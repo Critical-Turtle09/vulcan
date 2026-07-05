@@ -9,8 +9,10 @@ import { loadEnv, registerVoiceIpc } from './voice-main.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 loadEnv(ROOT);                 // .env -> process.env before anything reads keys
-// default to the VULCAN home (orb-home interface, v1.2); override with VULCAN_DEV_URL
-const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273/orb.html';
+// index.html IS the VULCAN home (orb-home, v1.2). Root serves it, and Vite's
+// dev fallback also lands here — no stale target can resurface the Slice 0 test
+// (that now lives at /dev/material-test.html). Override with VULCAN_DEV_URL.
+const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273/';
 
 function createWindow() {
   const win = new BrowserWindow({

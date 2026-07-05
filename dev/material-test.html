@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VULCAN — Silicon Forge Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root { --void: #050607; } /* real values injected from tokens.json at runtime */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--void); }
+    body { cursor: none; }
+    #stage { position: fixed; inset: 0; display: block; }
+
+    /* DOM label layer — the only text out of shader space (§0) */
+    #label-layer { position: fixed; inset: 0; pointer-events: none; }
+
+    .vulcan-label {
+      position: absolute; top: 0; left: 0; will-change: transform;
+      font-family: var(--type-mono);
+      font-size: var(--label-px);
+      letter-spacing: var(--label-track);
+      text-transform: uppercase;
+      color: var(--data-bone);
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 10px rgba(216, 68, 43, 0.18);
+    }
+    .vulcan-glyph {
+      display: inline-block;
+      opacity: 0;
+      filter: blur(4px);
+      transform: translateY(3px);
+      transition:
+        opacity   var(--dur, 18ms) linear var(--delay, 0ms),
+        filter    calc(var(--dur, 18ms) * 6) ease-out var(--delay, 0ms),
+        transform calc(var(--dur, 18ms) * 6) ease-out var(--delay, 0ms);
+    }
+    /* granular RESOLVE — per-glyph, staggered by --delay (noise) */
+    .vulcan-label.resolving .vulcan-glyph {
+      opacity: 1; filter: blur(0); transform: translateY(0);
+    }
+    /* granular DISSOLVE — same material, reversed, glyphs scatter as they leave */
+    .vulcan-label.dissolving .vulcan-glyph {
+      opacity: 0; filter: blur(5px); transform: translateY(-4px);
+      transition:
+        opacity   140ms linear var(--delay, 0ms),
+        filter    260ms ease-in var(--delay, 0ms),
+        transform 260ms ease-in var(--delay, 0ms);
+    }
+
+    /* registration tick + hairline leader anchoring the label to its event */
+    .vulcan-label-tick {
+      position: absolute; top: 0; left: 0; width: 22px; height: 22px;
+      will-change: transform, opacity;
+      opacity: 0; transition: opacity 300ms ease-out;
+    }
+    .vulcan-label-tick::before,
+    .vulcan-label-tick::after {
+      content: ""; position: absolute; background: var(--panel-stroke);
+    }
+    .vulcan-label-tick::before { left: 0; top: 50%; width: 24px; height: 1px; transform: translateY(-50%); }
+    .vulcan-label-tick::after  { left: 0; top: 50%; width: 5px; height: 5px; border: 1px solid var(--signal-ember); background: transparent; transform: translate(-2px,-50%) rotate(45deg); }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="label-layer"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
