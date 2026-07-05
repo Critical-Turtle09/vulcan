@@ -1,11 +1,14 @@
 // Electron shell — full-screen, chromeless, kiosk-style. VULCAN owns the whole
 // display (Mac mini at login/wake). The renderer is the Vite dev server during
 // build so it hot-reloads as slices land; production will load the built bundle.
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, session, systemPreferences } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadEnv, registerVoiceIpc } from './voice-main.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.join(__dirname, '..');
+loadEnv(ROOT);                 // .env -> process.env before anything reads keys
 const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273';
 
 function createWindow() {
@@ -17,7 +20,7 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
 
@@ -30,7 +33,19 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  registerVoiceIpc();
+
+  // macOS mic permission — ask up front so the wake ear can open the mic; if the
+  // operator declines, the renderer falls back to VOICE OFFLINE (keys still work).
+  if (process.platform === 'darwin') {
+    try { await systemPreferences.askForMediaAccess('microphone'); } catch (_) { /* declined */ }
+  }
+  // grant the renderer's getUserMedia(audio) request (OS gate already handled above)
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
+    cb(permission === 'media' || permission === 'audioCapture');
+  });
+
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

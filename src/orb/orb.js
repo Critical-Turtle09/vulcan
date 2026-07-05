@@ -230,10 +230,22 @@ export function createOrb() {
   const lerpRate = rawOrb.stateLerp;
   let spinAngle = 0, driftAngle = 0;
   const breathePeriod = rawOrb.breathePeriod, breatheAmp = rawOrb.breatheAmp;
-  const speakPeriod = rawOrb['speak.period'];
+
+  // ring amplitude response (ORGAN 1) — the SPEAKING ring is driven by a REAL
+  // amplitude envelope fed from the WebAudio analyser (no SIM). Response window
+  // and envelope smoothing come from voice.* tokens (fallback keeps Slice 1 alone
+  // renderable if the voice group is absent).
+  const V = rawTokens.voice || {};
+  const env = (V.envelope || { attack: 0.5, decay: 0.12 });
+  const respMin = V['ring.minResponse'] ?? 0.4;
+  const respMax = V['ring.maxResponse'] ?? 1.3;
+  let extAmp = 0;      // latest raw amplitude 0..1 from the analyser
+  let ampS = 0;        // attack/decay-smoothed amplitude
+  let speakInf = 0;    // 0..1 how much the ring is amplitude-driven (lerped, continuous)
 
   function setState(name){ if (STATES[name]) targetName = name; }
   function setStateIndex(i){ if (order[i]) targetName = order[i]; }
+  function setAmplitude(a){ extAmp = Math.max(0, Math.min(1, a || 0)); }
 
   function update(dt, t, reveal, pixelRatio){
     const tgt = STATES[targetName];
@@ -244,18 +256,22 @@ export function createOrb() {
     driftAngle += (rawOrb['ring.driftAmp']) * dt;
     const breathe = 1 + Math.sin(t * 6.2831 / breathePeriod) * breatheAmp;
 
-    // speaking amplitude — synthetic voice envelope (SIM, no audio in Slice 1)
-    const amp = 0.5 + 0.5 * Math.abs(Math.sin(t/speakPeriod) * Math.sin(t*0.37));
-    const speaking = targetName === 'speaking' ? 1 : 0;
+    // envelope: fast attack, slow decay (tokens), frame-rate normalised
+    const rate = (extAmp > ampS ? env.attack : env.decay);
+    ampS += (extAmp - ampS) * Math.min(rate * dt * 60, 1);
+    // how amplitude-driven the ring is — lerped so wake/end are never a snap
+    speakInf += (((targetName === 'speaking') ? 1 : 0) - speakInf) * k;
 
     // body uniforms
     uni.uTime.value = t; uni.uReveal.value = reveal; uni.uPixelRatio.value = pixelRatio;
     uni.uSpin.value = spinAngle; uni.uBreathe.value = breathe; uni.uAgitation.value = cur.agitation;
     // core
     coreUni.uCoreGlow.value = cur.coreGlow;
-    // ring — glow tracks voice amplitude when speaking
+    // ring — in speaking, glow rides the real amplitude between min/max response;
+    // in every other state it holds cur.ringGlow. Blended by speakInf (continuous).
     ringUni.uTime.value = t; ringUni.uReveal.value = reveal; ringUni.uPixelRatio.value = pixelRatio;
-    ringUni.uGlow.value = cur.ringGlow * (1 + speaking * (amp - 0.5) * 0.9);
+    const ampGlow = respMin + (respMax - respMin) * ampS;
+    ringUni.uGlow.value = cur.ringGlow * (1 - speakInf) + ampGlow * speakInf;
     ringUni.uTilt.value = rawOrb['ring.baseTilt'] + cur.ringTilt;
     ringUni.uDrift.value = driftAngle;
 
@@ -279,5 +295,9 @@ export function createOrb() {
     }
   }
 
-  return { object: group, setState, setStateIndex, update, get stateName(){ return targetName; }, probe(){ return { ...cur }; } };
+  return {
+    object: group, setState, setStateIndex, setAmplitude, update,
+    get stateName(){ return targetName; },
+    probe(){ return { ...cur, ampS, speakInf }; },
+  };
 }

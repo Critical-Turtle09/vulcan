@@ -6,6 +6,13 @@ dist-electron/
 npm-debug.log*
 .vite/
 
+# secrets — never commit real keys
+.env
+.env.local
+
 # audit artifacts (self-screenshots + playwright scratch)
 .playwright-mcp/
 slice0-*.png
+orb-*.png
+rl-*.png
+voice-*.png

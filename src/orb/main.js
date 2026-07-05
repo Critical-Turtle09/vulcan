@@ -7,6 +7,7 @@ import rawTokens from '../../tokens.json';
 import { simplex3 } from '../noise.js';
 import { createPost } from '../post.js';
 import { createOrb } from './orb.js';
+import { createVoice } from '../voice/voice.js';
 
 injectCSSVars();
 const ORB = rawTokens.orb;
@@ -41,20 +42,39 @@ worldScene.add(orb.object);
 
 const post = createPost(renderer, worldScene, camera, { w: w0, h: h0 });
 
-// ---- state HUD (mono caps, resolves per doctrine but here just tracks target) ----
+// ---- ORGAN 1 — voice loop ----
+// bridge to the main process (whisper / ElevenLabs / config); absent in a plain
+// browser tab, where a stub keeps the page alive and test mode still runs.
+const params = new URLSearchParams(location.search);
+const forceTest = params.get('voice') === 'test';
+const bridge = window.vulcan || {
+  async config() { return { hasKey: false, hasWhisper: false, testMode: forceTest }; },
+  async tts() { return { ok: false }; },
+  async transcribe() { return { ok: false }; },
+};
+const voice = createVoice({ orb, bridge, forceTest });
+
+// ---- state HUD (mono caps) — repainted from the orb each frame so loop-driven
+// transitions show, not just key presses ----
 const STATE_HINTS = {
   idle: 'AWAITING', listening: 'LISTENING', thinking: 'TRAVERSING GRAPH', speaking: 'RESPONDING',
 };
+const offlineEl = document.getElementById('voice-offline');
 function paintHud() {
   stateEls.name.textContent = orb.stateName.toUpperCase();
   stateEls.hint.textContent = STATE_HINTS[orb.stateName] || '';
+  const s = voice.status();
+  if (s.online) { offlineEl.textContent = ''; }
+  else { offlineEl.textContent = `VOICE OFFLINE · ${s.offlineReason || 'UNAVAILABLE'}`; }
 }
-paintHud();
 
+// keys 1-4 — manual overrides, always live (doctrine: they never stop working)
 window.addEventListener('keydown', (e) => {
   const map = { '1': 'idle', '2': 'listening', '3': 'thinking', '4': 'speaking' };
-  if (map[e.key]) { orb.setState(map[e.key]); paintHud(); }
+  if (map[e.key]) orb.setState(map[e.key]);
 });
+
+voice.boot().then(paintHud);
 
 // ---- reveal (granular formation) ----
 const formMs = ORB.formMs;
@@ -78,9 +98,11 @@ function frame() {
     camera.lookAt(0, 0, 0);
   }
 
+  voice.tick();               // feed real playback amplitude to the ring
   orb.update(dt, t, reveal, dpr);
   post.setTime(t);
   post.composer.render();
+  paintHud();
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -89,6 +111,9 @@ window.__vulcanOrb = {
   setState: (n) => { orb.setState(n); paintHud(); },
   state: () => ({ name: orb.stateName, reveal, t }),
   probe: () => orb.probe(),
+  // voice test harness
+  triggerWake: () => voice.triggerWake(),
+  voiceStatus: () => voice.status(),
 };
 
 window.addEventListener('resize', () => {
