@@ -1,63 +1,16 @@
-# CLAUDE.md
+# VULCAN — DESIGN SPEC v1.1
+<!-- Paste into CLAUDE.md design-spec placeholder after operator red-line. -->
+<!-- Every visual decision below derives from the operator's reference corpus (REF-01…14). -->
+<!-- Nothing here is a default. If a choice must deviate during build, flag it — never silently substitute. -->
+<!-- v1.1: FLUIDITY LAW elevated to doctrine 11 (v0 autopsy finding #2 — instant hard cuts). -->
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## What this is
-
-VULCAN — Silicon Forge Intelligence. A Jarvis-style GPU/semiconductor supply-chain terminal. It runs
-full-screen on a Mac mini, summoned at login or by wake word. Sibling project to Hermes.
-
-**Current state: Phase 2 (BUILD), Slice 0.** The design spec is LOCKED (v1.1 — see below).
-Building the interface in slices, material test first. Every visual value ships from
-`tokens.json`; nothing is hardcoded in a component.
-
-## Phases
-
-1. **DESIGN** — lock spec from operator references (palette, type, motion physics).
-   STATUS: LOCKED (v1.1). Red-lines RL-1 and RL-2 resolved (see §8).
-2. **BUILD** — Electron + WebGL front end, built against the spec, slice by slice.
-3. **ORGANS** — live quotes, RSS→Claude wire pipeline, whisper.cpp ears, ElevenLabs voice,
-   cron autonomy.
-
-## Working rules (non-negotiable)
-
-- **Never one-shot the interface.** Build in slices: core orb → rings → panels. Get operator
-  sign-off on each slice before moving to the next.
-- **Screenshot your own work.** After any UI change: run the dev server, screenshot the
-  rendering via Playwright, critique it against the spec, iterate. This machine takes its own
-  screenshots — never ask the operator for one.
-- **Check current APIs before coding.** Use context7 for up-to-date Three.js / GSAP / Electron
-  APIs before writing against them; training data may be stale.
-- **Real data or labeled SIM.** Never silently fake numbers. Anything not live is marked SIM.
-- **Tokens, never hardcode.** All visual properties (colors, glows, type, spacing, motion
-  curves) live in a single design-token layer — themes swappable via config, never hardcoded
-  in components. The interface must support restyling from operator-provided references
-  without structural rewrites.
-- **Commit early and often.**
-
-## Design bar / operator taste
-
-The bar is Territory Studio / FUI grade. Everything moves, but with **shader weight, not DOM
-animation**. Motion comes from the GPU (WebGL/shaders), not CSS tweens.
-
-Explicitly rejected (from v0, "2002 video game"):
-- CSS-tween feel
-- stock sci-fi fonts
-- dashed circles
-
-## Design spec
-
-> **DESIGN SPEC v1.1 — LOCKED.** Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual
-> decision derives from the operator's reference corpus (REF-01…14). Nothing here is a
-> default; if a choice must deviate during build, flag it — never silently substitute.
-
-### 0 · HOW TO READ THIS (Claude Code)
+## 0 · HOW TO READ THIS (Claude Code)
 
 - All values ship as **design tokens** (`tokens.json` → CSS vars + Three.js uniforms). Never hardcode a color, duration, easing, or size in a component.
 - Scene objects (world, orb, arcs, particles) live in **shader space** (Three.js). DOM is only for panel text. **No CSS/DOM tweens on anything that reads as part of the world.**
 - When in doubt, consult §2 doctrines and §7 kill list. The bar: *every frame should pass as an insert shot in a modern briefing-room scene.*
 
-### 1 · DESIGN DNA — the corpus and what each reference donated
+## 1 · DESIGN DNA — the corpus and what each reference donated
 
 | REF | Source | Donated axis |
 |---|---|---|
@@ -76,7 +29,7 @@ Explicitly rejected (from v0, "2002 video game"):
 
 **Corpus synthesis:** *Apes propagation logic, rendered in Anduril material, staged like Dune's war table, annotated with Maverick's instrument grammar, paneled like Palantir blueprints, fronted by a Gargantua-form orb.*
 
-### 2 · DOCTRINES (laws — every slice is audited against these)
+## 2 · DOCTRINES (laws — every slice is audited against these)
 
 1. **World-as-interface.** Data is drawn ON the world (terrain, globe, orb), not boxed beside it.
 2. **No ink without meaning.** Every mark binds to data. Decorative marks are forbidden — the dashed line is legitimate only when dashes encode "projected, not actual."
@@ -90,7 +43,7 @@ Explicitly rejected (from v0, "2002 video game"):
 10. **Tokens, never hardcode.** (Constitution law, restated because it gates every other law.)
 11. **Nothing arrives instantly.** *(v0 autopsy, finding #2 — operator law.)* Every click, query, dive, or data reveal answers with a fluid transition in the house material. Text and evidence *resolve* into being — granular, per-glyph — they never pop in. Outgoing and incoming states cross-flow; there is no frame where the screen simply cuts. A hard cut anywhere is a build-failing bug, not a style choice. Fluidity comes from **material continuity, never slowness** — the terminal must still feel instant: the transition *is* the response.
 
-### 3 · PALETTE TOKENS
+## 3 · PALETTE TOKENS
 
 ```json
 {
@@ -113,7 +66,7 @@ Explicitly rejected (from v0, "2002 video game"):
 - Event recency is encoded as **heat**: ignite at `signal.ember` + bloom flash → cool toward `signal.cooled` → archive at `data.faint`.
 - No other hues. No blues, no greens, no gradients-as-decoration. (Friend/foe distinction, if ever needed, is bone vs ember — already in corpus via REF-02 abstraction.)
 
-### 4 · TYPE TOKENS
+## 4 · TYPE TOKENS
 
 | Role | Face | Setting |
 |---|---|---|
@@ -124,7 +77,7 @@ Explicitly rejected (from v0, "2002 video game"):
 - Asset labels ride their objects (REF-02): small mono caps, tethered, colored by state (`data.bone` / `signal.ember`).
 - **Banned:** Orbitron, Audiowide, Michroma, Eurostile-alikes, any "techno" display face. (Paid upgrades if ever wanted: Söhne Mono / Neue Haas Grotesk — same personality, deeper cut. Not required.)
 
-### 5 · MOTION PHYSICS TOKENS
+## 5 · MOTION PHYSICS TOKENS
 
 ```json
 {
@@ -158,41 +111,38 @@ Explicitly rejected (from v0, "2002 video game"):
 - **Idle is sacred:** if all data stops, the frame still breathes (camera drift + node heartbeat + grain).
 - Honor `prefers-reduced-motion`: drop camera drift + propagation animation to instant-state; keep grain static.
 
-### 6 · COMPOSITION GRAMMAR
+## 6 · COMPOSITION GRAMMAR
 
 **STAGE (A).** The void, with atmosphere. World objects are *lit bodies* staged like Dune's table: rim light, haze, grain, shallow DOF at rest. Nothing floats in flat black; everything sits in air.
 
-**ORB (B) — VULCAN's presence.** Dark-core sphere wearing luminous orbital ring(s) — Gargantua form, never a plain circle. Body material: see RL-2 (LOCKED). States:
+**ORB (B) — VULCAN's presence.** Dark-core sphere wearing luminous orbital ring(s) — Gargantua form, never a plain circle. Body material: see RED-LINE RL-2. States:
 - *idle* — heartbeat pulse, ring drifts slowly off-axis
 - *listening* — ring brightens, tilts toward camera
 - *thinking* — particle body agitates; network constellations surface briefly (Skyfall read as a state, not the body)
 - *speaking* — ring luminance tracks voice amplitude
 
 **MAP (C) — the theater.** Two states, one signature move:
-- *ambient* — the war-room object. Mostly-quiet world, node heartbeats, ember events, faint standing chokepoint pressure. Readable across a room. Canvas: see RL-1 (LOCKED).
+- *ambient* — the war-room object. Mostly-quiet world, node heartbeats, ember events, faint standing chokepoint pressure. Readable across a room. Canvas: see RED-LINE RL-1.
 - *interrogation* — camera dives (granular transition, spring physics) to oblique terrain (Avatar angle). Routes resolve, labels appear, tethered panels attach.
 - Default theater centers the silicon corridor: Veldhoven → Taiwan/Korea/Japan → US Southwest.
 
 **PANELS (D).** Blueprint-schematic language (Palantir + Maverick): hairline `panel.stroke` outlines, registration marks, tethered leader-lines anchored to world objects. Panels exist only on interrogation — they resolve in granularly, they never dock to screen edges as bars, and the hero always outweighs them. Quotes/wire/alerts render as schematic annotations, not dashboard widgets.
 
-### 7 · KILL LIST (instant red-line, from the v0 autopsy + corpus dislikes)
+## 7 · KILL LIST (instant red-line, from the v0 autopsy + corpus dislikes)
 
 Stock sci-fi fonts · decorative dashed circles · hexagon wallpaper · lens flares · saturated neon · glitch-as-decoration · bottom telemetry strips · dashboard chrome · pure #FFF or #000 · flat vector maps · DOM tweens on world objects · any mark that encodes nothing · **instant hard cuts, pop-in text, anything that "just appears."**
 
 **Acceptance test per slice:** (1) briefing-scene test — could this frame appear in a modern military-briefing film insert? (2) ink audit — point to any mark, name the datum it encodes. (3) tokens audit — zero hardcoded visual values. (4) **fluidity audit — trigger every state change in the slice; any element that appears or vanishes without a material transition fails the slice.**
 
-### 8 · RED-LINE DECISIONS — **LOCKED** (operator adopted both recommendations)
+## 8 · RED-LINE DECISIONS — operator calls these two, then spec locks
 
-**RL-1 · Map canvas (C1). → HYBRID. LOCKED.** Globe as ambient state (Spectre scanline-globe +
-planet-as-body staging), granular dive to oblique terrain on interrogation (Dune/Maverick/Avatar
-votes). Both jobs, and the dive becomes VULCAN's signature move.
+**RL-1 · Map canvas (C1).** Options: orbital globe / tilted terrain theater / hybrid.
+→ **Recommendation: HYBRID.** Globe as ambient state (your Spectre scanline-globe love + planet-as-body staging), granular dive to oblique terrain on interrogation (your Dune/Maverick/Avatar votes). Both jobs, and the dive becomes VULCAN's signature move.
 
-**RL-2 · Orb body material (B). → PARTICLE-FIELD. LOCKED.** Particle-field body with dark core +
-luminous ring (Gargantua form in Anduril matter — "the living entity"), with **network
-constellations surfacing only in thinking state** (the Skyfall read appears when VULCAN is
-actually traversing its graph). Both references survive, each as a state.
+**RL-2 · Orb body material (B).** Options: network-sphere (nodes+edges, Skyfall) / particle-field (volumetric, Anduril–Ultron).
+→ **Recommendation: PARTICLE-FIELD** body with dark core + luminous ring (Gargantua form in Anduril matter — "the living entity"), with **network constellations surfacing only in thinking state** (the Skyfall read appears when VULCAN is actually traversing its graph). Both references survive, each as a state.
 
-### 9 · SLICE 0 — MATERIAL TEST (first build; the true preview)
+## 9 · SLICE 0 — MATERIAL TEST (first build after commit; the true preview)
 
 One full-screen scene, no UI, no data feeds: `void` + grain + atmosphere → a particle-terrain patch drifting (idle physics) → one node heartbeat → one ember event ignites, propagates two hops, begins cooling → one mono-caps label resolves in per-glyph beside the event, holds, dissolves (fluidity-law test). Camera drifts on Perlin. All values from tokens.
 **Review protocol:** Claude Code renders → screenshots itself via Playwright → operator judges against §7 acceptance tests. Pass = proceed to Slice 1 (orb). Fail = tune tokens, not doctrine.
