@@ -60,12 +60,16 @@ const STATE_HINTS = {
   idle: 'AWAITING', listening: 'LISTENING', thinking: 'TRAVERSING GRAPH', speaking: 'RESPONDING',
 };
 const offlineEl = document.getElementById('voice-offline');
+let lastStatusStr = '';
 function paintHud() {
   stateEls.name.textContent = orb.stateName.toUpperCase();
   stateEls.hint.textContent = STATE_HINTS[orb.stateName] || '';
   const s = voice.status();
   if (s.online) { offlineEl.textContent = ''; }
   else { offlineEl.textContent = `VOICE OFFLINE · ${s.offlineReason || 'UNAVAILABLE'}`; }
+  // surface status changes so the main process can log what the HUD shows
+  const str = JSON.stringify(s);
+  if (str !== lastStatusStr) { lastStatusStr = str; console.log('[voice] status', str); }
 }
 
 // keys 1-4 — manual overrides, always live (doctrine: they never stop working)

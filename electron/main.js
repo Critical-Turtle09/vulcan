@@ -25,6 +25,15 @@ function createWindow() {
   });
 
   win.once('ready-to-show', () => win.show());
+
+  // echo the renderer's [voice] status lines to the terminal so we can confirm
+  // what the HUD shows without a devtools window
+  win.webContents.on('console-message', (...args) => {
+    const parts = args.map((a) => (a && typeof a === 'object' && 'message' in a) ? a.message : a);
+    const msg = parts.filter((x) => typeof x === 'string').join(' ');
+    if (msg.includes('[voice]')) console.log('RENDERER', msg);
+  });
+
   win.loadURL(DEV_URL);
 
   // Esc to exit full-screen review
@@ -33,20 +42,22 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(async () => {
+app.whenReady().then(() => {
   registerVoiceIpc();
 
-  // macOS mic permission — ask up front so the wake ear can open the mic; if the
-  // operator declines, the renderer falls back to VOICE OFFLINE (keys still work).
-  if (process.platform === 'darwin') {
-    try { await systemPreferences.askForMediaAccess('microphone'); } catch (_) { /* declined */ }
-  }
-  // grant the renderer's getUserMedia(audio) request (OS gate already handled above)
+  // grant the renderer's getUserMedia(audio) request; the OS-level TCC prompt
+  // fires on first capture. Declining -> renderer shows VOICE OFFLINE, keys work.
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
     cb(permission === 'media' || permission === 'audioCapture');
   });
 
-  createWindow();
+  createWindow();               // create first — never block the window on a prompt
+
+  // proactively trigger the macOS mic permission dialog, fire-and-forget
+  if (process.platform === 'darwin') {
+    systemPreferences.askForMediaAccess('microphone').catch(() => {});
+  }
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

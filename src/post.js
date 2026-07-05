@@ -57,11 +57,14 @@ const GradePass = {
   `,
 };
 
-export function createPost(renderer, scene, camera, size) {
+// opts (optional): { bloom:{threshold,strength,radius}, grain } — lets a slice
+// grade with its own tokens (e.g. map.post.*) instead of the constitutional
+// motion.post.* defaults. Chromatic aberration + vignette stay house-wide.
+export function createPost(renderer, scene, camera, size, opts = {}) {
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
 
-  const b = motion('post.bloom');
+  const b = opts.bloom || motion('post.bloom');
   const bloom = new UnrealBloomPass(
     new THREE.Vector2(size.w, size.h),
     b.strength, b.radius, b.threshold
@@ -70,6 +73,7 @@ export function createPost(renderer, scene, camera, size) {
 
   const grade = new ShaderPass(GradePass);
   grade.uniforms.uRes.value.set(size.w, size.h);
+  if (opts.grain !== undefined) grade.uniforms.uGrain.value = opts.grain;
   composer.addPass(grade);
 
   composer.addPass(new OutputPass());
