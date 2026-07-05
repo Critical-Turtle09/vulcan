@@ -7,9 +7,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 VULCAN — Silicon Forge Intelligence. A Jarvis-style GPU/semiconductor supply-chain terminal. It runs
 full-screen on a Mac mini, summoned at login or by wake word. Sibling project to Hermes.
 
-**Current state: Phase 2 (BUILD), Slice 0.** The design spec is LOCKED (v1.1 — see below).
-Building the interface in slices, material test first. Every visual value ships from
-`tokens.json`; nothing is hardcoded in a component.
+**Current state: Phase 2 (BUILD).** The design spec is LOCKED (v1.2 — see below). Built so
+far: terrain material test (Slice 0), the orb (Slice 1), the voice organ (ORGAN 1), and the
+map rework (Slice 2R). The interface is **orb-home**: VULCAN is the centered orb by default;
+geography is *summoned* into an oblique terrain theater on demand. Every visual value ships
+from `tokens.json`; nothing is hardcoded in a component.
 
 ## Phases
 
@@ -47,7 +49,8 @@ Explicitly rejected (from v0, "2002 video game"):
 
 ## Design spec
 
-> **DESIGN SPEC v1.1 — LOCKED.** Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual
+> **DESIGN SPEC v1.2 — LOCKED.** (v1.2 amends Front C — see §6/§8: the ambient globe is
+> deleted; home is the orb, the map is summoned.) Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual
 > decision derives from the operator's reference corpus (REF-01…14). Nothing here is a
 > default; if a choice must deviate during build, flag it — never silently substitute.
 
@@ -162,16 +165,16 @@ Explicitly rejected (from v0, "2002 video game"):
 
 **STAGE (A).** The void, with atmosphere. World objects are *lit bodies* staged like Dune's table: rim light, haze, grain, shallow DOF at rest. Nothing floats in flat black; everything sits in air.
 
-**ORB (B) — VULCAN's presence.** Dark-core sphere wearing luminous orbital ring(s) — Gargantua form, never a plain circle. Body material: see RL-2 (LOCKED). States:
+**ORB (B) — VULCAN's presence AND the home interface.** Dark-core sphere wearing luminous orbital ring(s) — Gargantua form, never a plain circle. Body material: see RL-2 (LOCKED). **The orb is the default screen — centered, full presence, the protagonist** (not docked, not cornered). It only shrinks to a small docked presence while the map is summoned. States:
 - *idle* — heartbeat pulse, ring drifts slowly off-axis
 - *listening* — ring brightens, tilts toward camera
 - *thinking* — particle body agitates; network constellations surface briefly (Skyfall read as a state, not the body)
 - *speaking* — ring luminance tracks voice amplitude
 
-**MAP (C) — the theater.** Two states, one signature move:
-- *ambient* — the war-room object. Mostly-quiet world, node heartbeats, ember events, faint standing chokepoint pressure. Readable across a room. Canvas: see RL-1 (LOCKED).
-- *interrogation* — camera dives (granular transition, spring physics) to oblique terrain (Avatar angle). Routes resolve, labels appear, tethered panels attach.
-- Default theater centers the silicon corridor: Veldhoven → Taiwan/Korea/Japan → US Southwest.
+**MAP (C) — SUMMONED theater (v1.2, NO GLOBE).** There is no ambient globe — no globe anywhere, ever. Geography is not persistent; it is *summoned* only when needed. On summon, the interface transforms orb → theater in one continuous granular crossflow: the orb dissolves as the region's terrain forms from the same dust, and the orb re-forms small/docked. Return reverses identically — the orb re-forms center.
+- The theater is an **oblique 3D sculptural terrain of the relevant REGION** — the Top Gun: Maverick briefing-map read (REF-02): monochrome sculpted topography, thin precise white route lines and data marks, instrument realism; Avatar (REF-05/07) oblique angle. No atlas chrome.
+- **Route traversal (the Maverick plane):** supply routes are thin white arcs; a small bright 3D marker travels the active route, drawing/brightening the line as it moves (Apes propagation grammar — a seed moving through the network). One dominant traversal at a time.
+- Regions of the silicon corridor: Taiwan, Veldhoven/EU, N. America, Korea (keys t/v/n/k).
 
 **PANELS (D).** Blueprint-schematic language (Palantir + Maverick): hairline `panel.stroke` outlines, registration marks, tethered leader-lines anchored to world objects. Panels exist only on interrogation — they resolve in granularly, they never dock to screen edges as bars, and the hero always outweighs them. Quotes/wire/alerts render as schematic annotations, not dashboard widgets.
 
@@ -183,9 +186,12 @@ Stock sci-fi fonts · decorative dashed circles · hexagon wallpaper · lens fla
 
 ### 8 · RED-LINE DECISIONS — **LOCKED** (operator adopted both recommendations)
 
-**RL-1 · Map canvas (C1). → HYBRID. LOCKED.** Globe as ambient state (Spectre scanline-globe +
-planet-as-body staging), granular dive to oblique terrain on interrogation (Dune/Maverick/Avatar
-votes). Both jobs, and the dive becomes VULCAN's signature move.
+**RL-1 · Map canvas (C1). → ~~HYBRID~~ SUMMONED THEATER. LOCKED (amended v1.2).** The v1.1 hybrid
+globe is **struck** — no globe anywhere. Home is the orb (§6-B); geography is summoned only on
+demand, transforming orb → oblique sculptural terrain theater of the region via one continuous
+granular crossflow (orb dissolves as terrain forms from the same dust; orb docks small). The
+Maverick briefing-map read replaces the war-table globe. The summon/return crossflow is VULCAN's
+signature move; route traversal (the Maverick plane) is the theater's live grammar.
 
 **RL-2 · Orb body material (B). → PARTICLE-FIELD. LOCKED.** Particle-field body with dark core +
 luminous ring (Gargantua form in Anduril matter — "the living entity"), with **network

@@ -9,7 +9,8 @@ import { loadEnv, registerVoiceIpc } from './voice-main.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 loadEnv(ROOT);                 // .env -> process.env before anything reads keys
-const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273';
+// default to the VULCAN home (orb-home interface, v1.2); override with VULCAN_DEV_URL
+const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273/orb.html';
 
 function createWindow() {
   const win = new BrowserWindow({
