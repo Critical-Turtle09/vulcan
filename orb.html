@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VULCAN — Orb</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root { --void: #050607; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--void); }
+    body { cursor: none; }
+    #stage { position: fixed; inset: 0; display: block; }
+
+    /* state HUD — quiet mono-caps, bottom-left. Not a telemetry bar (§7): a single
+       tethered readout of VULCAN's current presence state. */
+    #hud { position: fixed; left: 38px; bottom: 34px; pointer-events: none;
+      font-family: var(--type-mono); text-transform: uppercase;
+      letter-spacing: var(--label-track); color: var(--data-dim); }
+    #state-name { font-size: 15px; color: var(--data-bone); }
+    #state-hint { font-size: 11px; color: var(--data-faint); margin-top: 4px; }
+    #keys { position: fixed; right: 38px; bottom: 34px; pointer-events: none;
+      font-family: var(--type-mono); font-size: 10.5px; letter-spacing: var(--label-track);
+      text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.7; }
+    #keys b { color: var(--data-dim); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div id="hud">
+    <div id="state-name">IDLE</div>
+    <div id="state-hint">AWAITING</div>
+  </div>
+  <div id="keys">
+    <div><b>1</b> IDLE</div>
+    <div><b>2</b> LISTENING</div>
+    <div><b>3</b> THINKING</div>
+    <div><b>4</b> SPEAKING</div>
+  </div>
+  <script type="module" src="/src/orb/main.js"></script>
+</body>
+</html>
