@@ -15,6 +15,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export function createVoice({ orb, bridge, forceTest = false }) {
   let running = false, cfg = null, ears = null, mouth = null, brain = createBrain();
   let mode = 'idle', online = false, offlineReason = '';
+  let muted = !!rawTokens.voice.startMuted;   // chosen state, not a fault
+  let unmuteResolve = null;
+  let waking = false;                          // true only while listening for wake
 
   async function boot() {
     cfg = await safeConfig(bridge);
@@ -42,8 +45,13 @@ export function createVoice({ orb, bridge, forceTest = false }) {
     while (running) {
       try {
         orb.setState('idle');                          // ← rest
+        // MUTED: park here with the ear fully suspended — no mic, no audio
+        // processing, no whisper — until unmuted. Orb holds idle (no snap).
+        if (muted) { ears.suspend(); await untilUnmuted(); if (!running) break; }
+        waking = true;
         await ears.listenForWake();                    // WAKE
-        if (!running) break;
+        waking = false;
+        if (!running || muted) continue;                // muted mid-wait -> re-park
         orb.setState('listening');                     // idle -> listening (lerp)
         const { transcript } = await ears.capture();   // CAPTURE (ends on silence)
         if (!running) break;
@@ -58,9 +66,26 @@ export function createVoice({ orb, bridge, forceTest = false }) {
         await mouth.speak(text, { synthetic });        // SPEAK — real amplitude via analyser
         orb.setAmplitude(0);                           // -> speaking -> idle (lerp back)
       } catch (e) {
+        waking = false;
+        // muting aborts a pending wake-listen — not a fault, just re-loop and park
+        if (e && e.message === 'aborted') continue;
         // an ear that can't open the mic drops us to offline, keys still live
         online = false; offlineReason = 'MIC UNAVAILABLE'; running = false; break;
       }
+    }
+  }
+
+  function untilUnmuted() { return new Promise((r) => { unmuteResolve = r; }); }
+
+  function setMuted(v) {
+    if (v === muted) return;
+    muted = v;
+    if (muted) {
+      // abort now only if we're actively listening for wake; a mid-exchange mute
+      // lets the current response finish, then the loop parks muted at idle.
+      if (ears && waking) ears.suspend();
+    } else {
+      if (unmuteResolve) { const r = unmuteResolve; unmuteResolve = null; r(); }
     }
   }
 
@@ -71,10 +96,11 @@ export function createVoice({ orb, bridge, forceTest = false }) {
 
   return {
     boot, tick,
+    setMuted, toggleMute() { setMuted(!muted); }, get muted() { return muted; },
     // test harness: fire the wake word on demand (test-mode ears)
     triggerWake() { if (ears && ears.triggerWake) ears.triggerWake(); },
     stop() { running = false; if (ears) ears.stop(); },
-    status() { return { online, mode, state: orb.stateName, offlineReason }; },
+    status() { return { online, mode, state: orb.stateName, offlineReason, muted }; },
   };
 }
 

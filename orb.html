@@ -21,8 +21,11 @@
       letter-spacing: var(--label-track); color: var(--data-dim); }
     #state-name { font-size: 15px; color: var(--data-bone); }
     #state-hint { font-size: 11px; color: var(--data-faint); margin-top: 4px; }
+    /* muted is a CHOSEN state — bone/dim, not ember. opacity transition = the lerp. */
+    #voice-muted { font-size: 10.5px; color: var(--data-dim); margin-top: 9px; min-height: 12px;
+      opacity: 0; transition: opacity 320ms ease; }
     /* fail-soft notice — ember, because an offline organ IS a signal/alert (§3) */
-    #voice-offline { font-size: 10.5px; color: var(--signal-ember); margin-top: 9px; min-height: 12px; }
+    #voice-offline { font-size: 10.5px; color: var(--signal-ember); margin-top: 4px; min-height: 12px; }
     #keys { position: fixed; right: 38px; bottom: 34px; pointer-events: none;
       font-family: var(--type-mono); font-size: 10.5px; letter-spacing: var(--label-track);
       text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.7; }
@@ -34,6 +37,7 @@
   <div id="hud">
     <div id="state-name">IDLE</div>
     <div id="state-hint">AWAITING</div>
+    <div id="voice-muted">MIC MUTED</div>
     <div id="voice-offline"></div>
   </div>
   <div id="keys">
@@ -41,6 +45,7 @@
     <div><b>2</b> LISTENING</div>
     <div><b>3</b> THINKING</div>
     <div><b>4</b> SPEAKING</div>
+    <div><b>M</b> MIC MUTE</div>
   </div>
   <script type="module" src="/src/orb/main.js"></script>
 </body>

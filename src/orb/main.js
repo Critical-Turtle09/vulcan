@@ -60,6 +60,7 @@ const STATE_HINTS = {
   idle: 'AWAITING', listening: 'LISTENING', thinking: 'TRAVERSING GRAPH', speaking: 'RESPONDING',
 };
 const offlineEl = document.getElementById('voice-offline');
+const mutedEl = document.getElementById('voice-muted');
 let lastStatusStr = '';
 function paintHud() {
   stateEls.name.textContent = orb.stateName.toUpperCase();
@@ -67,6 +68,8 @@ function paintHud() {
   const s = voice.status();
   if (s.online) { offlineEl.textContent = ''; }
   else { offlineEl.textContent = `VOICE OFFLINE · ${s.offlineReason || 'UNAVAILABLE'}`; }
+  // muted is a chosen state (bone/dim, not ember). CSS opacity transition = the lerp.
+  if (mutedEl) mutedEl.style.opacity = s.muted ? '1' : '0';
   // surface status changes so the main process can log what the HUD shows
   const str = JSON.stringify(s);
   if (str !== lastStatusStr) { lastStatusStr = str; console.log('[voice] status', str); }
@@ -75,7 +78,8 @@ function paintHud() {
 // keys 1-4 — manual overrides, always live (doctrine: they never stop working)
 window.addEventListener('keydown', (e) => {
   const map = { '1': 'idle', '2': 'listening', '3': 'thinking', '4': 'speaking' };
-  if (map[e.key]) orb.setState(map[e.key]);
+  if (map[e.key]) { orb.setState(map[e.key]); return; }
+  if (e.key.toLowerCase() === rawTokens.voice.muteKey) { voice.toggleMute(); paintHud(); }
 });
 
 voice.boot().then(paintHud);
@@ -118,6 +122,8 @@ window.__vulcanOrb = {
   // voice test harness
   triggerWake: () => voice.triggerWake(),
   voiceStatus: () => voice.status(),
+  toggleMute: () => { voice.toggleMute(); paintHud(); },
+  setMuted: (v) => { voice.setMuted(v); paintHud(); },
 };
 
 window.addEventListener('resize', () => {

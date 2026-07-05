@@ -14,17 +14,19 @@ export function createEars({ bridge, mode }) {
 
   // ---------- TEST MODE ----------
   if (mode === 'test') {
-    let manualWake = null;
+    let manualWake = null, wakeReject = null, wakeTimer = null;
     return {
       mode: 'test',
       offline: false,
       async listenForWake() {
-        return new Promise((resolve) => {
-          manualWake = resolve;
-          setTimeout(() => { if (manualWake) { manualWake = null; resolve(); } }, V.test.wakeDelayMs);
+        return new Promise((resolve, reject) => {
+          manualWake = resolve; wakeReject = reject;
+          wakeTimer = setTimeout(() => { if (manualWake) { manualWake = null; resolve(); } }, V.test.wakeDelayMs);
         });
       },
-      triggerWake() { if (manualWake) { const r = manualWake; manualWake = null; r(); } },
+      triggerWake() { if (manualWake) { clearTimeout(wakeTimer); const r = manualWake; manualWake = null; r(); } },
+      // muted: abort a pending wake so the loop can park (no synthetic wake fires)
+      suspend() { clearTimeout(wakeTimer); if (wakeReject) { const r = wakeReject; manualWake = wakeReject = null; r(new Error('aborted')); } },
       async capture() {
         return new Promise((resolve) =>
           setTimeout(() => resolve({ transcript: `${wakeWord} status report` }), V.test.captureMs));
@@ -75,6 +77,8 @@ export function createEars({ bridge, mode }) {
     return out;
   }
 
+  let abortWake = null;   // set while a wake-listen is pending; suspend() calls it
+
   return {
     mode: 'live',
     get offline() { return offline; },
@@ -82,7 +86,8 @@ export function createEars({ bridge, mode }) {
     // resolve when a spoken segment transcribes to something containing the wake word
     async listenForWake() {
       if (!(await init())) throw new Error('mic-unavailable');
-      return new Promise((resolve) => {
+      return new Promise((resolve, reject) => {
+        abortWake = () => { if (proc) proc.onaudioprocess = null; abortWake = null; reject(new Error('aborted')); };
         let seg = [], speaking = false, silence = 0;
         onFrame(async (buf) => {
           const rms = rmsOf(buf);
@@ -94,7 +99,7 @@ export function createEars({ bridge, mode }) {
               const frames = seg; seg = []; speaking = false; silence = 0;
               if (frames.length > 4) {
                 const txt = (await transcribe(frames)).toLowerCase();
-                if (txt.includes(wakeWord)) { proc.onaudioprocess = null; resolve(); }
+                if (txt.includes(wakeWord)) { proc.onaudioprocess = null; abortWake = null; resolve(); }
               }
             }
           }
@@ -118,6 +123,17 @@ export function createEars({ bridge, mode }) {
           }
         });
       });
+    },
+    // MUTED: fully suspend the ear — abort any pending wake, drop the audio graph,
+    // release the mic (OS indicator off). The next listenForWake re-acquires it,
+    // so unmuting resumes seamlessly with no re-prompt (permission persists).
+    suspend() {
+      if (abortWake) abortWake();
+      if (proc) { proc.onaudioprocess = null; proc.disconnect(); proc = null; }
+      if (source) { source.disconnect(); source = null; }
+      if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+      if (ctx) { ctx.close(); ctx = null; }
+      ready = false;
     },
     stop() {
       if (proc) proc.onaudioprocess = null;
