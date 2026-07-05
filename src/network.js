@@ -25,6 +25,8 @@ export function createNetwork(terrain) {
   const pos = new Float32Array(n * 3);
   const seed = new Float32Array(n);
   const heat = new Float32Array(n);          // 0 idle .. 1 just-ignited ember
+  const dominant = new Float32Array(n);      // 1 for the event seed — the dominant ember
+  dominant[0] = 1;
   let rr = 77003;
   const rnd = () => { rr = (rr * 1103515245 + 12345) & 0x7fffffff; return rr / 0x7fffffff; };
 
@@ -42,6 +44,7 @@ export function createNetwork(terrain) {
   nGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   nGeo.setAttribute('aSeed', new THREE.BufferAttribute(seed, 1));
   nGeo.setAttribute('aHeat', new THREE.BufferAttribute(heat, 1));
+  nGeo.setAttribute('aDominant', new THREE.BufferAttribute(dominant, 1));
 
   const nUniforms = {
     uTime:       { value: 0 },
@@ -49,6 +52,7 @@ export function createNetwork(terrain) {
     uPixelRatio: { value: 1 },
     uSize:       { value: scene('node.size') },
     uIgniteBoost:{ value: scene('node.igniteBoost') },
+    uDominantBoost:{ value: scene('node.dominantBoost') },
     uDim:        { value: color('data.dim') },
     uBone:       { value: color('data.bone') },
     uEmber:      { value: color('signal.ember') },
@@ -63,12 +67,14 @@ export function createNetwork(terrain) {
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */`
-      attribute float aSeed, aHeat;
-      uniform float uTime, uReveal, uPixelRatio, uSize, uIgniteBoost, uPulseLo;
+      attribute float aSeed, aHeat, aDominant;
+      uniform float uTime, uReveal, uPixelRatio, uSize, uIgniteBoost, uDominantBoost, uPulseLo;
       varying float vHeat;
       varying float vPulse;
+      varying float vDom;
       void main(){
         vHeat = aHeat;
+        vDom = aDominant;
         // heartbeat: desynced opacity pulse (idle.node.pulse), period per node
         float period = 4.0 + aSeed*3.0;
         float beat = mix(uPulseLo, 1.0, 0.5+0.5*sin(uTime*6.2831/period + aSeed*10.0));
@@ -78,30 +84,33 @@ export function createNetwork(terrain) {
         local = local*local*(3.0-2.0*local);
         vec4 mv = modelViewMatrix * vec4(position,1.0);
         gl_Position = projectionMatrix * mv;
-        float sz = uSize * (1.0 + aHeat*uIgniteBoost) * local;
+        // ignited nodes grow modestly; the dominant seed grows a touch more so
+        // one event reads as THE event (§3 rationed colour, red-line: one dominant).
+        float sz = uSize * (1.0 + aHeat*(uIgniteBoost + aDominant*uDominantBoost)) * local;
         gl_PointSize = sz * uPixelRatio * (300.0/-mv.z);
         vPulse *= local;
       }
     `,
     fragmentShader: /* glsl */`
       uniform vec3 uDim, uBone, uEmber, uCooled, uFaint;
-      varying float vHeat, vPulse;
+      varying float vHeat, vPulse, vDom;
       void main(){
         vec2 c = gl_PointCoord-0.5;
         float d = length(c);
-        // bright core + soft halo
-        float core = smoothstep(0.5,0.0,d);
-        float halo = smoothstep(0.5,0.28,d);
+        // sharp disc + a hair of halo — surgical signal, not a soft orb (red-line)
+        float core = smoothstep(0.44, 0.14, d);
+        float halo = smoothstep(0.5, 0.34, d);
         // heat -> color: idle bone/dim, ignite ember, cool through cooled -> faint
         vec3 idle = mix(uDim, uBone, 0.4);
         vec3 hot  = mix(uCooled, uEmber, smoothstep(0.55,1.0,vHeat));
         vec3 warm = mix(uFaint, uCooled, smoothstep(0.0,0.55,vHeat));
         vec3 heatCol = mix(warm, hot, step(0.55,vHeat));
         vec3 col = mix(idle, heatCol, smoothstep(0.02,0.2,vHeat));
-        // modest HDR push when ignited so a SMALL core crosses the bloom threshold
-        // (ember stays scarce — §3 <2% of frame — not a giant blob)
-        col *= 1.0 + vHeat*1.7;
-        float a = (core + halo*0.35) * vPulse;
+        // HDR push so a SMALL sharp core crosses the bloom threshold; the dominant
+        // seed pushes much harder so it out-blooms the two downstream embers, which
+        // stay as sharp near-un-bloomed points (surgical signals, red-line §3).
+        col *= 1.0 + vHeat*(2.6 + vDom*2.2);
+        float a = (core + halo*0.22) * vPulse;
         if (a<=0.001) discard;
         gl_FragColor = vec4(col, a);
       }
@@ -217,30 +226,31 @@ export function createNetwork(terrain) {
     activeHeads.push({ a, b, pa, pb, len, dur, t: -delayMs/1000, fired:false, onArrive });
   }
 
-  // fire a full 2-hop event from the seed
+  // fire a SINGLE-CHAIN 2-hop event from the seed (red-line §3: one dominant event,
+  // 2-3 embers max). seed -> one hop-1 -> one hop-2 = 3 embers, propagating along
+  // one real edge path (Apes law), not fanning out across the graph.
+  const neighbors = (node, seen) => EDGES
+    .filter(e => e[0] === node || e[1] === node)
+    .map(e => (e[0] === node ? e[1] : e[0]))
+    .filter(t => !seen.has(t));
+
   function triggerEvent(seed = 0){
-    // reset heat
     for (let i=0;i<n;i++){ heat[i]=0; }
     igniting.length = 0;
     activeHeads.length = 0;
     ignite(seed);
-    // hop 1 targets
-    const h1 = EDGES.filter(e=>e[0]===seed||e[1]===seed).map(e=>e[0]===seed?e[1]:e[0]);
-    const h1u = [...new Set(h1)].slice(0,2);
-    let stagger = 0;
+
     const seen = new Set([seed]);
-    h1u.forEach((t1,ix)=>{
+    const t1 = neighbors(seed, seen)[0];
+    if (t1 !== undefined){
       seen.add(t1);
-      launchHead(seed, t1, stagger, ()=>ignite(t1));
-      stagger += hopMs[0] + (hopMs[1]-hopMs[0])*ix;
-      // hop 2 from each hop-1 node
-      const h2 = EDGES.filter(e=>e[0]===t1||e[1]===t1).map(e=>e[0]===t1?e[1]:e[0])
-        .filter(t=>!seen.has(t)).slice(0,1);
-      h2.forEach(t2=>{
+      launchHead(seed, t1, 0, () => ignite(t1));
+      const t2 = neighbors(t1, seen)[0];
+      if (t2 !== undefined){
         seen.add(t2);
-        launchHead(t1, t2, stagger + 260, ()=>ignite(t2));
-      });
-    });
+        launchHead(t1, t2, hopMs[1] + 220, () => ignite(t2));
+      }
+    }
     return nodePos(seed);
   }
 
