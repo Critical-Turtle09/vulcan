@@ -1,0 +1,52 @@
+// Single source of visual truth. Every color, duration, easing, and size in the
+// scene resolves through here — doctrine 10 (tokens, never hardcode). Nothing
+// downstream is allowed to invent a literal.
+import * as THREE from 'three';
+import raw from '../tokens.json';
+
+export const TOKENS = raw;
+
+// hex -> THREE.Color (linear-correct for shader use)
+export function color(path) {
+  const hex = raw.palette[path];
+  if (!hex) throw new Error(`token: unknown palette key "${path}"`);
+  return new THREE.Color(hex).convertSRGBToLinear();
+}
+
+// hex string straight through (for DOM / CSS)
+export function hex(path) {
+  const h = raw.palette[path];
+  if (!h) throw new Error(`token: unknown palette key "${path}"`);
+  return h;
+}
+
+export function motion(path) {
+  const v = raw.motion[path];
+  if (v === undefined) throw new Error(`token: unknown motion key "${path}"`);
+  return v;
+}
+
+export function scene(path) {
+  const v = raw.scene[path];
+  if (v === undefined) throw new Error(`token: unknown scene key "${path}"`);
+  return v;
+}
+
+// Publish the whole palette + type as CSS custom properties so the DOM label
+// layer draws from the same token source as shader space — no parallel literals.
+export function injectCSSVars() {
+  const root = document.documentElement.style;
+  for (const [k, v] of Object.entries(raw.palette)) {
+    root.setProperty(`--${k.replace(/\./g, '-')}`, v);
+  }
+  root.setProperty('--type-mono', raw.type.mono);
+  root.setProperty('--type-ui', raw.type.ui);
+  root.setProperty('--label-px', `${raw.type['label.px']}px`);
+  root.setProperty('--label-track', `${raw.type['label.trackEm']}em`);
+}
+
+// deterministic pick within a [min,max] token range, seeded so it never uses
+// Math.random at module load (keeps renders reproducible for the audit)
+export function lerpRange(range, t) {
+  return range[0] + (range[1] - range[0]) * t;
+}
