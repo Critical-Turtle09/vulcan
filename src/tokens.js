@@ -43,6 +43,18 @@ export function injectCSSVars() {
   root.setProperty('--type-ui', raw.type.ui);
   root.setProperty('--label-px', `${raw.type['label.px']}px`);
   root.setProperty('--label-track', `${raw.type['label.trackEm']}em`);
+  // V.A.U.L.T HUD (§6-D) — publish so the DOM columns draw from the same tokens
+  const h = raw.hud;
+  root.setProperty('--hud-margin-x', `${h['margin.x']}px`);
+  root.setProperty('--hud-margin-y', `${h['margin.y']}px`);
+  root.setProperty('--hud-col-w', `${h['col.width']}px`);
+  root.setProperty('--hud-block-gap', `${h['block.gap']}px`);
+  root.setProperty('--hud-eyebrow-px', `${h['eyebrow.px']}px`);
+  root.setProperty('--hud-label-px', `${h['label.px']}px`);
+  root.setProperty('--hud-value-px', `${h['value.px']}px`);
+  root.setProperty('--hud-feed-px', `${h['feed.px']}px`);
+  root.setProperty('--hud-reg', `${h['reg.size']}px`);
+  root.setProperty('--hud-reveal-ms', `${h['reveal.ms']}ms`);
 }
 
 // deterministic pick within a [min,max] token range, seeded so it never uses

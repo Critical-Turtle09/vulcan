@@ -18,3 +18,9 @@ rl-*.png
 voice-*.png
 map-*.png
 rework-*.png
+baseline-*.png
+baseline-*.jpeg
+# stage audit shots (s0- sA- sB- sC- sD- sE-) + any jpeg self-screenshots
+s[0-9A-E]-*.png
+s[0-9A-E]-*.jpeg
+*.jpeg

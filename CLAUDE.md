@@ -7,11 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 VULCAN — Silicon Forge Intelligence. A Jarvis-style GPU/semiconductor supply-chain terminal. It runs
 full-screen on a Mac mini, summoned at login or by wake word. Sibling project to Hermes.
 
-**Current state: Phase 2 (BUILD).** The design spec is LOCKED (v1.2 — see below). Built so
-far: terrain material test (Slice 0), the orb (Slice 1), the voice organ (ORGAN 1), and the
-map rework (Slice 2R). The interface is **orb-home**: VULCAN is the centered orb by default;
-geography is *summoned* into an oblique terrain theater on demand. Every visual value ships
-from `tokens.json`; nothing is hardcoded in a component.
+**Current state: Phase 2 (BUILD) → v1+FORGE finishing campaign.** The design spec is LOCKED
+(v1.3 "FORGE AMENDMENT" — see below). Built so far: terrain material test (Slice 0), the orb
+(Slice 1), the voice organ (ORGAN 1), the map rework (Slice 2R), and the Forge amendment
+(molten palette, wave-orb, V.A.U.L.T HUD, mode/profile system). The interface is **orb-home**:
+VULCAN is the centered orb by default; geography is *summoned* into an oblique terrain theater
+on demand. The engine is **domain-blind** — every organ reads the ACTIVE PROFILE
+(`profiles/*.json`); `semiconductor` is the launch default, `bonsai` a scaffolded starter.
+Every visual value ships from `tokens.json`; nothing is hardcoded in a component.
 
 ## Phases
 
@@ -49,10 +52,40 @@ Explicitly rejected (from v0, "2002 video game"):
 
 ## Design spec
 
-> **DESIGN SPEC v1.2 — LOCKED.** (v1.2 amends Front C — see §6/§8: the ambient globe is
-> deleted; home is the orb, the map is summoned.) Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual
-> decision derives from the operator's reference corpus (REF-01…14). Nothing here is a
-> default; if a choice must deviate during build, flag it — never silently substitute.
+> **DESIGN SPEC v1.3 "FORGE AMENDMENT" — LOCKED.** (v1.2 deleted the ambient globe; v1.3
+> amends the accent to MOLTEN ORANGE, revises the orb form to audio-reactive WAVES, extends
+> the HUD to the V.A.U.L.T side columns, sets the wake phrase to "Fire and Forge", and makes
+> the engine domain-blind via a profile/mode system — see the FORGE AMENDMENT block below and
+> §3/§6/§8.) Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual decision derives from
+> the operator's reference corpus (REF-01…14). Nothing here is a default; if a choice must
+> deviate during build, flag it — never silently substitute.
+
+### FORGE AMENDMENT (v1.3) — deltas over v1.2
+
+- **PALETTE — molten, not ember.** The single rationed accent is now **MOLTEN ORANGE**
+  (lava / sunset / molten-iron heat): `signal.molten #EA6A1E`, ignite flash `signal.forge
+  #FF8A3D`, decay `signal.cooled #7E3A1B`. Ember red is retired everywhere. Discipline is
+  unchanged: greyscale world, bone-white data, ONE dominant heat signal (2–3 max on screen),
+  **≤2% heat pixels** in ambient state. Heat = meaning (events / alerts only), never decoration,
+  never price.
+- **ORB (Front B revised) — WAVES, not a ring.** The Saturn ring is RETIRED. VULCAN's form is
+  a particle-field sphere whose OUTER CONTOUR is **waves** — granular displacement of the house
+  dust (never smooth neon lines); the particle body rides the waves as its foundation.
+  **Audio-reactive:** waves stir to the operator's MIC amplitude while *listening*, surge to the
+  TTS envelope while *speaking*, and settle to a near-calm sea + tiny breathing heartbeat at
+  *idle*; *thinking* churns the sea and surfaces the network constellations (Skyfall read). Home
+  scale is reduced (~60%, `orb.scale`). Network constellations survive as the thinking state.
+- **HUD "V.A.U.L.T" (Front D extended) — side columns only.** LEFT column = **system vitals**
+  (voice / wire / quotes status, mode, uptime, heat index). RIGHT column = **command deck**
+  (active profile, directives, live wire-feed lines, recent events). Hairline Palantir blueprint
+  chrome, mono-caps, registration marks. Columns populate from real live state — no fake data.
+  **No bottom telemetry bar** (standing dislike-law, §7).
+- **WAKE PHRASE — "Fire and Forge"** (`voice.wakeWord`). "Vulcan" is retired as a wake word.
+- **MODE SYSTEM — profiles, domain-blind engine.** `profiles/*.json` describe a domain
+  (entities, wire feeds + keywords, quote symbols, panel dossiers, map on/off, HUD metrics). The
+  engine reads the ACTIVE profile and never hardcodes a domain. `semiconductor.json` is the v1
+  launch default; `bonsai.json` is a scaffolded starter (placeholder entities, map disabled).
+  Switch via key `P` (or command) with a granular crossflow. `profile.*` tokens.
 
 ### 0 · HOW TO READ THIS (Claude Code)
 
@@ -106,15 +139,16 @@ Explicitly rejected (from v0, "2002 video game"):
   "data.bone":     "#E6E4DE",   // primary data ink — never pure white
   "data.dim":      "#9A9DA2",   // secondary data, cooled labels
   "data.faint":    "#55585E",   // grid ghosts, contour lines, panel hairlines
-  "signal.ember":  "#D8442B",   // THE accent. Events, alerts, hostiles. Bloom-boosted.
-  "signal.cooled": "#7A3A30",   // ember decay state (event aging toward archive)
+  "signal.molten": "#EA6A1E",   // THE accent (v1.3). Events, alerts. Molten-iron heat. Bloom-boosted.
+  "signal.forge":  "#FF8A3D",   // ignite flash — the hottest crest of an event
+  "signal.cooled": "#7E3A1B",   // molten decay state (event aging toward archive)
   "panel.stroke":  "#3A3E44"    // blueprint hairlines, registration marks
 }
 ```
 
-- Ember appears on **<2% of any frame's pixels** in ambient state. If red is common, red is meaningless.
-- Event recency is encoded as **heat**: ignite at `signal.ember` + bloom flash → cool toward `signal.cooled` → archive at `data.faint`.
-- No other hues. No blues, no greens, no gradients-as-decoration. (Friend/foe distinction, if ever needed, is bone vs ember — already in corpus via REF-02 abstraction.)
+- Molten heat appears on **<2% of any frame's pixels** in ambient state. If heat is common, heat is meaningless.
+- Event recency is encoded as **heat**: ignite at `signal.forge` → settle to `signal.molten` + bloom flash → cool toward `signal.cooled` → archive at `data.faint`.
+- No other hues. No blues, no greens, no gradients-as-decoration. Molten is never used for price (quotes stay greyscale value + delta mark). Friend/foe, if ever needed, is bone vs molten.
 
 ### 4 · TYPE TOKENS
 
@@ -165,11 +199,16 @@ Explicitly rejected (from v0, "2002 video game"):
 
 **STAGE (A).** The void, with atmosphere. World objects are *lit bodies* staged like Dune's table: rim light, haze, grain, shallow DOF at rest. Nothing floats in flat black; everything sits in air.
 
-**ORB (B) — VULCAN's presence AND the home interface.** Dark-core sphere wearing luminous orbital ring(s) — Gargantua form, never a plain circle. Body material: see RL-2 (LOCKED). **The orb is the default screen — centered, full presence, the protagonist** (not docked, not cornered). It only shrinks to a small docked presence while the map is summoned. States:
-- *idle* — heartbeat pulse, ring drifts slowly off-axis
-- *listening* — ring brightens, tilts toward camera
-- *thinking* — particle body agitates; network constellations surface briefly (Skyfall read as a state, not the body)
-- *speaking* — ring luminance tracks voice amplitude
+**ORB (B) — VULCAN's presence AND the home interface (v1.3 WAVE FORM).** Dark-core particle
+sphere whose OUTER CONTOUR is **waves** — granular displacement of the house dust (the Saturn
+ring is retired; never smooth neon lines). The particle body rides the waves as its foundation.
+**The orb is the default screen — centered (~60% scale), full presence, the protagonist** (not
+docked, not cornered). It only shrinks to a small docked presence while the map is summoned.
+States (the sea is **audio-reactive**):
+- *idle* — near-calm sea + a tiny breathing heartbeat
+- *listening* — waves stir to the operator's live MIC amplitude
+- *thinking* — the sea churns and network constellations surface (Skyfall read as a state, not the body)
+- *speaking* — waves surge to the TTS playback envelope (real analyser, never a formula)
 
 **MAP (C) — SUMMONED theater (v1.2, NO GLOBE).** There is no ambient globe — no globe anywhere, ever. Geography is not persistent; it is *summoned* only when needed. On summon, the interface transforms orb → theater in one continuous granular crossflow: the orb dissolves as the region's terrain forms from the same dust, and the orb re-forms small/docked. Return reverses identically — the orb re-forms center.
 - The theater is an **oblique 3D sculptural terrain of the relevant REGION** — the Top Gun: Maverick briefing-map read (REF-02): monochrome sculpted topography, thin precise white route lines and data marks, instrument realism; Avatar (REF-05/07) oblique angle. No atlas chrome.
@@ -177,6 +216,12 @@ Explicitly rejected (from v0, "2002 video game"):
 - Regions of the silicon corridor: Taiwan, Veldhoven/EU, N. America, Korea (keys t/v/n/k).
 
 **PANELS (D).** Blueprint-schematic language (Palantir + Maverick): hairline `panel.stroke` outlines, registration marks, tethered leader-lines anchored to world objects. Panels exist only on interrogation — they resolve in granularly, they never dock to screen edges as bars, and the hero always outweighs them. Quotes/wire/alerts render as schematic annotations, not dashboard widgets.
+
+**HUD "V.A.U.L.T" (D, extended v1.3).** Two hairline blueprint **side columns** frame the orb —
+never a bottom bar. LEFT = system vitals (state, voice/wire/quotes status, heat index, uptime).
+RIGHT = command deck (active profile, directives, live wire-feed lines, recent events). Mono-caps,
+registration marks, `panel.stroke` rules. Rows resolve in staggered (never a pop-in block) and
+populate ONLY from real live state — no fake numbers. The hero orb/theater always outweighs it.
 
 ### 7 · KILL LIST (instant red-line, from the v0 autopsy + corpus dislikes)
 

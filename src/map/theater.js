@@ -9,7 +9,6 @@ import * as THREE from 'three';
 import { color } from '../tokens.js';
 import rawTokens from '../../tokens.json';
 import { simplex3 } from '../noise.js';
-import { REGIONS } from './regions.js';
 
 const M = rawTokens.map;
 const smooth = (e0, e1, x) => { const t = Math.min(Math.max((x - e0) / (e1 - e0), 0), 1); return t * t * (3 - 2 * t); };
@@ -102,7 +101,7 @@ export function createTheater() {
   sGeo.setDrawRange(0, 0);
   const sUni = {
     uTime: { value: 0 }, uReveal: { value: 0 }, uPixelRatio: { value: 1 },
-    uSize: { value: M['site.size'] }, uBone: { value: color('data.bone') }, uEmber: { value: color('signal.ember') },
+    uSize: { value: M['site.size'] }, uBone: { value: color('data.bone') }, uMolten: { value: color('signal.molten') },
     uPulseLo: { value: M['site.pulse'][0] },
   };
   const siteMarks = new THREE.Points(sGeo, new THREE.ShaderMaterial({
@@ -122,12 +121,12 @@ export function createTheater() {
         vPulse *= fl;
       }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uBone, uEmber; varying float vAlert, vPulse;
+      uniform vec3 uBone, uMolten; varying float vAlert, vPulse;
       void main(){
         vec2 c = gl_PointCoord-0.5; float d = length(c);
         float core = smoothstep(0.42,0.12,d), halo = smoothstep(0.5,0.3,d);
         if((core+halo)*vPulse <= 0.002) discard;
-        vec3 col = mix(uBone, uEmber, step(0.01, vAlert));   // ember hook — dark this slice
+        vec3 col = mix(uBone, uMolten, step(0.01, vAlert));   // molten heat hook (STAGE B drives aAlert)
         col *= 1.0 + vAlert*2.5;
         gl_FragColor = vec4(col, (core+halo*0.22)*vPulse);
       }`,
@@ -185,8 +184,11 @@ export function createTheater() {
 
   function clearGroup(g) { while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); if (c.material.dispose) c.material.dispose(); } }
 
-  function setRegion(regionId) {
-    region = REGIONS[regionId];
+  // takes the region data object directly (from the active profile — the engine
+  // is domain-blind, spec v1.3). Returns the resolved sites so callers can tether
+  // heat / quotes to real ground positions.
+  function setRegion(regionObj) {
+    region = regionObj;
     const seed = region.seed;
 
     // recompute terrain heights + normals for this region
@@ -298,5 +300,13 @@ export function createTheater() {
     return sites.map((s) => ({ site: s, world: s.world.clone() }));
   }
 
-  return { object: group, setRegion, update, siteScreens, get region() { return region; }, get active() { return active; }, get headU() { return headU; } };
+  // resolved sites (world positions) for the current region — used by heat/quotes
+  // organs to tether marks to real ground. Empty until setRegion runs.
+  function siteById(id) { return sites.find((s) => s.id === id) || null; }
+
+  return {
+    object: group, setRegion, update, siteScreens,
+    get region() { return region; }, get sites() { return sites; }, siteById,
+    get active() { return active; }, get headU() { return headU; },
+  };
 }

@@ -14,6 +14,7 @@
     body { cursor: none; }
     #stage { position: fixed; inset: 0; display: block; }
     #label-layer { position: fixed; inset: 0; pointer-events: none; }
+    #panel-layer { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
 
     /* tethered site marks in the theater */
     .site-label {
@@ -27,42 +28,90 @@
       border: 1px solid var(--panel-stroke); transform: translate(-2px,-50%) rotate(45deg);
     }
 
-    /* state HUD — quiet mono-caps, bottom-left. Not a telemetry bar (§7). */
-    #hud { position: fixed; left: 38px; bottom: 34px; pointer-events: none;
+    /* ---- V.A.U.L.T HUD — blueprint side columns (§6-D, no bottom bar) ---- */
+    .vault-col {
+      position: fixed; top: var(--hud-margin-y); pointer-events: none;
       font-family: var(--type-mono); text-transform: uppercase;
-      letter-spacing: var(--label-track); color: var(--data-dim); }
-    #hud-region { font-size: 10.5px; color: var(--data-faint); margin-bottom: 8px; }
-    #state-name { font-size: 15px; color: var(--data-bone); }
-    #state-hint { font-size: 11px; color: var(--data-faint); margin-top: 4px; }
-    #voice-muted { font-size: 10.5px; color: var(--data-dim); margin-top: 9px; min-height: 12px;
-      opacity: 0; transition: opacity 320ms ease; }
-    #voice-offline { font-size: 10.5px; color: var(--signal-ember); margin-top: 4px; min-height: 12px; }
-    #keys { position: fixed; right: 38px; bottom: 34px; pointer-events: none;
-      font-family: var(--type-mono); font-size: 10.5px; letter-spacing: var(--label-track);
-      text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.7; }
+      letter-spacing: var(--label-track); width: var(--hud-col-w);
+    }
+    #vault-left  { left: var(--hud-margin-x); }
+    #vault-right { right: var(--hud-margin-x); text-align: right; }
+    .vault-eyebrow {
+      font-size: var(--hud-eyebrow-px); color: var(--data-faint);
+      padding-bottom: 7px; margin-bottom: 11px; border-bottom: 1px solid var(--panel-stroke);
+      display: flex; justify-content: space-between; gap: 10px;
+    }
+    #vault-right .vault-eyebrow { flex-direction: row-reverse; }
+    .vault-block { margin-bottom: var(--hud-block-gap); }
+    .vault-block-title { font-size: var(--hud-eyebrow-px); color: var(--data-dim); margin-bottom: 8px; }
+    .vault-row {
+      display: flex; justify-content: space-between; gap: 12px;
+      font-size: var(--hud-value-px); line-height: 1.65; margin-bottom: 2px;
+      opacity: 0; transition: opacity var(--hud-reveal-ms) ease;
+    }
+    #vault-right .vault-row { flex-direction: row-reverse; }
+    .vault-row .k { color: var(--data-faint); font-size: var(--hud-label-px); }
+    .vault-row .v { color: var(--data-bone); }
+    .vault-row .v.dim  { color: var(--data-dim); }
+    .vault-row .v.heat { color: var(--signal-molten); }
+    .vault-line {
+      font-size: var(--hud-feed-px); color: var(--data-dim); line-height: 1.7;
+      margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      opacity: 0; transition: opacity var(--hud-reveal-ms) ease;
+    }
+    .vault-line .tick { color: var(--data-faint); margin-right: 6px; }
+    .vault-line.heat .tick { color: var(--signal-molten); }
+    .vault-directive { font-size: var(--hud-label-px); color: var(--data-dim); line-height: 1.75; margin-bottom: 2px; }
+    /* registration mark on each column corner (blueprint chrome) */
+    .vault-col::after {
+      content: ""; position: absolute; top: -9px; width: var(--hud-reg); height: var(--hud-reg);
+      border-top: 1px solid var(--panel-stroke); opacity: 0.7;
+    }
+    #vault-left::after  { left: 0;  border-left: 1px solid var(--panel-stroke); }
+    #vault-right::after { right: 0; border-right: 1px solid var(--panel-stroke); }
+
+    #keys { position: fixed; right: var(--hud-margin-x); bottom: 30px; pointer-events: none;
+      font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
+      text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.65; opacity: 0.72; }
     #keys b { color: var(--data-dim); font-weight: 500; }
-    #keys .sep { height: 8px; }
   </style>
 </head>
 <body>
   <canvas id="stage"></canvas>
   <div id="label-layer"></div>
-  <div id="hud">
-    <div id="hud-region">VULCAN · HOME</div>
-    <div id="state-name">IDLE</div>
-    <div id="state-hint">AWAITING</div>
-    <div id="voice-muted">MIC MUTED</div>
-    <div id="voice-offline"></div>
-  </div>
+  <div id="panel-layer"></div>
+
+  <!-- LEFT column — SYSTEM VITALS -->
+  <aside id="vault-left" class="vault-col">
+    <div class="vault-eyebrow"><span id="vault-mode">HOME</span><span>V.A.U.L.T</span></div>
+    <div class="vault-block">
+      <div class="vault-block-title">VITALS</div>
+      <div class="vault-row"><span class="k">STATE</span><span class="v" id="vt-state">IDLE</span></div>
+      <div class="vault-row"><span class="k">VOICE</span><span class="v dim" id="vt-voice">OFFLINE</span></div>
+      <div class="vault-row"><span class="k">WIRE</span><span class="v dim" id="vt-wire">STANDBY</span></div>
+      <div class="vault-row"><span class="k">QUOTES</span><span class="v dim" id="vt-quotes">STANDBY</span></div>
+      <div class="vault-row"><span class="k">HEAT</span><span class="v" id="vt-heat">0.00</span></div>
+      <div class="vault-row"><span class="k">UPTIME</span><span class="v dim" id="vt-uptime">00:00</span></div>
+    </div>
+  </aside>
+
+  <!-- RIGHT column — COMMAND DECK -->
+  <aside id="vault-right" class="vault-col">
+    <div class="vault-eyebrow"><span id="vault-profile">SILICON FORGE</span><span>DECK</span></div>
+    <div class="vault-block">
+      <div class="vault-block-title">DIRECTIVES</div>
+      <div id="vt-directives"></div>
+    </div>
+    <div class="vault-block">
+      <div class="vault-block-title">WIRE FEED</div>
+      <div id="vt-feed"></div>
+    </div>
+  </aside>
+
   <div id="keys">
-    <div><b>T</b> TAIWAN</div>
-    <div><b>V</b> VELDHOVEN/EU</div>
-    <div><b>N</b> N. AMERICA</div>
-    <div><b>K</b> KOREA</div>
+    <div><b>T V N K</b> SUMMON REGION</div>
     <div><b>0 / ESC</b> HOME</div>
-    <div class="sep"></div>
-    <div><b>1–4</b> ORB STATE</div>
-    <div><b>M</b> MIC MUTE</div>
+    <div><b>1–4</b> ORB STATE · <b>M</b> MUTE · <b>P</b> PROFILE</div>
   </div>
   <script type="module" src="/src/orb/main.js"></script>
 </body>

@@ -1,0 +1,27 @@
+{
+  "id": "bonsai",
+  "name": "BONSAI ATELIER",
+  "eyebrow": "CULTIVATION INTELLIGENCE",
+  "note": "SCAFFOLD — placeholder entities, map disabled. Populate before live use.",
+  "hud": {
+    "profile": "BONSAI ATELIER",
+    "directives": [
+      "TEND · CANOPY BALANCE",
+      "WATCH · SEASONAL WINDOW",
+      "TRACK · ROOT HEALTH"
+    ]
+  },
+  "map": {
+    "enabled": false,
+    "regions": {}
+  },
+  "wire": {
+    "feeds": [
+      { "label": "BONSAI", "url": "https://news.google.com/rss/search?q=bonsai+cultivation&hl=en-US&gl=US&ceid=US:en" }
+    ],
+    "keywords": {}
+  },
+  "quotes": {
+    "symbols": []
+  }
+}

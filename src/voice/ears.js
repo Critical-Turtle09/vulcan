@@ -14,7 +14,7 @@ export function createEars({ bridge, mode }) {
 
   // ---------- TEST MODE ----------
   if (mode === 'test') {
-    let manualWake = null, wakeReject = null, wakeTimer = null;
+    let manualWake = null, wakeReject = null, wakeTimer = null, capturing = false;
     return {
       mode: 'test',
       offline: false,
@@ -28,9 +28,12 @@ export function createEars({ bridge, mode }) {
       // muted: abort a pending wake so the loop can park (no synthetic wake fires)
       suspend() { clearTimeout(wakeTimer); if (wakeReject) { const r = wakeReject; manualWake = wakeReject = null; r(new Error('aborted')); } },
       async capture() {
+        capturing = true;
         return new Promise((resolve) =>
-          setTimeout(() => resolve({ transcript: `${wakeWord} status report` }), V.test.captureMs));
+          setTimeout(() => { capturing = false; resolve({ transcript: `${wakeWord} status report` }); }, V.test.captureMs));
       },
+      // synthetic mic envelope so LISTENING waves stir with no real mic
+      getLevel() { return capturing ? (0.22 + 0.18 * Math.abs(Math.sin(performance.now() / 90))) : 0; },
       stop() {},
     };
   }
@@ -39,6 +42,7 @@ export function createEars({ bridge, mode }) {
   let ctx = null, stream = null, proc = null, source = null;
   let srcRate = 48000;
   let ready = false, offline = false;
+  let level = 0;   // running mic RMS — feeds the LISTENING waves (real amplitude)
 
   async function init() {
     if (ready) return true;
@@ -82,6 +86,8 @@ export function createEars({ bridge, mode }) {
   return {
     mode: 'live',
     get offline() { return offline; },
+    // running mic amplitude (0..1-ish RMS) — the LISTENING waves stir to this
+    getLevel() { return ready ? level : 0; },
     async available() { return init(); },
     // resolve when a spoken segment transcribes to something containing the wake word
     async listenForWake() {
@@ -90,7 +96,7 @@ export function createEars({ bridge, mode }) {
         abortWake = () => { if (proc) proc.onaudioprocess = null; abortWake = null; reject(new Error('aborted')); };
         let seg = [], speaking = false, silence = 0;
         onFrame(async (buf) => {
-          const rms = rmsOf(buf);
+          const rms = rmsOf(buf); level = rms;
           if (rms > V['vad.threshold']) { speaking = true; silence = 0; seg.push(buf.slice()); }
           else if (speaking) {
             silence += buf.length / srcRate * 1000;
@@ -112,7 +118,7 @@ export function createEars({ bridge, mode }) {
         let seg = [], silence = 0, started = false, elapsed = 0;
         onFrame(async (buf) => {
           elapsed += buf.length / srcRate * 1000;
-          const rms = rmsOf(buf);
+          const rms = rmsOf(buf); level = rms;
           seg.push(buf.slice());
           if (rms > V['vad.threshold']) { started = true; silence = 0; }
           else if (started) silence += buf.length / srcRate * 1000;
@@ -133,13 +139,13 @@ export function createEars({ bridge, mode }) {
       if (source) { source.disconnect(); source = null; }
       if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
       if (ctx) { ctx.close(); ctx = null; }
-      ready = false;
+      ready = false; level = 0;
     },
     stop() {
       if (proc) proc.onaudioprocess = null;
       if (stream) stream.getTracks().forEach((t) => t.stop());
       if (ctx) ctx.close();
-      ready = false;
+      ready = false; level = 0;
     },
   };
 }

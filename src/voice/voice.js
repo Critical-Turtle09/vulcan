@@ -89,9 +89,16 @@ export function createVoice({ orb, bridge, forceTest = false }) {
     }
   }
 
-  // called every render frame: feed the REAL playback amplitude to the ring
+  // called every render frame: feed the REAL amplitude driving the orb's waves.
+  // SPEAKING rides the TTS playback envelope; LISTENING stirs to live mic RMS;
+  // otherwise the sea is calm. (main.js may override with a synthetic envelope
+  // for the headless audit — last writer per frame wins.)
   function tick() {
-    if (mouth) orb.setAmplitude(mouth.playing ? mouth.getAmplitude() : 0);
+    if (mouth && mouth.playing) { orb.setAmplitude(mouth.getAmplitude()); return; }
+    if (orb.stateName === 'listening' && ears && ears.getLevel) {
+      orb.setAmplitude(Math.min((ears.getLevel() || 0) * 5, 1)); return;
+    }
+    orb.setAmplitude(0);
   }
 
   return {

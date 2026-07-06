@@ -1,8 +1,23 @@
-# VULCAN — DESIGN SPEC v1.1
-<!-- Paste into CLAUDE.md design-spec placeholder after operator red-line. -->
+# VULCAN — DESIGN SPEC v1.3 "FORGE AMENDMENT"
+<!-- Living copy of the deltas lives in CLAUDE.md → "## Design spec" (kept in lockstep). -->
 <!-- Every visual decision below derives from the operator's reference corpus (REF-01…14). -->
 <!-- Nothing here is a default. If a choice must deviate during build, flag it — never silently substitute. -->
 <!-- v1.1: FLUIDITY LAW elevated to doctrine 11 (v0 autopsy finding #2 — instant hard cuts). -->
+<!-- v1.2: ambient globe deleted; home is the orb, geography is summoned (Front C). -->
+<!-- v1.3 FORGE AMENDMENT: accent → MOLTEN ORANGE; orb ring → audio-reactive WAVES; HUD → V.A.U.L.T
+     side columns; wake phrase → "Fire and Forge"; engine domain-blind via profiles/ mode system. -->
+
+> **v1.3 FORGE AMENDMENT (deltas over v1.1/v1.2):**
+> - **Accent = MOLTEN ORANGE** (`signal.molten #EA6A1E`, flash `signal.forge #FF8A3D`, decay
+>   `signal.cooled #7E3A1B`). Ember red retired. Discipline unchanged — ≤2% heat pixels, heat = meaning.
+> - **Orb = WAVES** (Saturn ring retired): particle sphere whose outer contour is granular wave
+>   displacement of the house dust; audio-reactive (mic while listening, TTS envelope while
+>   speaking, calm heartbeat at idle, churn + constellations while thinking). Home scale ~60%.
+> - **HUD = V.A.U.L.T** — hairline blueprint side columns: LEFT vitals, RIGHT command deck. No
+>   bottom bar. Real live state only.
+> - **Wake phrase = "Fire and Forge"** (`voice.wakeWord`).
+> - **Mode system** — `profiles/*.json` drive a domain-blind engine; `semiconductor` default,
+>   `bonsai` scaffold. Switch key `P`, granular crossflow.
 
 ## 0 · HOW TO READ THIS (Claude Code)
 
@@ -56,8 +71,9 @@
   "data.bone":     "#E6E4DE",   // primary data ink — never pure white
   "data.dim":      "#9A9DA2",   // secondary data, cooled labels
   "data.faint":    "#55585E",   // grid ghosts, contour lines, panel hairlines
-  "signal.ember":  "#D8442B",   // THE accent. Events, alerts, hostiles. Bloom-boosted.
-  "signal.cooled": "#7A3A30",   // ember decay state (event aging toward archive)
+  "signal.molten": "#EA6A1E",   // THE accent (v1.3). Events, alerts. Molten-iron heat. Bloom-boosted.
+  "signal.forge":  "#FF8A3D",   // ignite flash — hottest crest of an event
+  "signal.cooled": "#7E3A1B",   // molten decay state (event aging toward archive)
   "panel.stroke":  "#3A3E44"    // blueprint hairlines, registration marks
 }
 ```
