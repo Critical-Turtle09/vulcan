@@ -61,6 +61,112 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   audit` — a real occlusion test (temporary `pointer-events:auto` + `elementFromPoint`)
   that fails if the columns are covered or transparent. Audit now **18/18 PASS**.
 
+### PART 3 — Orb rings rework: Line2 wave-tethered contours 🟢 DONE
+- **What changed:** retired the `LineLoop`/`LineBasicMaterial` rings (WebGL ignored
+  `linewidth`, so they could never thicken) for **Line2/LineGeometry/LineMaterial**.
+- **Wave-tethered:** every ring vertex now rides the **identical displacement field
+  as the body** (`displaceJS`), so each ring reads as a molten-surface contour —
+  wavy, never circular — and surges with audio like the sea.
+- **Persistent molten ring:** one always-on heat contour (`rings.molten.*`), slow
+  breathing + wire-heat flush; opacity tuned 0.34→0.6 so it reads molten-iron, not
+  crimson, while a thin ring stays under the ambient heat budget.
+- **Clustered dots:** bone beads bunched along each contour (`rings.dotsPerRing/
+  dotSize`), sampled from the live displaced line, dpr-scaled.
+- **Token schema reworked:** `radii/noiseAmp/noiseFreq/audioGain/speed` →
+  `offsets/spinFollow/dotsPerRing/dotSize/molten{}`. `orb.setResolution` wired from
+  main.js (Line2 needs the drawing-buffer size). Screenshots idle/listening/speaking
+  (`p3-idle2/-listening2/-speaking.jpeg`) — calm undulation → stir to mic → surge to TTS.
+- **Operator eyes:** listening/speaking at high amplitude churn the sea hard (the
+  silhouette loosens by design — audio-reactive). Tune via `orb.states.*.waveAmp`
+  / `wave.maxAmp` if you want a tighter body.
+
+### PART 4 — Ceremony v2: richer strike, longer quench 🟢 DONE
+- **Ignition richer:** `spark.count` 1900→2400, `ceremony.ms` 3000→3200; the STRIKE
+  is now a **double hairline shockwave** (lead ring + lagging inner ghost,
+  `shock.innerLag`) — a richer hammer-on-anvil read than one circle.
+- **Quench longer + richer:** `bank.ms` 1800→2600; the cooling splits — ~82% of
+  sparks **steam upward** (`quench.steamRise`), ~18% heavy **embers fall**
+  (`quench.emberFall`), all drift outward as the orb cools to grey.
+- **Real screen through the dissolve:** verified with a simulated desktop backdrop —
+  the real screen shows THROUGH both the ignition sparks and the quench dissolve
+  (canvas lighten-composite), the orb condensing/dissolving as granular matter over
+  it (`p4-strike.jpeg`, `p4-quench-mid.jpeg`).
+- **Operator eyes:** the mid-quench shot used an over-bright test backdrop, which
+  washes out the (additive) dissolving orb; on a real, darker desktop the dissolve
+  reads far stronger. Worth a look in the packaged .app over a normal screen.
+
+### PART 5 — Map country borders + labels + legends 🟢 DONE
+- **Real political layer** (public-domain Natural Earth 50m, same corpus as PART 2 —
+  no fabricated geography). `build-topo.mjs` clips **admin-0 boundary lines** per
+  region into normalized (u,v); `theater.js` draws them as quiet terrain-riding
+  hairlines (`data.faint`, `border.*` tokens), distinct from the bright bone coast.
+- **Honest by construction:** Taiwan yields **0 land borders** (the strait is
+  maritime), EU gets NL/DE/BE, Korea the DMZ, N.America the US–Mexico line.
+- **Country labels:** NE admin-0 label points — in-bbox countries render on the
+  terrain; a curated per-region EXTRA (China, N.Korea, USA, Mexico) covers countries
+  in view whose centroid is off-bbox. Because fab sites are **hand-placed (not
+  geo-registered)**, a geo-accurate label can fall off the camera frame — those
+  clamp to a safe band with a ‹/› caret (off-view indicator), de-collided, clear of
+  the V.A.U.L.T columns.
+- **Legend:** extended with `▬ COAST` and, only where a land border exists, `─ BORDER`.
+- **Evidence:** `p5-eu2.jpeg` (NL/DE/BE), `p5-korea2.jpeg` (S.Korea + DMZ),
+  `p5-taiwan2.jpeg` (TAIWAN + ‹ CHINA, no BORDER in legend).
+- **KNOWN LIMITATION (morning):** the terrain is real geography at full span but the
+  fab sites are hand-placed decoratively, so borders/labels don't register 1:1 with
+  the site marks and some borders sit off the framed center. A true fix is to
+  geo-register the sites (place them by lon/lat through the same u,v transform).
+
+### PART 6 — .app packaging + login item 🟢 DONE
+- **Packaged** with `@electron/packager` (arm64) → `release/VULCAN.app` (bundle id
+  `com.siliconforge.vulcan`, asar off so the main process keeps fs-reading
+  tokens.json/profiles/.env). `vite base:'./'` + `build:web` produce `dist/`; main.js
+  loads `dist/index.html` when `app.isPackaged`, else the dev server. `three` moved to
+  devDependencies (build-time only), ignore list trims scratch/dev/media.
+- **Login item** (packaged only): `openAtLogin` default-on first run, `openAsHidden`
+  so it boots resident to the tray + wake listener with **no overlay flash**
+  (`ready-to-show` honors `wasOpenedAsHidden`); operator toggle in the tray.
+- **Verified:** built renderer boots over a file://-equivalent preview; packaged main
+  process boots clean via the DIAG self-test (no crash / missing files); Info.plist +
+  bundle structure correct.
+- **Operator eyes:** unsigned/un-notarized (local Mac mini use). First launch needs a
+  right-click → Open (Gatekeeper). Screen-recording permission for the ceremony
+  backdrop and mic permission prompt on first use. `npm run pack` rebuilds it.
+
+### PART 7 — Kokoro TTS via python3.11 venv 🟢 DONE (upgrades Night I's deferral)
+- Night I deferred Kokoro (Python 3.9 < required 3.10). Now stood up on **python3.11**:
+  `voice/kokoro/venv` with **kokoro-onnx** (onnxruntime) + `espeakng-loader` (bundled
+  espeak-ng, no system install) + soundfile.
+- `say.py` (kokoro-onnx → 24 kHz mono WAV) behind `kokoro-say`, matching the
+  `KOKORO_BIN "<text>" -o <out.wav>` contract the voice organ already had. Default
+  voice **`bm_george`** (British male — the Jarvis/forge read); `KOKORO_VOICE` overrides.
+- `setup.sh` recreates venv + downloads the ~350 MB models idempotently; `venv/` +
+  `models/` gitignored and excluded from the .app (packaged app uses the absolute
+  `KOKORO_BIN` into the source tree). README + .env.example document it.
+- **Verified:** standalone synth (2.77 s, peak 0.52, 62% non-silent real speech) and
+  the exact `voice-main.js` spawn path (`KOKORO_BIN [text,'-o',out]` → valid WAV).
+  With no ELEVENLABS key the chain now lands on **Kokoro**, not macOS `say`.
+
+### PART 8 — Performance pass 🟢 DONE
+- **Ring buffer reuse:** the PART 3 rings called `LineGeometry.setPositions()` every
+  frame for 7 rings (reallocating the interleaved buffer + recomputing bounds — GC
+  churn at 60 Hz). Now the buffer is allocated once and the per-frame update writes
+  straight into `attributes.instanceStart.data.array`; `frustumCulled=false` skips the
+  bounds recompute.
+- **Summoned-scene draw gating:** the 60k-point terrain + schematic were always in the
+  scene, issuing full draws at home that produced only alpha-0 fragments. Gate
+  `object.visible` on reveal so those draws are skipped when they'd render nothing.
+- **Measured:** 60 fps home-idle / home-speaking(audio) / taiwan-theater (rAF-capped;
+  the wins are GPU/GC headroom for a base Mac mini, not average FPS here). Summon↔
+  dismiss crossflow intact (visibility flips while content alpha ≈ 0 → no pop-in).
+
+### PART 9 — Close-out 🟢 DONE
+- `npm run audit` → **18/18 PASS** (FLUIDITY-AUDIT-v2.md regenerated); none of PART
+  3–8 regressed doctrine-11 (ceremony 0.016, bank/quench 0.02, ring reactivity 0.038,
+  summon 0.049). Report Night II section written; all parts committed + pushed.
+- **Not done / deferred this run:** none of PART 3–9 were blocked. The one carry-over
+  is the PART 5 geo-registration limitation above (sites vs real topo) — a design
+  decision for the operator, not a bug.
+
 ## Part log
 
 ### PART 1 — RL-4 signing pass 🟢
