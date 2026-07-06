@@ -114,7 +114,11 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     triggerWake() { if (ears && ears.triggerWake) ears.triggerWake(); },
     triggerDismiss() { if (ears && ears.triggerDismiss) ears.triggerDismiss(); },
     stop() { running = false; if (ears) ears.stop(); },
-    status() { return { online, mode, state: orb.stateName, offlineReason, muted }; },
+    status() {
+      const provider = mouth ? mouth.getProvider() : null;
+      const local = provider === 'say' || provider === 'kokoro';
+      return { online, mode, state: orb.stateName, offlineReason, muted, provider, local };
+    },
   };
 }
 

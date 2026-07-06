@@ -16,7 +16,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 2 | Real geography | 🟡 DRAFT | real Natural Earth land/sea wired + rendering; relief derived (not DEM), legibility a morning tune |
 | 3 | Molten ink + legends | 🟢 DONE | molten working-ink on scenes, ink.* tokens, per-scene legend, role labels |
 | 4 | Scene library groundwork (schematic DRAFT) | 🟡 DRAFT | registry + device/schematic v0 (condense + explode), procedural |
-| 5 | Local voice fallback | … | |
+| 5 | Local voice fallback | 🟢 DONE (Kokoro deferred: py3.9) | provider chain elevenlabs→kokoro→say; say fallback tested |
 | 6 | Local reflexes (Ollama) | … | |
 | 7 | Profile drafts | … | |
 | 8 | Regression harness | … | |
@@ -89,4 +89,20 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   fog off). `p4-assembled` / `p4-exploded` (die lifts, HBM out, VRM forward).
 - **DRAFT:** dim house-material read + basic labels; brightness, per-part legend
   panels, and graph/timeline scenes are follow-ups.
+
+### PART 5 — Local voice fallback 🟢 (Kokoro deferred)
+- **Provider abstraction** in `voice-main.js` with auto-failover
+  (`voice.providerChain`): **elevenlabs** (cloud) → **kokoro** (local, slots in via
+  `$KOKORO_BIN`) → **say** (macOS, always available). ElevenLabs returning
+  null on quota/auth/network fails over automatically. `VULCAN_TTS_PROVIDER` env
+  forces one (for testing).
+- **macOS `say`** fallback tested headless: produces valid RIFF/WAVE, base64
+  round-trips cleanly, decodes through the SAME analyser → envelope drives orb +
+  rings identically on every provider.
+- HUD: local TTS surfaces as `LISTENING · LOCAL SAY` (molten) on the VOICE vitals
+  line. `voice.status()` exposes `{provider, local}`.
+- **Kokoro deferred (blocked):** system Python is **3.9.6** (< kokoro's 3.10+),
+  and kokoro pulls heavy deps + a ~300MB model — impractical to install cleanly
+  unattended. Wired to slot in when a `KOKORO_BIN` is configured. `say` is the
+  shipped tested local path.
 

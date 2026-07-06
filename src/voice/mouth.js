@@ -12,6 +12,7 @@ export function createMouth({ bridge }) {
   let analyser = null;
   let dataArr = null;
   let playing = false;
+  let lastProvider = null;   // ORGAN 1.5 — which TTS provider produced the last audio
   // fallback envelope (only if the analyser yields no signal, e.g. a suspended
   // context) — still the real envelope of the real buffer, read by position.
   let fbBuffer = null, fbStart = 0;
@@ -98,14 +99,16 @@ export function createMouth({ bridge }) {
     try {
       const res = await bridge.tts(text);
       if (res && res.ok && res.audioBase64) {
+        lastProvider = res.provider || 'cloud';   // elevenlabs | kokoro | say
         const bytes = Uint8Array.from(atob(res.audioBase64), (c) => c.charCodeAt(0));
         ensureCtx();
         const audio = await ctx.decodeAudioData(bytes.buffer);
-        return play(audio);
+        return play(audio);   // same analyser path -> envelope drives orb + rings identically
       }
     } catch (_) { /* fall through to synthetic */ }
+    lastProvider = 'synthetic';
     return play(synth(durS));
   }
 
-  return { speak, getAmplitude, get playing() { return playing; }, resume: ensureCtx };
+  return { speak, getAmplitude, get playing() { return playing; }, getProvider() { return lastProvider; }, resume: ensureCtx };
 }

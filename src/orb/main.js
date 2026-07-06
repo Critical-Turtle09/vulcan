@@ -252,9 +252,11 @@ let lastStatusStr = '';
 function paintHud() {
   vt.state.textContent = orb.stateName.toUpperCase();
   const s = voice.status();
-  vt.voice.textContent = s.online ? (s.muted ? 'MUTED' : STATE_HINTS[orb.stateName] || 'LIVE')
+  // ORGAN 1.5 — surface local-TTS failover as a "LOCAL" tag
+  const localTag = s.local ? ` · LOCAL ${(s.provider || '').toUpperCase()}` : '';
+  vt.voice.textContent = s.online ? (s.muted ? 'MUTED' : `${STATE_HINTS[orb.stateName] || 'LIVE'}${localTag}`)
     : `OFFLINE · ${s.offlineReason || 'UNAVAILABLE'}`;
-  vt.voice.className = 'v ' + (s.online ? (s.muted ? 'dim' : '') : 'heat');
+  vt.voice.className = 'v ' + (s.online ? (s.muted ? 'dim' : (s.local ? 'heat' : '')) : 'heat');
   const ws = wire.status();
   vt.wire.textContent = ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : `OFFLINE · ${ws.offlineReason || 'STANDBY'}`;
   vt.wire.className = 'v ' + (ws.online ? '' : (ws.offlineReason === 'STANDBY' ? 'dim' : 'heat'));
