@@ -10,6 +10,9 @@
 //   thinking  — the sea churns and network constellations surface (Skyfall read)
 // Every state change lerps continuously — nothing snaps.
 import * as THREE from 'three';
+import { Line2 } from 'three/addons/lines/Line2.js';
+import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
+import { LineMaterial } from 'three/addons/lines/LineMaterial.js';
 import { color } from '../tokens.js';
 import { SIMPLEX3 } from '../glsl-noise.js';
 import { simplex3 } from '../noise.js';
@@ -181,24 +184,84 @@ export function createOrb() {
   // threading the orb, NEVER straight or perfectly circular: each vertex is
   // continuously displaced by noise (wavy, molten-surface read), each ring
   // independently phased and tilted. Audio-reactive like the body. ----
-  const RG = O.rings || { count: 0, radii: [], segments: 128, noiseAmp: 0.2, noiseFreq: 2.6, audioGain: 0.5, speed: 0.4, tilts: [0], opacity: 0.5 };
+  // v1.3 PART 3 rework: rings are Line2 (real, thicker CSS-pixel stroke — the old
+  // LineLoop ignored linewidth in WebGL) TETHERED to the orb's displacement field:
+  // every vertex rides the identical sea as the body (displaceJS), so each ring
+  // reads as a molten-surface contour — wavy, never circular. Plus a PERSISTENT
+  // molten ring (always breathing, heat-flushed) and CLUSTERED bone dots riding
+  // each contour. Audio-reactive like the body.
+  const RG = O.rings;
   const rings = [];
+  const ringMats = [];                                 // for setResolution
   const group = new THREE.Group();
   group.add(core, body, constLines, constNodes);
-  for (let i = 0; i < RG.count; i++) {
+
+  function buildRing({ off, tilt, weight, opacity, molten }) {
     const seg = RG.segments;
-    const rpos = new Float32Array(seg * 3);
-    const rgeo = new THREE.BufferGeometry();
-    rgeo.setAttribute('position', new THREE.BufferAttribute(rpos, 3));
-    const rmat = new THREE.LineBasicMaterial({
-      color: color('data.bone'), transparent: true, depthWrite: false,
-      blending: THREE.AdditiveBlending, opacity: RG.opacity, linewidth: RG.lineWeight || 1,
+    // rest contour = a tilted unit circle of DIRECTIONS; the sea displaces it live
+    const dirs = new Float32Array(seg * 3);
+    for (let j = 0; j < seg; j++) {
+      const th = j / seg * Math.PI * 2;
+      const d = rotX([Math.cos(th), 0, Math.sin(th)], tilt);
+      dirs[j*3] = d[0]; dirs[j*3+1] = d[1]; dirs[j*3+2] = d[2];
+    }
+    const lpos = new Float32Array((seg + 1) * 3);      // +1 closes the loop
+    const lgeo = new LineGeometry();
+    lgeo.setPositions(lpos);
+    const lmat = new LineMaterial({
+      color: molten ? color('signal.molten') : color('data.bone'),
+      linewidth: weight, worldUnits: false, transparent: true, opacity,
+      depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
     });
-    const loop = new THREE.LineLoop(rgeo, rmat);
-    loop.renderOrder = 2;
-    group.add(loop);
-    rings.push({ geo: rgeo, pos: rpos, mat: rmat, seg, radius: (RG.radii[i] || 1) * R, tilt: RG.tilts[i % RG.tilts.length] || 0, phase: i * 1.73 });
+    const line = new Line2(lgeo, lmat);
+    line.renderOrder = molten ? 4 : 2;
+    group.add(line);
+    ringMats.push(lmat);
+
+    // clustered dots — a few beads bunched along the contour (never evenly strewn),
+    // sampled from the live displaced line each frame
+    const nd = RG.dotsPerRing;
+    const dotIdx = new Int32Array(nd);
+    const clusters = 3, per = Math.ceil(nd / clusters);
+    let di = 0;
+    for (let c = 0; c < clusters && di < nd; c++) {
+      const center = (c / clusters + off * 0.37 + (molten ? 0.5 : 0)) % 1;
+      for (let m = 0; m < per && di < nd; m++) {
+        const frac = (center + (m / per - 0.5) * 0.07 + 1) % 1;
+        dotIdx[di++] = Math.floor(frac * seg) % seg;
+      }
+    }
+    const dotPos = new Float32Array(nd * 3);
+    const dgeo = new THREE.BufferGeometry();
+    dgeo.setAttribute('position', new THREE.BufferAttribute(dotPos, 3));
+    const dmat = new THREE.PointsMaterial({
+      color: molten ? color('signal.molten') : color('data.bone'),
+      size: RG.dotSize, sizeAttenuation: false, transparent: true, opacity,
+      depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending,
+    });
+    const dots = new THREE.Points(dgeo, dmat);
+    dots.renderOrder = molten ? 5 : 3;
+    group.add(dots);
+
+    return {
+      dirs, seg, off, molten, lgeo, lpos, lmat, baseOpacity: opacity,
+      dotIdx, dotPos, dgeo, dmat,
+      breatheAmp: molten ? RG.molten.breatheAmp : 0,
+      breatheHz:  molten ? RG.molten.breatheHz  : 0,
+    };
   }
+
+  for (let i = 0; i < RG.count; i++) {
+    rings.push(buildRing({
+      off: RG.offsets[i], tilt: RG.tilts[i % RG.tilts.length],
+      weight: RG.lineWeight, opacity: RG.opacity, molten: false,
+    }));
+  }
+  // persistent molten ring — VULCAN's single rationed heat, always threading the orb
+  rings.push(buildRing({
+    off: RG.molten.offset, tilt: RG.molten.tilt,
+    weight: RG.molten.lineWeight, opacity: RG.molten.opacity, molten: true,
+  }));
 
   // ---- CPU wave (must match the GLSL so constellations ride the same sea) ----
   function rotY(v, a){ const c=Math.cos(a), s=Math.sin(a); return [c*v[0]+s*v[2], v[1], -s*v[0]+c*v[2]]; }
@@ -240,6 +303,10 @@ export function createOrb() {
   let heatTick = 0;                      // molten rim flash, decays over wire.tick.decayMs
   const heatDecayMs = (rawTokens.wire && rawTokens.wire['tick.decayMs']) || 7000;
 
+  // Line2 stroke width is CSS-pixel-space — materials need the drawing-buffer
+  // resolution to convert. Wired from main.js on init + resize.
+  function setResolution(w, h){ for (const m of ringMats) m.resolution.set(w, h); }
+
   function setState(name){ if (STATES[name]) targetName = name; }
   function setStateIndex(i){ if (order[i]) targetName = order[i]; }
   function setAmplitude(a){ extAmp = Math.max(0, Math.min(1, a || 0)); }
@@ -266,22 +333,34 @@ export function createOrb() {
     heatTick = Math.max(0, heatTick - dt * 1000 / heatDecayMs);
     coreUni.uCoreGlow.value = cur.coreGlow; coreUni.uHeat.value = heatTick;
 
-    // ---- wave-rings: wavy (never circular), independently phased, audio-reactive
-    const ringAmp = RG.noiseAmp + RG.audioGain * cur.reactive * ampS;   // fraction of radius
+    // ---- wave-rings: contour lines TETHERED to the orb's sea. Each vertex rides
+    // the identical displacement field as the body (displaceJS), so the rings read
+    // as molten-surface contours — wavy, never circular — and surge with audio. ----
+    const ringSpin = spinAngle * RG.spinFollow;
+    const audioLift = 0.72 + 0.5 * cur.reactive * ampS;
     for (const rg of rings) {
-      const p = rg.pos, seg = rg.seg, ph = rg.phase + t * RG.speed;
+      const seg = rg.seg, dirs = rg.dirs, lp = rg.lpos, off = rg.off;
+      const mBr = rg.molten ? (1 + Math.sin(t * 6.2831 * rg.breatheHz) * rg.breatheAmp) : 1;
       for (let j = 0; j < seg; j++) {
-        const th = j / seg * Math.PI * 2, ct = Math.cos(th), st = Math.sin(th);
-        const d1 = simplex3(ct * RG.noiseFreq, st * RG.noiseFreq, ph);              // radial wobble
-        const d2 = simplex3(ct * RG.noiseFreq + 5, st * RG.noiseFreq + 5, ph * 0.7); // out-of-plane
-        const rr = rg.radius * (1 + d1 * ringAmp);
-        let q = [ct * rr * breathe, d2 * ringAmp * R * 0.42 * breathe, st * rr * breathe];
-        q = rotX(q, rg.tilt);
-        q = rotY(q, spinAngle * 0.5 + rg.phase * 0.4);      // slow precession, per-ring phase
-        p[j*3] = q[0]; p[j*3+1] = q[1]; p[j*3+2] = q[2];
+        const b = [dirs[j*3]*off*R, dirs[j*3+1]*off*R, dirs[j*3+2]*off*R];
+        const q = displaceJS(b, t, ringSpin, breathe * mBr, cur.agitation * 0.5, waveAmp);
+        lp[j*3] = q[0]; lp[j*3+1] = q[1]; lp[j*3+2] = q[2];
       }
-      rg.geo.attributes.position.needsUpdate = true;
-      rg.mat.opacity = RG.opacity * reveal * (0.72 + 0.5 * cur.reactive * ampS);
+      lp[seg*3] = lp[0]; lp[seg*3+1] = lp[1]; lp[seg*3+2] = lp[2];   // close the loop
+      rg.lgeo.setPositions(lp);
+      let op = rg.baseOpacity * reveal * audioLift;
+      if (rg.molten) op = Math.min(1, op + heatTick * 0.4);          // heat flush
+      rg.lmat.opacity = op;
+
+      // clustered dots — sample the live displaced contour
+      const idx = rg.dotIdx, dp = rg.dotPos;
+      for (let d = 0; d < idx.length; d++) {
+        const si = idx[d];
+        dp[d*3] = lp[si*3]; dp[d*3+1] = lp[si*3+1]; dp[d*3+2] = lp[si*3+2];
+      }
+      rg.dgeo.attributes.position.needsUpdate = true;
+      rg.dmat.size = RG.dotSize * pixelRatio * (rg.molten ? 1.3 : 1.0);
+      rg.dmat.opacity = Math.min(1, op + 0.28);
     }
 
     const cv = cur.constel;
@@ -304,7 +383,7 @@ export function createOrb() {
   }
 
   return {
-    object: group, setState, setStateIndex, setAmplitude, pulseHeat, update,
+    object: group, setState, setStateIndex, setAmplitude, pulseHeat, update, setResolution,
     get stateName(){ return targetName; },
     probe(){ return { ...cur, ampS, heatTick }; },
   };

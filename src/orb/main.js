@@ -63,6 +63,7 @@ const orb = createOrb();
 const dock = new THREE.Group();
 dock.add(orb.object);
 camera.add(dock);
+orb.setResolution(w0 * dpr, h0 * dpr);
 const HOME_POS = new THREE.Vector3(...M['orb.homePos']);
 const DOCK_POS = new THREE.Vector3(...M['orb.dockPos']);
 const HOME_SCALE = M['orb.homeScale'] * O.scale;   // v1.3 — reduced home scale
@@ -567,5 +568,6 @@ window.addEventListener('resize', () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h); post.setSize(w, h, dpr);
+  orb.setResolution(w * dpr, h * dpr);
   ignition.resize(w / h);
 });
