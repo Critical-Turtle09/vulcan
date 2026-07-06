@@ -1,0 +1,17 @@
+{
+  "id": "fixture-note",
+  "eyebrow": "OBSIDIAN · RETRIEVED NOTE",
+  "title": "VULCAN — CONDUCTOR BRIEF",
+  "rows": [
+    ["VAULT", "SILICON-FORGE", "bone"],
+    ["MODIFIED", "2026-07-06", ""],
+    ["BACKLINKS", "3 NOTES", ""],
+    ["STATUS", "ACTIVE", "bone"]
+  ],
+  "list": [
+    "Route spoken intent to tools — Obsidian, GitHub, Vercel, Hermes.",
+    "Present retrieved results in blueprint panels.",
+    "Scene library deferred to v3."
+  ],
+  "body": "The conductor's mouth-to-screen path: retrieved content resolves into a blueprint panel per-glyph, tethered to nothing, standing beside the orb. This is a static fixture proving the surface renders arbitrary content."
+}

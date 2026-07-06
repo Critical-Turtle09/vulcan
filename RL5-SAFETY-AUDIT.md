@@ -126,3 +126,23 @@ at 60 Hz, a per-frame `JSON.stringify` of the wire feed, constant style writes).
   regression (wave-rings, particle field, site markers, HUD all intact).
 
 **Fluidity regression:** `npm run audit` — **PASS 18/18** with all perf changes in.
+
+---
+
+## PART 4 — MAP REBUILD  ⟲ CANCELLED → replaced by v1.4 COMMAND CENTER PIVOT
+
+Mid-campaign the operator issued a foundation change order (**SPEC v1.4 "COMMAND
+CENTER PIVOT"**). PART 4 (map rebuild) is **cancelled** — the whole scene library
+(map, device/schematic, graph, timeline) is **deferred to v3**, dormant in-tree.
+Delivered instead:
+
+| # | v1.4 requirement | Implementation |
+|---|---|---|
+| 1 | Mission = retrieval + presentation, not generation | Written into `CLAUDE.md` (v1.4 amendment block + current-state line) |
+| 2 | Panels = primary answer surface, arbitrary content, summoned programmatically | `panels.present({eyebrow,title,rows,list,body})` in `src/map/panels.js` — untethered free panel, blueprint chrome + per-glyph resolve; exposed as `window.__vulcanHome.present()`. Exempt from the leaving-theater auto-close |
+| 3 | Scene keys off the HUD legend (dev-only, undocumented) | `index.html` legend reduced to `M MUTE · P PROFILE`; scene shortcuts still work as dev overrides |
+| 4 | Verify with one test panel from a static fixture | `data/present-fixture.json` + `presentTest()`; `scripts/verify-present.mjs` asserts DOM (title/eyebrow/4 rows/3 list items/body, 414/414 glyphs resolved), survives at home, toggles closed — **PASS**. Screenshot `v14-present-panel.jpeg` |
+| 5 | Identity layer unchanged and protected | Orb / ignition-quench / wire heat / V.A.U.L.T / voice loop untouched; fluidity audit **PASS 18/18** |
+
+**Safety/perf items (PARTS 1–3) were already complete before the pivot** and remain
+in force.

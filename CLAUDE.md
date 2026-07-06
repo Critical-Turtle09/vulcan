@@ -7,14 +7,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 VULCAN — Silicon Forge Intelligence. A Jarvis-style GPU/semiconductor supply-chain terminal. It runs
 full-screen on a Mac mini, summoned at login or by wake word. Sibling project to Hermes.
 
-**Current state: Phase 2 (BUILD) → v1+FORGE finishing campaign.** The design spec is LOCKED
-(v1.3 "FORGE AMENDMENT" — see below). Built so far: terrain material test (Slice 0), the orb
-(Slice 1), the voice organ (ORGAN 1), the map rework (Slice 2R), and the Forge amendment
-(molten palette, wave-orb, V.A.U.L.T HUD, mode/profile system). The interface is **orb-home**:
-VULCAN is the centered orb by default; geography is *summoned* into an oblique terrain theater
-on demand. The engine is **domain-blind** — every organ reads the ACTIVE PROFILE
-(`profiles/*.json`); `semiconductor` is the launch default, `bonsai` a scaffolded starter.
-Every visual value ships from `tokens.json`; nothing is hardcoded in a component.
+**Current state: Phase 2 (BUILD) → v1.4 COMMAND CENTER PIVOT.** The design spec is LOCKED
+(v1.3 "FORGE AMENDMENT" + v1.4 "COMMAND CENTER PIVOT" — see below). Built so far: terrain
+material test (Slice 0), the orb (Slice 1), the voice organ (ORGAN 1), the map rework
+(Slice 2R), the Forge amendment (molten palette, wave-orb, V.A.U.L.T HUD, mode/profile
+system), and RL-5 v2 stabilization (system-safety escapes, mic coexistence, packaged 60fps).
+**v1.4 sharpens the mission: RETRIEVAL + PRESENTATION, not generation** — the conductor (v2)
+routes spoken intent to tools and presents results in **blueprint panels**, now the primary
+answer surface (`panels.present(content)`). The summonable **scene library (map/device/graph/
+timeline) is deferred to v3** — dormant in-tree, keys are dev-only and off the HUD legend. The
+interface is **orb-home**: VULCAN is the centered orb by default. The engine is
+**domain-blind** — every organ reads the ACTIVE PROFILE (`profiles/*.json`); `semiconductor`
+is the launch default, `bonsai` a scaffolded starter. Every visual value ships from
+`tokens.json`; nothing is hardcoded in a component.
 
 ## Phases
 
@@ -59,6 +64,33 @@ Explicitly rejected (from v0, "2002 video game"):
 > §3/§6/§8.) Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual decision derives from
 > the operator's reference corpus (REF-01…14). Nothing here is a default; if a choice must
 > deviate during build, flag it — never silently substitute.
+
+### COMMAND CENTER PIVOT (v1.4) — foundation decision, amends the mission
+
+> **SPEC v1.4 "COMMAND CENTER PIVOT" — LOCKED.** A foundation decision about what VULCAN
+> *is for*. The visual identity is untouched; the mission is sharpened.
+
+- **MISSION — RETRIEVAL + PRESENTATION, not generation.** VULCAN's core job is to fetch what
+  the operator asks for and *present* it beautifully — not to write prose or invent content.
+  The **conductor** (v2) routes spoken intent to tools — **Obsidian, GitHub, Vercel, Claude
+  Code, Hermes** — and renders the results in **BLUEPRINT PANELS** (the existing Front-D
+  surface): dossiers, statuses, lists, note contents, deploy states.
+- **PANELS ARE THE PRIMARY ANSWER SURFACE.** A panel can render **arbitrary retrieved
+  content** — `{ eyebrow?, title, rows?: [[k,v,cls?]], list?: [str], body? }` — summoned
+  **programmatically**, untethered to any 3D scene, on the same blueprint chrome + per-glyph
+  granular resolve (doctrine 11). This is the conductor's mouth-to-screen path:
+  `panels.present(content)` / `window.__vulcanHome.present(content)`. Verified by a static
+  fixture (`data/present-fixture.json`, `presentTest()`).
+- **SCENE LIBRARY DEFERRED TO v3.** The summonable scenes (map, device/schematic, graph,
+  timeline) are **dormant**: code stays in-tree, but there is **no further investment** until
+  the conductor era is proven. Their keyboard shortcuts (t/v/n/k summon · x device · e explode ·
+  0 home · 1-4 orb state) are **DEV/DEBUG overrides only** — undocumented, **removed from the
+  HUD legend**. Scenes are summoned by spoken intent, not keys. (This supersedes the earlier
+  scene-key note; the map rebuild — old RL-5 PART 4 — is **cancelled**.)
+- **IDENTITY LAYER — UNCHANGED AND PROTECTED.** The orb (wave form + rings + states), the
+  ignition/quench ceremony, the wire heat ticks, the V.A.U.L.T columns, and the voice loop are
+  the locked identity and must not regress. The pivot changes *what fills the panels*, never
+  the house material or the ceremony.
 
 ### FORGE AMENDMENT (v1.3) — deltas over v1.2
 

@@ -93,6 +93,13 @@
     .panel-row .pv.heat { color: var(--signal-molten); }
     .panel-note { font-size: var(--panel-label-px); color: var(--data-faint); line-height: 1.55;
       margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--panel-stroke); text-transform: none; letter-spacing: 0.02em; }
+    /* v1.4 — programmatic answer panels (the conductor's mouth-to-screen surface):
+       eyebrow context label + short lists, on the same blueprint chrome. */
+    .panel-eyebrow { font-size: var(--panel-label-px); color: var(--signal-molten);
+      letter-spacing: var(--label-track); margin-bottom: 8px; }
+    .panel-li { display: flex; gap: 10px; margin-bottom: var(--panel-row-gap); line-height: 1.5; }
+    .panel-li .pb { color: var(--data-faint); flex: 0 0 auto; }
+    .panel-li .pv { font-size: var(--panel-value-px); color: var(--data-dim); text-transform: none; letter-spacing: 0.02em; }
     /* per-glyph granular resolve — text RESOLVES into being (doctrine 11), never pops */
     .g { display: inline-block; opacity: 0; transform: translateY(3px); filter: blur(2px);
       transition: opacity var(--glyph-ms) linear, transform var(--glyph-ms) ease, filter var(--glyph-ms) ease; }
@@ -195,10 +202,12 @@
     </div>
   </aside>
 
+  <!-- v1.4 COMMAND CENTER PIVOT: scene shortcuts (t/v/n/k summon · x device · e
+       explode · 0 home · 1-4 orb state) are DEV/DEBUG overrides only — undocumented,
+       removed from the operator legend. Scenes are summoned by spoken intent (the
+       conductor), not keys. Only genuine operator controls are advertised. -->
   <div id="keys">
-    <div><b>T V N K</b> SUMMON REGION · <b>X</b> DEVICE</div>
-    <div><b>0</b> ORB HOME · <b>E</b> EXPLODE</div>
-    <div><b>1–4</b> ORB STATE · <b>M</b> MUTE · <b>P</b> PROFILE</div>
+    <div><b>M</b> MUTE · <b>P</b> PROFILE</div>
   </div>
   <div id="bank-hint"><span class="k">ESC</span>BANK THE FIRE</div>
   <!-- scene LEGEND (PART 3) — what this is + what the marks mean; theater only -->

@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { color, injectCSSVars } from '../tokens.js';
 import rawTokens from '../../tokens.json';
+import presentFixture from '../../data/present-fixture.json';   // v1.4 — test-panel fixture
 import { simplex3 } from '../noise.js';
 import { createPost } from '../post.js';
 import { createOrb } from './orb.js';
@@ -594,7 +595,9 @@ function frame() {
   schematic.update(dt, t, schemReveal, explodeP, dpr);
   paintLabels();
   paintQuotes();
-  if (panels.isOpen && !inTheaterNow()) panels.close();   // leaving theater dissolves the panel
+  // leaving theater dissolves a SITE panel — but a v1.4 free answer panel (the
+  // conductor's presentation surface) lives at home and is exempt from this.
+  if (panels.isOpen && !panels.isFree && !inTheaterNow()) panels.close();
   panels.update(camera, window.innerWidth, window.innerHeight);
   post.setTime(t);
   post.composer.render();
@@ -622,6 +625,12 @@ window.__vulcanHome = {
   openSite: (i) => selectSiteIndex(i),
   closePanel: () => panels.close(),
   panelOpen: () => panels.isOpen,
+  // v1.4 COMMAND CENTER PIVOT — the conductor's mouth-to-screen path: present
+  // arbitrary retrieved content (title, body, key-value rows, short list) in a
+  // blueprint answer panel, untethered to any scene. present(null-schema) toggles.
+  present: (content) => panels.present(content),
+  presentTest: () => panels.present(presentFixture),   // static-fixture verification
+  panelFree: () => panels.isFree,
   sites: () => theater.sites.map((s) => s.id),
   // PART 4 — scene harness
   summonSchematic: () => summonSchematic(),

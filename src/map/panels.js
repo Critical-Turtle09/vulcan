@@ -49,7 +49,63 @@ export function createPanels() {
   document.body.appendChild(leader);
 
   let panelEl = null, frameSvg = null, current = null, openId = null;
-  let closing = false, pending = null;
+  let closing = false, pending = null, pendingFree = null;
+
+  // v1.4 COMMAND CENTER PIVOT — the panel is promoted to VULCAN's PRIMARY answer
+  // surface: the conductor retrieves content (Obsidian notes, GitHub/Vercel statuses,
+  // lists, dossiers) and PRESENTS it here, untethered to any 3D scene. Same blueprint
+  // chrome + per-glyph granular resolve (doctrine 11) as the site panels. Content
+  // schema: { id?, eyebrow?, title, rows?: [[k,v,cls?]], list?: [str], body? }.
+  function buildContentPanel(c) {
+    const el = document.createElement('div');
+    el.className = 'panel panel-free';
+    const parts = [];
+    if (c.eyebrow) parts.push(`<div class="panel-eyebrow">${glyphize(c.eyebrow)}</div>`);
+    parts.push(`<div class="panel-title">${glyphize(c.title || '')}</div>`);
+    for (const r of (c.rows || [])) {
+      const [k, v, cls = ''] = r; if (v == null || v === '') continue;
+      parts.push(`<div class="panel-row"><span class="pk">${glyphize(k)}</span><span class="pv ${cls}">${glyphize(v)}</span></div>`);
+    }
+    for (const item of (c.list || [])) {
+      if (item == null || item === '') continue;
+      parts.push(`<div class="panel-li"><span class="pb">◦</span><span class="pv">${glyphize(item)}</span></div>`);
+    }
+    if (c.body) parts.push(`<div class="panel-note">${glyphize(c.body)}</div>`);
+    el.innerHTML = `<svg class="panel-frame"></svg><div class="panel-inner">${parts.join('')}</div>`;
+    document.getElementById('panel-layer').appendChild(el);
+    frameSvg = el.querySelector('.panel-frame');
+    return el;
+  }
+
+  // untethered panels sit beside the hero (left of center), vertically centered —
+  // never docked to an edge as a bar (§6-D). Recomputed on open + resize.
+  function positionFree(el) {
+    const w = window.innerWidth, h = window.innerHeight;
+    const px = Math.round(w * 0.09);
+    const py = Math.round(Math.max(rawTokens.hud['margin.y'], (h - el.offsetHeight) / 2));
+    el.style.left = `${px}px`; el.style.top = `${py}px`;
+  }
+
+  function reallyPresent(c) {
+    current = { id: c.id || '__present', free: true };
+    openId = current.id; closing = false;
+    panelEl = buildContentPanel(c);
+    drawFrame(panelEl);
+    positionFree(panelEl);
+    const glyphs = Array.from(panelEl.querySelectorAll('.g'));
+    stagger(glyphs, P['text.delayMs'], rawTokens.motion['reveal.text.blockCap.ms']);
+    requestAnimationFrame(() => requestAnimationFrame(() => panelEl.classList.add('resolve')));
+    leader.style.opacity = '0';   // free panels carry no site tether
+  }
+
+  // present arbitrary retrieved content programmatically (the conductor's path)
+  function present(c) {
+    if (!c) return;
+    const id = c.id || '__present';
+    if (openId === id) { close(); return; }               // toggle same content
+    if (panelEl) { close(); pendingFree = c; pending = null; return; }   // crossflow over the old
+    reallyPresent(c);
+  }
 
   function buildPanel(site) {
     const d = site.dossier || {};
@@ -138,6 +194,7 @@ export function createPanels() {
     setTimeout(() => {
       el.remove(); closing = false;
       if (pending) { const s = pending; pending = null; reallyOpen(s); }
+      else if (pendingFree) { const c = pendingFree; pendingFree = null; reallyPresent(c); }
     }, life);
   }
 
@@ -145,6 +202,7 @@ export function createPanels() {
   // leader line drawn from the site diamond to the panel's near edge.
   function update(camera, w, h) {
     if (!current || !panelEl) return;
+    if (current.free) { positionFree(panelEl); leader.style.opacity = '0'; return; }   // untethered answer panel
     const proj = current.world.clone().project(camera);
     if (proj.z > 1) { leader.style.opacity = '0'; return; }
     const sx = (proj.x * 0.5 + 0.5) * w, sy = (-proj.y * 0.5 + 0.5) * h;
@@ -163,8 +221,9 @@ export function createPanels() {
   }
 
   return {
-    open, close, update,
+    open, present, close, update,
     get openId() { return openId; },
     get isOpen() { return !!panelEl; },
+    get isFree() { return !!(current && current.free); },   // v1.4 — untethered answer panel
   };
 }
