@@ -20,7 +20,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 6 | Local reflexes (Ollama) | 🟢 DONE | regex reflexes verified; Ollama installed + llama3.2:1b + wired |
 | 7 | Profile drafts | 🟡 DRAFT | bonsai fleshed out (map off), political drafted (map on); default unchanged; +crash fix |
 | 8 | Regression harness | 🟢 DONE | `npm run audit` — 17 checks, frame-accurate, PASS; FLUIDITY-AUDIT-v2.md |
-| 9 | Docs pass | … | |
+| 9 | Docs pass | 🟢 DONE | README front door, generated TOKENS.md, ARCHITECTURE.md, .env.example updated |
 | 10 | Media capture | … | |
 | 11 | Website draft | … | |
 | 12 | Skill scaffold | … | |
@@ -147,4 +147,13 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   cause was measurement aliasing (confirmed the panel lives its full ~408ms
   dissolve), fixed by frame-rate sampling. (Durations read short under headless
   rAF throttling; the maxStep fluidity metric is unaffected.)
+
+### PART 9 — Docs pass 🟢
+- **README.md** — real front door: what VULCAN is, the ceremony, orb, theaters,
+  key map, setup, `.env` **field names only** (no values), commands, doc links.
+- **TOKENS.md** — auto-generated from `tokens.json` by `scripts/gen-tokens.mjs`
+  (`npm run tokens`); every token path + value, grouped + described.
+- **ARCHITECTURE.md** — engine / organs / profiles / scenes with a system diagram.
+- `.env.example` updated (VULCAN_TTS_PROVIDER, KOKORO_BIN, VULCAN_DEV_URL — names
+  only). Added `npm run tokens` + `npm run topo` scripts.
 
