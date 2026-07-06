@@ -24,7 +24,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 10 | Media capture | 🟢 DONE | 11 stills + ignition.mp4/.gif; MEDIA-INDEX.md committed, media gitignored |
 | 11 | Website draft | 🟡 DRAFT | /site single page, house aesthetic; static, no deploy, waitlist front-end only |
 | 12 | Skill scaffold | 🟢 DONE | 4 SKILL.md drafts (build-protocol, profile/wire/scene authoring), docs only |
-| 13 | Close-out | … | |
+| 13 | Close-out | 🟢 DONE | report finalized, all parts pushed |
 
 ---
 
@@ -183,4 +183,68 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   - `profile-authoring` — the profile schema + rules (domain-blind engine).
   - `wire-feed-tuning` — the wire pipeline (score→ignite→propagate→decay) + levers.
   - `scene-authoring` — the condense-from-dust pattern + summon-machine wiring.
+
+### PART 13 — Close-out 🟢
+Report finalized; every part committed + pushed (one commit per part). See below.
+
+---
+
+## Needs operator eyes (couldn't be verified headless)
+
+These are **implemented + syntax-clean** but are Electron-main visuals that a headless
+Playwright run can't confirm — verify in the live app:
+
+1. **§1a live transparency in Electron.** The transparency *mechanism* is verified in-browser
+   (desktop-sim shows beneath the sparks via `mix-blend-mode: lighten`). In Electron it uses a
+   `desktopCapturer` snapshot of the active display as the backdrop — confirm the real screen
+   shows beneath the kindling sparks, and that screen-recording permission is granted (fail-soft
+   to void if denied).
+2. **§1a active-Space overlay / §1b focus restore.** Confirm summoning in Chrome/Mail resolves
+   OVER that screen with **no Space swipe**, and banking returns focus to that app (via
+   `app.hide()` on macOS) — not the desktop.
+3. **Wake→ignition + voice dismiss live.** With the mic, confirm "Fire and Forge" from hidden
+   plays the full ceremony and "Bank the fire" quenches.
+
+## Open issues / follow-ups (morning)
+
+- **Real geography legibility (PART 2, DRAFT).** Relief is real in outline but the map-shape
+  reads subtly from the fixed low-oblique camera, and fine elevation is *derived*, not a sampled
+  DEM. Upgrades: a real ETOPO/SRTM subset, a camera/contrast pass, the world strip.
+- **Molten ink retune (PART 3).** `ink.*` tokens are exposed for a taste pass — resting scenes
+  are calmer now (`site.rest 0.32`) but the resting-vs-heat gap is a judgement call.
+- **Schematic polish (PART 4, DRAFT).** Dim house-material read; wants brightness, per-part
+  panels, and the graph/timeline scenes.
+- **Kokoro TTS (PART 5, deferred).** System Python is 3.9.6 (< 3.10) + heavy deps; the provider
+  chain slots it in via `$KOKORO_BIN`. macOS `say` is the shipped tested local fallback.
+- **Ollama reflex (PART 6).** Installed + `llama3.2:1b` pulled + wired; the fuzzy path needs the
+  server running (`brew services start ollama`). The regex layer works without it (verified).
+- **Profiles (PART 7, DRAFT).** `bonsai`/`political` are scaffolds; populate before live use.
+- **Website (PART 11, DRAFT).** Static only; no deploy/payments; waitlist is front-end only.
+
+## Questions for the operator
+
+1. **Real DEM vs derived relief** — worth wiring a real ETOPO/SRTM subset (heavier data,
+   real elevation) for the map, or is the real-coastline + derived-relief read enough?
+2. **Ceremony length** — ignition ~3s / bank ~1.8s. Too long for a daily-driver summon, or right
+   for the ceremony? (Own tokens — trivial to retune.)
+3. **Molten-as-working-ink** — approve the ink-doctrine amendment (molten routes/sites at rest,
+   heat = intensity), or keep summoned scenes greyscale with molten reserved strictly for events?
+4. **Profiles to prioritize** — flesh out `political`, `bonsai`, or a different domain next?
+5. **Wave-rings** — 6 rings at the tightened radii — keep, or fewer/looser?
+
+## How to review
+
+```bash
+npm start          # resident overlay on the orb home (fixed build)
+npm run audit      # re-run the fluidity harness (17 checks) -> FLUIDITY-AUDIT-v2.md
+npm run media      # regenerate the money shots -> media/ (+ ffmpeg for clips)
+open site/index.html   # the website draft
+```
+Live app: summon `T/V/N/K` (real terrain), click sites (dossiers), `X`+`E` (schematic),
+`P` (profiles), say a command ("pull up korea", "status", "explode it"), `Esc` to bank.
+
+## Ledger
+
+13 parts · 13 commits · all pushed to `origin/master`. 🟢 8 done · 🟡 4 draft (2, 4, 7, 11)
+· 1 partial-deferred (5 Kokoro). No part skipped/blocked outright.
 
