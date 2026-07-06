@@ -28,6 +28,28 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 
 ---
 
+## NIGHT II (final) — regressions first, then polish + non-design
+
+### PART 1 — Space-switch bug, DIAGNOSTIC-FIRST 🟢 FIXED
+- **Root cause (measured, not guessed):** `showOverlay()` called `win.show()`, which
+  **activates** the app → macOS switches to the window's Space and steals frontmost.
+- **Fix:** rebuilt the overlay as a **non-activating `type: 'panel'`** window shown
+  via **`win.showInactive()`** (never `.show()`/`.focus()`), `setAlwaysOnTop
+  'screen-saver'`, `visibleOnAllWorkspaces {visibleOnFullScreenScreen:true}`, sized
+  to the active display, `fullscreenable:false`. Removed `app.hide()` on bank (no
+  activation to undo).
+- **Instrumentation:** `VULCAN_DIAG=1` runs a scripted self-test logging window
+  state + macOS frontmost app around summon/bank → `ignition-diagnostic.log`.
+- **Acceptance (log evidence):** frontmost app = **`Finder` at baseline, at summon,
+  after-summon, and after-bank — never changed**; at summon the panel is
+  `visible:true, focused:false`. **No app switch; non-activating panel ⇒ no Space
+  switch.** Focus returns to the underlying app on bank automatically.
+- **Operator eyes:** the panel shows without focus, so **keyboard** shortcuts
+  (T/V/N/K, digits) need a click on the overlay first (`acceptFirstMouse` — makes it
+  key without activating the app) or use voice/hotkey; the global `Esc` banks
+  regardless of focus. Verify keyboard-after-click doesn't switch Spaces on your
+  setup. (Voice is the primary driver, so this is a minor caveat.)
+
 ## Part log
 
 ### PART 1 — RL-4 signing pass 🟢

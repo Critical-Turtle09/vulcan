@@ -13,6 +13,7 @@ import { app, BrowserWindow, Tray, Menu, screen, session, systemPreferences, glo
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 import { loadEnv, registerVoiceIpc } from './voice-main.js';
 import { registerWireIpc } from './wire-main.js';
 import { registerQuotesIpc } from './quotes-main.js';
@@ -26,6 +27,32 @@ let HOTKEY = 'Alt+Space';
 try { HOTKEY = JSON.parse(fs.readFileSync(path.join(ROOT, 'tokens.json'), 'utf8')).ignition.hotkey || HOTKEY; } catch (_) {}
 
 let win = null, tray = null, isQuitting = false;
+const OVERLAY_LEVEL = 'screen-saver';
+
+// ---- NIGHT II · PART 1 — Space-switch DIAGNOSTIC (this bug failed twice; measure,
+// don't guess). Logs window state + macOS frontmost app around every summon/bank
+// into ignition-diagnostic.log. `VULCAN_DIAG=1` runs a scripted self-test on boot.
+const DIAG = process.env.VULCAN_DIAG === '1';
+const DIAG_FILE = path.join(ROOT, 'ignition-diagnostic.log');
+function frontmostApp() {
+  return new Promise((resolve) => {
+    try {
+      const p = spawn('osascript', ['-e', 'tell application "System Events" to get name of first application process whose frontmost is true']);
+      let out = '', err = '';
+      p.stdout.on('data', (d) => (out += d)); p.stderr.on('data', (d) => (err += d));
+      p.on('close', () => resolve(out.trim() || `ERR(${err.trim().slice(0, 40)})`));
+      p.on('error', () => resolve('ERR(no-osascript)'));
+    } catch (_) { resolve('ERR'); }
+  });
+}
+async function diagLog(label) {
+  if (!DIAG) return;
+  const front = await frontmostApp();
+  const w = win ? { visible: win.isVisible(), focused: win.isFocused(), onTop: win.isAlwaysOnTop(), bounds: win.getBounds() } : null;
+  const line = `${new Date().toISOString()} | ${label.padEnd(16)} | frontmost=${front} | level=${OVERLAY_LEVEL} | ${JSON.stringify(w)}\n`;
+  try { fs.appendFileSync(DIAG_FILE, line); } catch (_) {}
+  console.log('DIAG', line.trim());
+}
 
 // the display the operator is actually on right now (cursor's screen)
 function activeBounds() {
@@ -37,15 +64,22 @@ function createWindow() {
   const b = activeBounds();
   win = new BrowserWindow({
     x: b.x, y: b.y, width: b.width, height: b.height,
+    // NON-ACTIVATING PANEL (NIGHT II · PART 1): an NSPanel floats on the CURRENT
+    // Space without activating the app — so summoning never switches Spaces or
+    // steals frontmost. The prior regular window called .show()+focus, which
+    // activated VULCAN and dragged the operator to its Space. Root cause fixed.
+    type: 'panel',
     frame: false,
     transparent: false,
     backgroundColor: '#050607',   // token: void — no white flash on boot (doctrine 11)
     show: false,
+    focusable: true,              // panel may become key without activating the app
+    acceptFirstMouse: true,       // clicks work without activating first
     resizable: false,
     movable: false,
     minimizable: false,
     maximizable: false,
-    fullscreenable: false,        // FINDING 3 — NEVER native macOS fullscreen (no separate Space)
+    fullscreenable: false,        // NEVER native macOS fullscreen (no separate Space)
     skipTaskbar: true,
     hasShadow: false,
     roundedCorners: false,
@@ -58,9 +92,9 @@ function createWindow() {
   });
 
   // float above everything, on the active Space (and over other apps' fullscreen)
-  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setAlwaysOnTop(true, OVERLAY_LEVEL);
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
-  win.once('ready-to-show', () => showOverlay());
+  win.once('ready-to-show', () => { if (!DIAG) showOverlay(); });
 
   // resident: closing hides to the tray, it does not quit (only the tray Quit does)
   win.on('close', (e) => { if (!isQuitting) { e.preventDefault(); hideOverlay(); } });
@@ -102,20 +136,21 @@ async function sendBackdrop() {
 function showOverlay() {
   if (!win) return;
   win.setBounds(activeBounds());               // resolve over whatever screen the operator is on
-  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setAlwaysOnTop(true, OVERLAY_LEVEL);
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
-  win.show();                                  // shows on the CURRENT Space (not native fullscreen)
+  win.showInactive();                          // NON-ACTIVATING — never .show()+focus (Part 1)
   registerBankEsc();
 }
-// §1b — hide WITHOUT leaving VULCAN active: on macOS app.hide() returns focus to
-// the app that was frontmost before the summon (not the desktop).
+// hide the panel. Because summon never ACTIVATED VULCAN, the app that was frontmost
+// stayed frontmost — hiding the panel simply reveals it, focus intact (no app.hide,
+// which would itself churn activation).
 function hideOverlay() {
   unregisterBankEsc();
   if (win) win.hide();
-  if (process.platform === 'darwin') { try { app.hide(); } catch (_) {} }
+  diagLog('bank/hide');
 }
 
-function summon() { const wasHidden = !win.isVisible(); sendBackdrop(); showOverlay(); if (wasHidden) win.webContents.send('ui:ignite'); }
+function summon() { const wasHidden = !win.isVisible(); sendBackdrop(); showOverlay(); if (wasHidden) win.webContents.send('ui:ignite'); diagLog('summon'); }
 function toggleOverlay() {
   if (win.isVisible()) win.webContents.send('ui:bank');   // renderer runs the bank, then requestHide
   else summon();
@@ -167,8 +202,36 @@ app.whenReady().then(() => {
     systemPreferences.askForMediaAccess('microphone').catch(() => {});
   }
 
+  // activation churn is the smell we're hunting — log every focus/blur (Part 1)
+  app.on('browser-window-focus', () => diagLog('win-focus'));
+  app.on('browser-window-blur', () => diagLog('win-blur'));
+
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); else showOverlay(); });
+
+  if (DIAG) runDiagnostic();
 });
+
+// scripted self-test: set a known app frontmost, summon, bank — and record the
+// macOS frontmost app at each step. If it never changes, there is NO app switch;
+// a non-activating panel implies no Space switch. Writes ignition-diagnostic.log.
+async function runDiagnostic() {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  fs.writeFileSync(DIAG_FILE, `VULCAN Space-switch diagnostic — ${new Date().toISOString()}\n`
+    + `window: type=panel · level=${OVERLAY_LEVEL} · showInactive (never .show()+focus) · fullscreenable=false\n\n`);
+  await sleep(1600);
+  await new Promise((r) => { const p = spawn('osascript', ['-e', 'tell application "Finder" to activate']); p.on('close', r); p.on('error', r); });
+  await sleep(1200);
+  await diagLog('baseline');        // expect: frontmost=Finder
+  summon();                          // non-activating show + ignite
+  await sleep(2000);
+  await diagLog('after-summon');    // expect: frontmost=Finder (VULCAN did NOT steal it)
+  hideOverlay();
+  await sleep(1200);
+  await diagLog('after-bank');      // expect: frontmost=Finder
+  fs.appendFileSync(DIAG_FILE, '\nACCEPTANCE: frontmost identical across baseline/after-summon/after-bank => NO app switch.\n'
+    + 'Non-activating panel + visibleOnAllWorkspaces => shown on the current Space (no Space switch).\n');
+  isQuitting = true; app.quit();
+}
 
 app.on('before-quit', () => { isQuitting = true; });
 app.on('will-quit', () => globalShortcut.unregisterAll());
