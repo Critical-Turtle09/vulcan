@@ -39,3 +39,7 @@ media/seq-*/
 
 # PART 6 packaged app (regenerate: npm run pack)
 release/
+
+# PART 7 — Kokoro TTS venv + model files (heavy; recreate: voice/kokoro/setup.sh)
+voice/kokoro/venv/
+voice/kokoro/models/

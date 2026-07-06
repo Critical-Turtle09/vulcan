@@ -13,7 +13,7 @@
     "topo": "node scripts/build-topo.mjs",
     "media": "node scripts/capture-media.mjs",
     "build:web": "vite build",
-    "pack": "npm run build:web && electron-packager . VULCAN --platform=darwin --arch=arm64 --out=release --overwrite --asar=false --app-bundle-id=com.siliconforge.vulcan --app-category-type=public.app-category.productivity --ignore=\"^/release($|/)\" --ignore=\"^/\\.playwright-mcp\" --ignore=\"^/dev($|/)\" --ignore=\"^/site($|/)\" --ignore=\"^/scripts($|/)\" --ignore=\"^/[^/]+\\.(png|jpeg)$\" --ignore=\"^/data/topo/[^/]+\\.geojson$\" --ignore=\"^/media($|/)\" --ignore=\"ignition-diagnostic\\.log$\"",
+    "pack": "npm run build:web && electron-packager . VULCAN --platform=darwin --arch=arm64 --out=release --overwrite --asar=false --app-bundle-id=com.siliconforge.vulcan --app-category-type=public.app-category.productivity --ignore=\"^/release($|/)\" --ignore=\"^/\\.playwright-mcp\" --ignore=\"^/dev($|/)\" --ignore=\"^/site($|/)\" --ignore=\"^/scripts($|/)\" --ignore=\"^/[^/]+\\.(png|jpeg)$\" --ignore=\"^/data/topo/[^/]+\\.geojson$\" --ignore=\"^/media($|/)\" --ignore=\"^/voice/kokoro/(venv|models)($|/)\" --ignore=\"ignition-diagnostic\\.log$\"",
     "start": "concurrently -k \"vite\" \"wait-on tcp:5273 && electron .\""
   },
   "dependencies": {},
