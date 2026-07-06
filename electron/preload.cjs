@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld('vulcan', {
   wirePoll: (feeds) => ipcRenderer.invoke('wire:poll', feeds),
   // ORGAN: QUOTES — poll the active profile's symbols (main-side, keyless)
   quotePoll: (symbols) => ipcRenderer.invoke('quotes:poll', symbols),
+  // PART 6 — LOCAL REFLEXES: classify a short utterance via local Ollama
+  reflex: (text, cfg) => ipcRenderer.invoke('reflex:classify', text, cfg),
   // STAGE D — THE IGNITION (resident overlay control)
   requestSummon: () => ipcRenderer.send('ui:request-summon'), // wake-from-hidden -> summon + ignite
   requestShow: () => ipcRenderer.send('ui:request-show'),   // legacy alias

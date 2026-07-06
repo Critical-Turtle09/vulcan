@@ -17,7 +17,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 3 | Molten ink + legends | 🟢 DONE | molten working-ink on scenes, ink.* tokens, per-scene legend, role labels |
 | 4 | Scene library groundwork (schematic DRAFT) | 🟡 DRAFT | registry + device/schematic v0 (condense + explode), procedural |
 | 5 | Local voice fallback | 🟢 DONE (Kokoro deferred: py3.9) | provider chain elevenlabs→kokoro→say; say fallback tested |
-| 6 | Local reflexes (Ollama) | … | |
+| 6 | Local reflexes (Ollama) | 🟢 DONE | regex reflexes verified; Ollama installed + llama3.2:1b + wired |
 | 7 | Profile drafts | … | |
 | 8 | Regression harness | … | |
 | 9 | Docs pass | … | |
@@ -105,4 +105,17 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   and kokoro pulls heavy deps + a ~300MB model — impractical to install cleanly
   unattended. Wired to slot in when a `KOKORO_BIN` is configured. `say` is the
   shipped tested local path.
+
+### PART 6 — Local reflexes 🟢
+- `src/reflex.js`: short intents (mute/unmute, bank, summon «region|schematic»,
+  status, profile, explode/assemble) classified **regex-first** (instant, zero-dep)
+  then **Ollama** for fuzzy phrasing; non-commands fall through to the brain.
+- Wired into the voice loop (after capture) — a reflex resolves + optionally speaks
+  a confirmation and skips the brain. `main.js` `runCommand` maps intents to real
+  actions + a spoken `statusLine`.
+- **Ollama installed** (brew) + **`llama3.2:1b` pulled** + server up (Apple
+  M4/Metal); `reflex:classify` IPC (JSON, few-shot, 2.5s timeout) — fail-soft to
+  regex. reflex.* tokens.
+- **Tested headless (regex):** 8 simulated transcripts all route correctly. Ollama
+  path needs the server running (`brew services start ollama` — setup note).
 

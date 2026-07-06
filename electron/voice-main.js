@@ -101,6 +101,41 @@ export function registerVoiceIpc() {
     return { ok: false, reason: 'no-provider' };
   });
 
+  // PART 6 — LOCAL REFLEXES: classify a short utterance into an intent via a small
+  // local Ollama model. Fail-soft: no server / timeout / bad JSON -> null (the
+  // renderer's regex layer already handled the common cases first).
+  ipcMain.handle('reflex:classify', async (_e, text, cfg) => {
+    const url = (cfg && cfg.url) || 'http://localhost:11434';
+    const model = (cfg && cfg.model) || 'llama3.2:1b';
+    const timeoutMs = (cfg && cfg.timeoutMs) || 2500;
+    const sys = 'Route a terminal operator\'s short command into ONE intent. '
+      + 'Reply ONLY compact JSON {"type":"...","arg":...}. '
+      + 'type is exactly one of: mute, unmute, bank, summon, status, profile, explode, assemble, none. '
+      + 'For summon, arg is one of taiwan, eu, namerica, korea, schematic, or null; otherwise arg is null. '
+      + 'Not a short command -> {"type":"none","arg":null}. Examples: '
+      + '"quiet down" -> {"type":"mute","arg":null}; '
+      + '"pull up korea" -> {"type":"summon","arg":"korea"}; '
+      + '"show me the gpu" -> {"type":"summon","arg":"schematic"}; '
+      + '"stand down" -> {"type":"bank","arg":null}; '
+      + '"how are we doing" -> {"type":"status","arg":null}; '
+      + '"tell me a joke" -> {"type":"none","arg":null}.';
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), timeoutMs);
+      const res = await fetch(`${url}/api/generate`, {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, system: sys, prompt: text, stream: false, format: 'json', options: { temperature: 0 } }),
+      });
+      clearTimeout(to);
+      if (!res.ok) return null;
+      const j = await res.json();
+      const parsed = JSON.parse(j.response || '{}');
+      if (!parsed || !parsed.type) return null;
+      return { type: parsed.type, arg: parsed.arg ?? null };
+    } catch (_) { return null; }
+  });
+
   ipcMain.handle('voice:transcribe', async (_e, wavBase64) => {
     const bin = process.env.WHISPER_BIN, model = process.env.WHISPER_MODEL;
     if (!bin || !model) return { ok: false, reason: 'no-whisper' };

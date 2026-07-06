@@ -9,10 +9,11 @@ import rawTokens from '../../tokens.json';
 import { createEars } from './ears.js';
 import { createBrain } from './brain.js';
 import { createMouth } from './mouth.js';
+import { classify } from '../reflex.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null }) {
+export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null, onCommand = null }) {
   let running = false, cfg = null, ears = null, mouth = null, brain = createBrain();
   let mode = 'idle', online = false, offlineReason = '';
   let muted = !!rawTokens.voice.startMuted;   // chosen state, not a fault
@@ -61,6 +62,15 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         orb.setState('listening');                     // idle -> listening (lerp)
         const { transcript } = await ears.capture();   // CAPTURE (ends on silence)
         if (!running) break;
+        // PART 6 — LOCAL REFLEX: short intents resolve locally + instantly and
+        // skip the brain. A reflex may return a short confirmation to speak.
+        const cmdIntent = onCommand ? await classify(transcript, bridge) : null;
+        if (cmdIntent) {
+          orb.setState('thinking');
+          let spoken = null; try { spoken = onCommand(cmdIntent); } catch (_) {}
+          if (spoken) { orb.setState('speaking'); await mouth.speak(spoken, { synthetic }); orb.setAmplitude(0); }
+          continue;                                    // reflex handled it
+        }
         orb.setState('thinking');                      // listening -> thinking
         // hold the thinking beat: the stub brain is instant, so dwell a minimum so
         // the LISTENING->THINKING reorganization is actually seen. A real brain's

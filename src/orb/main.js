@@ -104,7 +104,32 @@ const voice = createVoice({
     if (presence < 0.5) ignite();                        // local kindle (browser + belt-and-suspenders)
   },
   onDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },
+  // PART 6 — LOCAL REFLEX intents -> actions (returns optional spoken confirmation)
+  onCommand: (intent) => runCommand(intent),
 });
+
+function statusLine() {
+  const s = voice.status(), ws = wire.status(), qs = quotes.status();
+  return `Status. Voice ${s.online ? (s.local ? 'local' : 'online') : 'offline'}, `
+    + `wire ${ws.online ? 'live' : 'offline'}, quotes ${qs.online ? 'live' : 'offline'}, `
+    + `heat index ${heatIndex.toFixed(2)}.`;
+}
+function runCommand(intent) {
+  switch (intent && intent.type) {
+    case 'mute': voice.setMuted(true); paintHud(); return 'Muted.';
+    case 'unmute': voice.setMuted(false); paintHud(); return 'Listening.';
+    case 'bank': bank(); return null;
+    case 'summon':
+      if (intent.arg === 'schematic') { summonSchematic(); return 'Summoning the device schematic.'; }
+      if (intent.arg && regions()[intent.arg]) { summon(intent.arg); return `Summoning ${regions()[intent.arg].name}.`; }
+      return 'Which region — Taiwan, Europe, North America, or Korea?';
+    case 'explode': if (sceneKind === 'schematic') { explodeTarget = 1; return 'Exploded view.'; } return null;
+    case 'assemble': explodeTarget = 0; return 'Reassembled.';
+    case 'profile': switchProfile(); return `Profile ${activeProfileId()}.`;
+    case 'status': return statusLine();
+    default: return null;
+  }
+}
 
 // ---- THE IGNITION state machine (system-wide summon / bank) ----
 let presence = 1;            // command-center presence: 1 resolved (default) .. 0 hidden
@@ -529,6 +554,8 @@ window.__vulcanHome = {
   // simulate the wake/dismiss OUTCOMES directly (routes exactly as the phrases do)
   simWake: () => { if (bridge.requestSummon) bridge.requestSummon(); if (presence < 0.5) ignite(); },
   simDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },
+  // PART 6 — reflex harness: classify a simulated transcript + run the command
+  reflexTest: async (text) => { const intent = await (await import('../reflex.js')).classify(text, bridge); return { intent, spoken: intent ? runCommand(intent) : null }; },
   voiceStatus: () => voice.status(),
   toggleMute: () => { voice.toggleMute(); paintHud(); },
   setMuted: (v) => { voice.setMuted(v); paintHud(); },
