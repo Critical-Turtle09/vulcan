@@ -52,6 +52,7 @@ export function createIgnition({ homePos, homeScale, orbRadius, fov, aspect }) {
   const uni = {
     uP: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: 1 }, uSize: { value: IG['spark.size'] },
     uHot: { value: IG['spark.hotPush'] }, uStrike: { value: 0 }, uQuench: { value: 0 },
+    uSteamRise: { value: IG['quench.steamRise'] }, uEmberFall: { value: IG['quench.emberFall'] },
     uMolten: { value: color('signal.molten') }, uForge: { value: color('signal.forge') },
     uBone: { value: color('data.bone') }, uHaze: { value: color('haze') },
   };
@@ -61,7 +62,7 @@ export function createIgnition({ homePos, homeScale, orbRadius, fov, aspect }) {
     vertexShader: /* glsl */`
       ${SIMPLEX3}
       attribute vec3 aTarget; attribute float aSeed;
-      uniform float uP, uTime, uPixelRatio, uSize, uStrike, uQuench;
+      uniform float uP, uTime, uPixelRatio, uSize, uStrike, uQuench, uSteamRise, uEmberFall;
       varying float vHeat, vA;
       void main(){
         // per-spark staggered surge — edge sparks kindle first, then converge.
@@ -75,8 +76,12 @@ export function createIgnition({ homePos, homeScale, orbRadius, fov, aspect }) {
           snoise(vec3(aSeed*8.0, uTime*0.8, 0.0)),
           snoise(vec3(0.0, aSeed*8.0 + uTime*0.8, 5.0)),
           snoise(vec3(3.0, 0.0, aSeed*8.0 + uTime*0.8))) * turb;
-        // THE QUENCH — steam rises: cooling sparks drift upward + outward on bank
-        pos.y += uQuench * (1.0 - e) * (2.5 + 3.0*aSeed);
+        // THE QUENCH — most cooling sparks steam UPWARD, a few heavy embers FALL,
+        // all drift OUTWARD as the orb dissolves and the real screen shows through.
+        float steam = step(0.18, aSeed);                     // ~82% steam, ~18% embers
+        float vy = steam * uSteamRise - (1.0 - steam) * uEmberFall;
+        pos.y += uQuench * (1.0 - e) * vy * (2.0 + 3.0*aSeed);
+        pos.x += uQuench * (1.0 - e) * (aSeed - 0.5) * 3.4;  // outward steam spread
         vHeat = (1.0 - local) * (1.0 - 0.55*uQuench) + uStrike*0.6;  // strike flares, quench cools
         // kindle in, blaze during the surge, hand off (fade) as the orb takes over
         vA = smoothstep(0.0,0.12,uP) * (1.0 - smoothstep(0.72,1.0,local)) * (0.35 + 0.65*e);
@@ -101,25 +106,32 @@ export function createIgnition({ homePos, homeScale, orbRadius, fov, aspect }) {
   }));
   points.frustumCulled = false;
 
-  // ---- STRIKE SHOCKWAVE — one molten hairline ring thrown from the anvil (the
-  // hammer-on-anvil impact, abstract: particle/hairline read, no clipart). It
-  // expands and fades across the strike window. ----
-  const SHM = 150;
-  const spos = new Float32Array(SHM * 3);
-  for (let i = 0; i < SHM; i++) {
-    const th = i / SHM * Math.PI * 2, wob = 1 + 0.06 * Math.sin(th * 7) + 0.04 * Math.sin(th * 13 + 1.3);
-    spos[i * 3] = Math.cos(th) * wob; spos[i * 3 + 1] = Math.sin(th) * wob; spos[i * 3 + 2] = 0;
+  // ---- STRIKE SHOCKWAVE — TWO molten hairline rings thrown from the anvil (the
+  // hammer-on-anvil impact, abstract: particle/hairline read, no clipart): a lead
+  // ring and a lagging inner ghost, each independently wobbled so the strike reads
+  // richer than a single circle. They expand and fade across the strike window. ----
+  const SHOCK_MAX = IG['shock.max'], INNER_LAG = IG['shock.innerLag'];
+  function makeShockRing(h1, h2, ph) {
+    const SHM = 150;
+    const p = new Float32Array(SHM * 3);
+    for (let i = 0; i < SHM; i++) {
+      const th = i / SHM * Math.PI * 2, wob = 1 + 0.06 * Math.sin(th * h1 + ph) + 0.04 * Math.sin(th * h2 + ph * 1.7);
+      p[i * 3] = Math.cos(th) * wob; p[i * 3 + 1] = Math.sin(th) * wob; p[i * 3 + 2] = 0;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    const m = new THREE.LineBasicMaterial({ color: color('signal.forge'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
+    const loop = new THREE.LineLoop(g, m);
+    loop.position.set(homePos.x, homePos.y, homePos.z);
+    loop.renderOrder = 5;
+    loop.frustumCulled = false;
+    return { loop, mat: m };
   }
-  const sgeo = new THREE.BufferGeometry();
-  sgeo.setAttribute('position', new THREE.BufferAttribute(spos, 3));
-  const smat = new THREE.LineBasicMaterial({ color: color('signal.forge'), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
-  const shock = new THREE.LineLoop(sgeo, smat);
-  shock.position.set(homePos.x, homePos.y, homePos.z);
-  shock.renderOrder = 5;
-  shock.frustumCulled = false;
+  const shockLead = makeShockRing(7, 13, 1.3);
+  const shockGhost = makeShockRing(9, 17, 4.1);
 
   const grp = new THREE.Group();
-  grp.add(points, shock);
+  grp.add(points, shockLead.loop, shockGhost.loop);
 
   return {
     object: grp,
@@ -129,9 +141,14 @@ export function createIgnition({ homePos, homeScale, orbRadius, fov, aspect }) {
     setStrike(flash) { uni.uStrike.value = flash; },          // 0..1 spark flash bell
     setQuench(q) { uni.uQuench.value = q; },                  // 0 ignition .. 1 bank (steam)
     setShock(w) {                                             // 0..1 monotonic expand+fade
-      const sc = R * (0.5 + w * 5.2);
-      shock.scale.set(sc, sc, sc);
-      smat.opacity = Math.max(0, 1 - w) * 0.85 * (w > 0.001 ? 1 : 0);
+      const scL = R * (0.5 + w * SHOCK_MAX);
+      shockLead.loop.scale.setScalar(scL);
+      shockLead.mat.opacity = Math.max(0, 1 - w) * 0.85 * (w > 0.001 ? 1 : 0);
+      // ghost ring lags behind the lead, expands faster, fades sooner
+      const wg = Math.max(0, (w - INNER_LAG) / (1 - INNER_LAG));
+      const scG = R * (0.35 + wg * SHOCK_MAX * 1.25);
+      shockGhost.loop.scale.setScalar(scG);
+      shockGhost.mat.opacity = Math.max(0, 1 - wg) * 0.5 * (wg > 0.001 ? 1 : 0);
     },
     resize(asp) { halfH = Math.tan((fov * Math.PI / 180) / 2) * d; halfW = halfH * asp; },
   };
