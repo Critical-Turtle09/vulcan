@@ -18,7 +18,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 4 | Scene library groundwork (schematic DRAFT) | 🟡 DRAFT | registry + device/schematic v0 (condense + explode), procedural |
 | 5 | Local voice fallback | 🟢 DONE (Kokoro deferred: py3.9) | provider chain elevenlabs→kokoro→say; say fallback tested |
 | 6 | Local reflexes (Ollama) | 🟢 DONE | regex reflexes verified; Ollama installed + llama3.2:1b + wired |
-| 7 | Profile drafts | … | |
+| 7 | Profile drafts | 🟡 DRAFT | bonsai fleshed out (map off), political drafted (map on); default unchanged; +crash fix |
 | 8 | Regression harness | … | |
 | 9 | Docs pass | … | |
 | 10 | Media capture | … | |
@@ -118,4 +118,17 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   regex. reflex.* tokens.
 - **Tested headless (regex):** 8 simulated transcripts all route correctly. Ollama
   path needs the server running (`brew services start ollama` — setup note).
+
+### PART 7 — Profile drafts 🟡 DRAFT
+- `bonsai.json` fleshed out: directives + HUD metrics, 4 specimen entities with
+  dossiers (juniper/maple/pine/azalea), keyless horticulture feeds. Map OFF.
+- `political.json` drafted (NEW): map ON with 3 theaters (Washington / Brussels /
+  East Asia) — institutions as sites + dossiers + routes, keyless political feeds
+  (sanctions / alliances / flashpoints) with region keywords. Sites render on
+  procedural terrain (no topo grids yet). Both marked `"draft": true`.
+- Registered in `profile.js` (cycle semi→bonsai→political→semi). **Launch default
+  unchanged (semiconductor).** Verified cycle + political `eastasia` summon.
+- **Bug fixed:** switching profile while a region was summoned crashed `paintHud`
+  (`regions()[currentRegion].name` on a region absent from the new profile) —
+  now guarded (+ shows "DEVICE" for the schematic scene).
 

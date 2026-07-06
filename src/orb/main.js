@@ -292,7 +292,9 @@ function paintHud() {
   vt.heat.className = 'v ' + (heatIndex > 0.01 ? 'heat' : 'dim');
   const up = Math.floor((performance.now() - bootMs) / 1000);
   vt.uptime.textContent = `${String(Math.floor(up / 60)).padStart(2, '0')}:${String(up % 60).padStart(2, '0')}`;
-  vt.mode.textContent = (summonP > 0.5 && currentRegion) ? regions()[currentRegion].name : 'HOME';
+  const rObj = currentRegion ? regions()[currentRegion] : null;
+  vt.mode.textContent = (summonP > 0.5 && sceneKind === 'schematic') ? 'DEVICE'
+    : (summonP > 0.5 && rObj) ? rObj.name : 'HOME';
   const str = JSON.stringify(s);
   if (str !== lastStatusStr) { lastStatusStr = str; console.log('[voice] status', str); }
 }

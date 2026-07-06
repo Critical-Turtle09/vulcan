@@ -1,0 +1,78 @@
+{
+  "id": "political",
+  "name": "GEOPOLITICAL DESK",
+  "eyebrow": "STATECRAFT INTELLIGENCE",
+  "note": "DRAFT — keyless feeds + entities + dossier schema wired; sites on procedural terrain (no topo yet).",
+  "draft": true,
+  "hud": {
+    "profile": "GEOPOLITICAL DESK",
+    "directives": [
+      "MONITOR · ALLIANCE POSTURE",
+      "WATCH · SANCTIONS + TRADE",
+      "TRACK · FLASHPOINTS"
+    ]
+  },
+  "map": {
+    "enabled": true,
+    "regions": {
+      "washington": {
+        "key": "w", "name": "WASHINGTON", "seed": 5.1,
+        "sites": [
+          { "id": "whitehouse", "name": "EXECUTIVE", "x": -4.0, "z": -3.0, "alert": 0,
+            "dossier": { "role": "EXECUTIVE BRANCH", "node": "POLICY", "org": "WHITE HOUSE",
+              "products": "EXEC ORDERS · DIPLOMACY", "throughput": "—", "status": "ACTIVE", "note": "DRAFT placeholder institution." } },
+          { "id": "capitol", "name": "LEGISLATURE", "x": 3.0, "z": -1.0, "alert": 0,
+            "dossier": { "role": "LEGISLATIVE BRANCH", "node": "STATUTE", "org": "CONGRESS",
+              "products": "LAW · APPROPRIATIONS", "throughput": "—", "status": "IN SESSION", "note": "DRAFT placeholder institution." } },
+          { "id": "state", "name": "STATE DEPT", "x": 1.0, "z": 6.0, "alert": 0,
+            "dossier": { "role": "FOREIGN AFFAIRS", "node": "DIPLOMACY", "org": "STATE DEPT",
+              "products": "TREATIES · MISSIONS", "throughput": "—", "status": "ACTIVE", "note": "DRAFT placeholder institution." } }
+        ],
+        "routes": [[0, 1], [0, 2]],
+        "lanes": []
+      },
+      "brussels": {
+        "key": "b", "name": "BRUSSELS / EU", "seed": 9.3,
+        "sites": [
+          { "id": "commission", "name": "EU COMMISSION", "x": -3.0, "z": -2.0, "alert": 0,
+            "dossier": { "role": "EXECUTIVE", "node": "POLICY", "org": "EC",
+              "products": "REGULATION · TRADE", "throughput": "—", "status": "ACTIVE", "note": "DRAFT placeholder institution." } },
+          { "id": "nato", "name": "NATO HQ", "x": 4.0, "z": 1.5, "alert": 0,
+            "dossier": { "role": "ALLIANCE", "node": "DEFENSE", "org": "NATO",
+              "products": "COLLECTIVE DEFENSE", "throughput": "—", "status": "STANDING", "note": "DRAFT placeholder institution." } }
+        ],
+        "routes": [[0, 1]],
+        "lanes": []
+      },
+      "eastasia": {
+        "key": "a", "name": "EAST ASIA", "seed": 13.7,
+        "sites": [
+          { "id": "beijing", "name": "BEIJING", "x": -6.0, "z": -3.0, "alert": 0,
+            "dossier": { "role": "STATE", "node": "POLICY", "org": "PRC",
+              "products": "STATECRAFT", "throughput": "—", "status": "ACTIVE", "note": "DRAFT placeholder." } },
+          { "id": "taipei", "name": "TAIPEI", "x": 2.0, "z": 2.0, "alert": 0,
+            "dossier": { "role": "STATE", "node": "POLICY", "org": "ROC",
+              "products": "STATECRAFT", "throughput": "—", "status": "ACTIVE", "note": "DRAFT placeholder." } },
+          { "id": "tokyo", "name": "TOKYO", "x": 7.0, "z": -1.0, "alert": 0,
+            "dossier": { "role": "STATE", "node": "POLICY", "org": "JPN",
+              "products": "STATECRAFT", "throughput": "—", "status": "ACTIVE", "note": "DRAFT placeholder." } }
+        ],
+        "routes": [[0, 1], [1, 2]],
+        "lanes": [{ "name": "TAIWAN STRAIT", "ax": -3, "az": -6, "bx": -1, "bz": 6 }]
+      }
+    }
+  },
+  "wire": {
+    "feeds": [
+      { "label": "SANCTIONS",  "url": "https://news.google.com/rss/search?q=sanctions+trade&hl=en-US&gl=US&ceid=US:en" },
+      { "label": "ALLIANCES",  "url": "https://news.google.com/rss/search?q=NATO+OR+alliance+defense&hl=en-US&gl=US&ceid=US:en" },
+      { "label": "FLASHPOINTS","url": "https://news.google.com/rss/search?q=%22Taiwan+Strait%22+OR+geopolitics&hl=en-US&gl=US&ceid=US:en" }
+    ],
+    "keywords": {
+      "washington": ["white house", "congress", "state department", "washington", "u.s."],
+      "brussels":   ["eu", "european", "brussels", "nato", "commission"],
+      "eastasia":   ["beijing", "taipei", "tokyo", "china", "taiwan", "japan", "strait"]
+    }
+  },
+  "quotes": { "symbols": [] }
+}

@@ -2,26 +2,42 @@
   "id": "bonsai",
   "name": "BONSAI ATELIER",
   "eyebrow": "CULTIVATION INTELLIGENCE",
-  "note": "SCAFFOLD — placeholder entities, map disabled. Populate before live use.",
+  "note": "DRAFT — placeholder entities/metrics/dossiers; map disabled. Populate before live use.",
+  "draft": true,
   "hud": {
     "profile": "BONSAI ATELIER",
     "directives": [
       "TEND · CANOPY BALANCE",
       "WATCH · SEASONAL WINDOW",
       "TRACK · ROOT HEALTH"
+    ],
+    "metrics": [
+      { "label": "SEASON", "value": "LATE SUMMER (SIM)" },
+      { "label": "SPECIMENS", "value": "4 (SIM)" },
+      { "label": "NEXT WORK", "value": "WIRING · JUNIPER (SIM)" }
     ]
   },
-  "map": {
-    "enabled": false,
-    "regions": {}
+  "map": { "enabled": false, "regions": {} },
+  "entities": {
+    "juniper-01": { "name": "SHIMPAKU JUNIPER", "dossier": {
+      "role": "FORMAL UPRIGHT · CHOKKAN", "age": "~45 YR (SIM)", "style": "MOYOGI TRANSITION",
+      "products": "APEX REFINEMENT", "status": "HEALTHY", "note": "Deadwood jin on lower left; next wiring pass due." } },
+    "maple-03": { "name": "TRIDENT MAPLE", "dossier": {
+      "role": "BROOM · HOKIDACHI", "age": "~28 YR (SIM)", "style": "DECIDUOUS",
+      "products": "RAMIFICATION", "status": "DEFOLIATE PENDING", "note": "Leaf-cut window opening; watch internode length." } },
+    "pine-02": { "name": "JAPANESE BLACK PINE", "dossier": {
+      "role": "INFORMAL UPRIGHT", "age": "~60 YR (SIM)", "style": "MOYOGI",
+      "products": "CANDLE BALANCE", "status": "DECANDLE DONE", "note": "Needle reduction on strong apex; feed reduced." } },
+    "azalea-05": { "name": "SATSUKI AZALEA", "dossier": {
+      "role": "SLANTING · SHAKAN", "age": "~35 YR (SIM)", "style": "FLOWERING",
+      "products": "BLOOM TIMING", "status": "POST-BLOOM PRUNE", "note": "Sport control; repot in acidic kanuma next spring." } }
   },
   "wire": {
     "feeds": [
-      { "label": "BONSAI", "url": "https://news.google.com/rss/search?q=bonsai+cultivation&hl=en-US&gl=US&ceid=US:en" }
+      { "label": "BONSAI",       "url": "https://news.google.com/rss/search?q=bonsai+cultivation&hl=en-US&gl=US&ceid=US:en" },
+      { "label": "HORTICULTURE", "url": "https://news.google.com/rss/search?q=horticulture+technique&hl=en-US&gl=US&ceid=US:en" }
     ],
     "keywords": {}
   },
-  "quotes": {
-    "symbols": []
-  }
+  "quotes": { "symbols": [] }
 }

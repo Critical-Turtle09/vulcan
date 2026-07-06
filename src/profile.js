@@ -5,9 +5,10 @@
 import rawTokens from '../tokens.json';
 import semiconductor from '../profiles/semiconductor.json';
 import bonsai from '../profiles/bonsai.json';
+import political from '../profiles/political.json';
 
-const PROFILES = { semiconductor, bonsai };
-const ORDER = ['semiconductor', 'bonsai'];
+const PROFILES = { semiconductor, bonsai, political };
+const ORDER = ['semiconductor', 'bonsai', 'political'];   // semiconductor stays launch default
 
 let activeId = rawTokens.profile.default;
 const subs = new Set();
