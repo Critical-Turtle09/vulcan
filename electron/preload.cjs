@@ -21,4 +21,13 @@ contextBridge.exposeInMainWorld('vulcan', {
   onBank: (cb) => ipcRenderer.on('ui:bank', () => cb()),
   onMute: (cb) => ipcRenderer.on('ui:mute', () => cb()),
   onBackdrop: (cb) => ipcRenderer.on('ui:backdrop', (_e, url) => cb(url)),  // §1a active-display snapshot
+  // RL-5 v2 · PART 1 — SAFETY. Main force-hid the overlay (emergency hotkey or the
+  // watchdog); a responsive renderer snaps to its hidden state for a clean next summon.
+  onForceHide: (cb) => ipcRenderer.on('ui:force-hide', () => cb()),
 });
+
+// PART 1 — WATCHDOG heartbeat. Main pings; we pong on the renderer's main thread. If
+// the renderer is wedged this handler cannot run, so no pong arrives and main
+// force-hides the overlay (>2s) — the operator is never trapped behind a frozen
+// window. Registered outside the bridge so it needs no renderer-side wiring.
+ipcRenderer.on('wd:ping', () => { try { ipcRenderer.send('wd:pong'); } catch (_) {} });

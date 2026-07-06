@@ -385,6 +385,9 @@ window.addEventListener('pointerdown', (e) => {
 if (bridge.onIgnite) bridge.onIgnite(() => ignite());
 if (bridge.onBank) bridge.onBank(() => bank());
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintHud(); });
+// RL-5 v2 · PART 1 — SAFETY. Main already hid the window (emergency hotkey / watchdog);
+// snap straight to the hidden state (no ceremony) so the next summon ignites clean.
+if (bridge.onForceHide) bridge.onForceHide(() => { presence = 0; ignMode = 'hidden'; });
 // §1a — the active-display snapshot becomes the ceremony backdrop (real screen
 // beneath the sparks). null (no permission) -> stays void; fail-soft.
 if (bridge.onBackdrop) bridge.onBackdrop((url) => { backdrop.style.backgroundImage = url ? `url(${url})` : 'none'; });

@@ -9,20 +9,20 @@ not a curve.
 | Transition | Driver | maxStep | Verdict | Notes |
 |---|---|---|---|---|
 | V.A.U.L.T sidebars visible | `occlusion` | 0 | ✅ | left=on-top · right=on-top · opacity=1 |
-| ignition ceremony | `presence` | 0.016 | ✅ | range=0.42 |
-| bank / quench | `presence` | 0.02 | ✅ | range=0.35 |
-| orb -> listening | `agitation` | 0.006 | ✅ | range=0.03 |
-| orb -> thinking | `agitation` | 0.066 | ✅ | range=0.29 |
-| orb -> speaking | `agitation` | 0.03 | ✅ | range=0.14 |
-| orb -> idle | `agitation` | 0.03 | ✅ | range=0.13 |
-| ring/body reactivity | `ampS` | 0.038 | ✅ | peak=0.2 · note=audio envelope — responsive by design |
+| ignition ceremony | `presence` | 0.016 | ✅ | range=0.55 |
+| bank / quench | `presence` | 0.02 | ✅ | range=0.42 |
+| orb -> listening | `agitation` | 0.005 | ✅ | range=0.03 |
+| orb -> thinking | `agitation` | 0.065 | ✅ | range=0.34 |
+| orb -> speaking | `agitation` | 0.035 | ✅ | range=0.18 |
+| orb -> idle | `agitation` | 0.026 | ✅ | range=0.14 |
+| ring/body reactivity | `ampS` | 0.064 | ✅ | peak=0.37 · note=audio envelope — responsive by design |
 | mute toggle | `flag` | 0 | ✅ | toggled=true |
 | summon taiwan | `summonP` | 0.049 | ✅ | range=0.39 |
 | wire ignition (flash+decay) | `heat` | 0.2 | ✅ | peak=0.32 · note=ignite is an intended flash |
 | quotes visible | `chips` | 0 | ✅ | visibleChips=1 |
-| panel open (per-glyph) | `glyph` | 0.341 | ✅ | range=0.93 |
-| panel close (dissolve) | `glyph` | 0.454 | ✅ | range=0.93 |
-| return home | `summonP` | 0.05 | ✅ | end=0.45 |
+| panel open (per-glyph) | `glyph` | 0.273 | ✅ | range=0.95 |
+| panel close (dissolve) | `glyph` | 0.428 | ✅ | range=0.95 |
+| return home | `summonP` | 0.05 | ✅ | end=0.35 |
 | profile switch | `crossflow` | 0 | ✅ | from=semiconductor · to=bonsai |
 | schematic condense | `reveal` | 0 | ✅ | note=dust condense (visual) |
 | schematic explode | `explodeP` | 0.1 | ✅ | note=lerped separation (visual) |

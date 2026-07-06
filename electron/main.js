@@ -29,6 +29,19 @@ try { HOTKEY = JSON.parse(fs.readFileSync(path.join(ROOT, 'tokens.json'), 'utf8'
 let win = null, tray = null, isQuitting = false;
 const OVERLAY_LEVEL = 'screen-saver';
 
+// ---- RL-5 v2 · PART 1 — SYSTEM SAFETY. The overlay is a full-screen, always-on-top
+// screen-saver-level panel; if the renderer ever hangs while it is up, nothing is
+// reachable and the Mac reads as FROZEN. Three independent escape hatches, all of
+// which bypass the renderer so a hung renderer can never trap the operator:
+//   1. emergency global hotkey (Cmd+Shift+Esc) -> forceHide(), always registered
+//   2. a heartbeat WATCHDOG: main pings, the renderer pongs on its main thread; if
+//      no pong lands within WATCHDOG_HANG_MS the overlay is force-hidden
+//   3. forceHide() drops always-on-top + hides straight from main (no IPC round-trip)
+const WATCHDOG_PING_MS = 500;    // heartbeat cadence while the overlay is visible
+const WATCHDOG_HANG_MS = 2000;   // renderer silent longer than this => auto force-hide
+const EMERGENCY_HOTKEY = 'CommandOrControl+Shift+Escape';
+let lastPong = 0, watchdogTimer = null;
+
 // ---- NIGHT II · PART 1 — Space-switch DIAGNOSTIC (this bug failed twice; measure,
 // don't guess). Logs window state + macOS frontmost app around every summon/bank
 // into ignition-diagnostic.log. `VULCAN_DIAG=1` runs a scripted self-test on boot.
@@ -155,6 +168,40 @@ async function sendBackdrop() {
   } catch (_) { win.webContents.send('ui:backdrop', null); }
 }
 
+// PART 1 — WATCHDOG. While the overlay is up, ping the renderer; it pongs on its
+// main thread (see preload). A hung main thread (GC stall, infinite loop, shader
+// compile lock) cannot pong, so silence past WATCHDOG_HANG_MS means the operator is
+// about to be trapped behind a frozen full-screen window -> force-hide immediately.
+function startWatchdog() {
+  stopWatchdog();
+  lastPong = Date.now();                        // assume alive at show; miss => hang
+  watchdogTimer = setInterval(() => {
+    if (!win || !win.isVisible()) return;       // nothing to escape from while hidden
+    try { win.webContents.send('wd:ping'); } catch (_) {}
+    if (Date.now() - lastPong > WATCHDOG_HANG_MS) {
+      console.log(`[safety] renderer unresponsive >${WATCHDOG_HANG_MS}ms — force-hiding overlay`);
+      forceHide('watchdog');
+    }
+  }, WATCHDOG_PING_MS);
+  if (watchdogTimer.unref) watchdogTimer.unref();
+}
+function stopWatchdog() { if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; } }
+
+// PART 1 — the hard escape hatch. Runs entirely in main (no renderer IPC), so it
+// works even when the renderer is wedged: drop always-on-top so a zombie window can
+// never stay above the OS, hide, release Esc, stop the watchdog. Also nudges a
+// still-responsive renderer to snap back to its hidden state for a clean next summon.
+function forceHide(reason) {
+  unregisterBankEsc();
+  stopWatchdog();
+  if (win) {
+    try { win.setAlwaysOnTop(false); } catch (_) {}
+    try { win.webContents.send('ui:force-hide'); } catch (_) {}
+    try { win.hide(); } catch (_) {}
+  }
+  diagLog(`force-hide/${reason || 'manual'}`);
+}
+
 function showOverlay() {
   if (!win) return;
   win.setBounds(activeBounds());               // resolve over whatever screen the operator is on
@@ -162,12 +209,14 @@ function showOverlay() {
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
   win.showInactive();                          // NON-ACTIVATING — never .show()+focus (Part 1)
   registerBankEsc();
+  startWatchdog();                             // arm the hang detector while visible
 }
 // hide the panel. Because summon never ACTIVATED VULCAN, the app that was frontmost
 // stayed frontmost — hiding the panel simply reveals it, focus intact (no app.hide,
 // which would itself churn activation).
 function hideOverlay() {
   unregisterBankEsc();
+  stopWatchdog();
   if (win) win.hide();
   diagLog('bank/hide');
 }
@@ -209,9 +258,18 @@ app.whenReady().then(() => {
     cb(permission === 'media' || permission === 'audioCapture');
   });
 
-  // PART 6 — default open-at-login ON for the packaged .app (first run); the operator
-  // can uncheck it in the tray. Never touches login items for the dev binary.
-  if (app.isPackaged && !app.getLoginItemSettings().openAtLogin) setLoginItem(true);
+  // RL-5 v2 · PART 1 — open-at-login is OFF BY DEFAULT (a resident overlay that can
+  // trap the machine must never resurrect itself at every login without an explicit
+  // opt-in). We no longer auto-enable it. One-time migration: the prior build forced
+  // it ON, so on first run of this build we turn it back OFF (guarded by a marker so
+  // a later operator opt-in via the tray is respected and never re-forced).
+  try {
+    const flag = path.join(app.getPath('userData'), 'login-default-off.v2');
+    if (app.isPackaged && !fs.existsSync(flag)) {
+      setLoginItem(false);
+      fs.writeFileSync(flag, new Date().toISOString());
+    }
+  } catch (_) {}
 
   createWindow();
   buildTray();
@@ -220,11 +278,19 @@ app.whenReady().then(() => {
   ipcMain.on('ui:request-summon', () => summon());       // wake-from-hidden (FINDING 1)
   ipcMain.on('ui:request-show', () => summon());         // legacy alias
   ipcMain.on('ui:request-hide', () => hideOverlay());    // bank complete (FINDING 4)
+  ipcMain.on('wd:pong', () => { lastPong = Date.now(); }); // PART 1 — watchdog heartbeat
 
   // global summon hotkey — fail-soft: if registration is refused (e.g. accessibility
   // denied), the tray item + wake word still summon; nothing hard-fails.
   const ok = globalShortcut.register(HOTKEY, () => toggleOverlay());
   if (!ok) console.log(`[ignition] hotkey ${HOTKEY} unavailable — use the tray or wake word`);
+
+  // PART 1 — EMERGENCY force-hide, always registered while the app runs. Bypasses the
+  // renderer entirely, so even a fully wedged renderer cannot keep the operator
+  // trapped behind the overlay. Fail-soft: if the OS refuses the binding, the tray
+  // Quit + watchdog remain as escapes.
+  const eok = globalShortcut.register(EMERGENCY_HOTKEY, () => forceHide('hotkey'));
+  if (!eok) console.log(`[safety] emergency hotkey ${EMERGENCY_HOTKEY} unavailable — watchdog + tray remain`);
 
   if (process.platform === 'darwin') {
     systemPreferences.askForMediaAccess('microphone').catch(() => {});
