@@ -82,9 +82,17 @@ const bridge = window.vulcan || {
   async tts() { return { ok: false }; },
   async transcribe() { return { ok: false }; },
 };
-// wake-from-hidden: if VULCAN is banked (overlay hidden), "Fire and Forge" shows
-// the window and re-ignites the command center; otherwise wake just proceeds.
-const voice = createVoice({ orb, bridge, forceTest, onWake: () => { if (presence < 0.5) { if (bridge.requestShow) bridge.requestShow(); ignite(); } } });
+// wake-from-hidden: "Fire and Forge" routes through the SAME summon path as the
+// Alt+Space hotkey — show the overlay over the active Space and play the full
+// ignition (FINDING 1). "Bank the fire" / "stand down" reverse it (FINDING 4).
+const voice = createVoice({
+  orb, bridge, forceTest,
+  onWake: () => {
+    if (bridge.requestSummon) bridge.requestSummon();   // main: overlay active Space + ui:ignite
+    if (presence < 0.5) ignite();                        // local kindle (browser + belt-and-suspenders)
+  },
+  onDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },
+});
 
 // ---- THE IGNITION state machine (system-wide summon / bank) ----
 let presence = 1;            // command-center presence: 1 resolved (default) .. 0 hidden
@@ -312,7 +320,7 @@ function step(dt) {
 }
 
 // command-center chrome fades in as the fire resolves (last, after the orb)
-const hudEls = [document.getElementById('vault-left'), document.getElementById('vault-right'), document.getElementById('keys')];
+const hudEls = [document.getElementById('vault-left'), document.getElementById('vault-right'), document.getElementById('keys'), document.getElementById('bank-hint')];
 function gateChrome(p) { const o = smooth(0.64, 1.0, p).toFixed(3); for (const el of hudEls) if (el) el.style.opacity = o; }
 
 function paintLabels() {
@@ -423,8 +431,12 @@ window.__vulcanHome = {
   // STAGE C — quotes harness: seed a synthetic quote (sym, price, pct)
   quotesInject: (sym, price, pct) => quotes.injectTest(sym, price, pct),
   quotesStatus: () => quotes.status(),
-  // voice harness
+  // voice harness (FINDING 1/4)
   triggerWake: () => voice.triggerWake(),
+  triggerDismiss: () => voice.triggerDismiss(),
+  // simulate the wake/dismiss OUTCOMES directly (routes exactly as the phrases do)
+  simWake: () => { if (bridge.requestSummon) bridge.requestSummon(); if (presence < 0.5) ignite(); },
+  simDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },
   voiceStatus: () => voice.status(),
   toggleMute: () => { voice.toggleMute(); paintHud(); },
   setMuted: (v) => { voice.setMuted(v); paintHud(); },

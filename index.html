@@ -11,7 +11,8 @@
     :root { --void: #050607; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; overflow: hidden; background: var(--void); }
-    body { cursor: none; }
+    /* cursor stays VISIBLE (FINDING 2) — an instrument reticle, not hidden */
+    body { cursor: crosshair; }
     #stage { position: fixed; inset: 0; display: block; }
     #label-layer { position: fixed; inset: 0; pointer-events: none; }
     #panel-layer { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
@@ -117,6 +118,12 @@
       font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
       text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.65; opacity: 0.72; }
     #keys b { color: var(--data-dim); font-weight: 500; }
+    /* persistent exit affordance (FINDING 2) — always-visible while resolved */
+    #bank-hint { position: fixed; left: var(--hud-margin-x); bottom: 30px; pointer-events: none;
+      font-family: var(--type-mono); font-size: 10.5px; letter-spacing: var(--label-track);
+      text-transform: uppercase; color: var(--data-dim); }
+    #bank-hint b { color: var(--data-bone); font-weight: 500; }
+    #bank-hint .k { display: inline-block; border: 1px solid var(--panel-stroke); padding: 1px 5px; margin-right: 7px; color: var(--data-bone); }
   </style>
 </head>
 <body>
@@ -153,9 +160,10 @@
 
   <div id="keys">
     <div><b>T V N K</b> SUMMON REGION</div>
-    <div><b>0 / ESC</b> HOME</div>
+    <div><b>0</b> ORB HOME</div>
     <div><b>1–4</b> ORB STATE · <b>M</b> MUTE · <b>P</b> PROFILE</div>
   </div>
+  <div id="bank-hint"><span class="k">ESC</span>BANK THE FIRE</div>
   <script type="module" src="/src/orb/main.js"></script>
 </body>
 </html>

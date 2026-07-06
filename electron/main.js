@@ -1,10 +1,15 @@
-// Electron shell — RESIDENT overlay (STAGE D). VULCAN launches at login, shows the
-// orb-home command center, and hides to a menu-bar (tray) item instead of quitting.
-// The wake listener + audio keep running while hidden (backgroundThrottling off),
-// so "Fire and Forge" from anywhere summons the always-on-top overlay; the global
-// hotkey (Alt+Space) is the fail-soft manual summon if the mic/permission is denied.
-// Esc banks the fire (renderer runs the reverse transition, then asks to hide).
-import { app, BrowserWindow, Tray, Menu, session, systemPreferences, globalShortcut, ipcMain, nativeImage } from 'electron';
+// Electron shell — RESIDENT OVERLAY (STAGE D + final-pass FINDING 3). VULCAN is a
+// borderless, always-on-top overlay that JOINS the currently active Space and
+// monitor — it is NEVER a native macOS fullscreen window (that would open a
+// separate Space and yank the user away). Say "Fire and Forge" (or Alt+Space) in
+// Chrome/Mail and the command center resolves OVER that screen; banking hides it
+// and reveals the same apps untouched — no Space animation, no app switch.
+//
+// It launches at login, hides to a menu-bar (tray) item instead of quitting, and
+// keeps the wake listener + audio alive while hidden (backgroundThrottling off).
+// Esc banks the fire ALWAYS while resolved (a global shortcut registered only
+// while the overlay is up, so it never swallows Esc from other apps when hidden).
+import { app, BrowserWindow, Tray, Menu, screen, session, systemPreferences, globalShortcut, ipcMain, nativeImage } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -22,13 +27,28 @@ try { HOTKEY = JSON.parse(fs.readFileSync(path.join(ROOT, 'tokens.json'), 'utf8'
 
 let win = null, tray = null, isQuitting = false;
 
+// the display the operator is actually on right now (cursor's screen)
+function activeBounds() {
+  try { return screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).bounds; }
+  catch (_) { return screen.getPrimaryDisplay().bounds; }
+}
+
 function createWindow() {
+  const b = activeBounds();
   win = new BrowserWindow({
-    fullscreen: true,
-    alwaysOnTop: true,
-    backgroundColor: '#050607',   // token: void — no white flash on boot (doctrine 11)
+    x: b.x, y: b.y, width: b.width, height: b.height,
     frame: false,
+    transparent: false,
+    backgroundColor: '#050607',   // token: void — no white flash on boot (doctrine 11)
     show: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,        // FINDING 3 — NEVER native macOS fullscreen (no separate Space)
+    skipTaskbar: true,
+    hasShadow: false,
+    roundedCorners: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -37,11 +57,13 @@ function createWindow() {
     },
   });
 
+  // float above everything, on the active Space (and over other apps' fullscreen)
+  win.setAlwaysOnTop(true, 'screen-saver');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
   win.once('ready-to-show', () => showOverlay());
 
   // resident: closing hides to the tray, it does not quit (only the tray Quit does)
-  win.on('close', (e) => { if (!isQuitting) { e.preventDefault(); win.hide(); } });
+  win.on('close', (e) => { if (!isQuitting) { e.preventDefault(); hideOverlay(); } });
 
   // echo renderer [voice] status to the terminal (no devtools needed)
   win.webContents.on('console-message', (...args) => {
@@ -53,15 +75,26 @@ function createWindow() {
   win.loadURL(DEV_URL);
 }
 
+// Esc banks ALWAYS while resolved — registered globally only while the overlay is
+// visible (so it never eats Esc from other apps when VULCAN is hidden).
+function registerBankEsc() {
+  try { globalShortcut.register('Escape', () => { if (win && win.isVisible()) win.webContents.send('ui:bank'); }); } catch (_) {}
+}
+function unregisterBankEsc() { try { globalShortcut.unregister('Escape'); } catch (_) {} }
+
 function showOverlay() {
   if (!win) return;
-  win.show();
-  if (process.platform === 'darwin') { try { app.focus({ steal: true }); } catch (_) {} }
-  win.focus();
+  win.setBounds(activeBounds());               // resolve over whatever screen the operator is on
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
+  win.show();                                  // shows on the CURRENT Space (not native fullscreen)
+  registerBankEsc();
 }
+function hideOverlay() { unregisterBankEsc(); if (win) win.hide(); }
+
 function summon() { const wasHidden = !win.isVisible(); showOverlay(); if (wasHidden) win.webContents.send('ui:ignite'); }
 function toggleOverlay() {
-  if (win.isVisible()) win.webContents.send('ui:bank');   // renderer banks, then requestHide
+  if (win.isVisible()) win.webContents.send('ui:bank');   // renderer runs the bank, then requestHide
   else summon();
 }
 
@@ -97,9 +130,10 @@ app.whenReady().then(() => {
   createWindow();
   buildTray();
 
-  // resident overlay control from the renderer (wake-from-hidden / bank-complete)
-  ipcMain.on('ui:request-show', () => summon());
-  ipcMain.on('ui:request-hide', () => { if (win) win.hide(); });
+  // resident overlay control from the renderer
+  ipcMain.on('ui:request-summon', () => summon());       // wake-from-hidden (FINDING 1)
+  ipcMain.on('ui:request-show', () => summon());         // legacy alias
+  ipcMain.on('ui:request-hide', () => hideOverlay());    // bank complete (FINDING 4)
 
   // global summon hotkey — fail-soft: if registration is refused (e.g. accessibility
   // denied), the tray item + wake word still summon; nothing hard-fails.

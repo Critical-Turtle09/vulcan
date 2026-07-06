@@ -12,7 +12,7 @@ import { createMouth } from './mouth.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createVoice({ orb, bridge, forceTest = false, onWake = null }) {
+export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null }) {
   let running = false, cfg = null, ears = null, mouth = null, brain = createBrain();
   let mode = 'idle', online = false, offlineReason = '';
   let muted = !!rawTokens.voice.startMuted;   // chosen state, not a fault
@@ -49,9 +49,14 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null }) {
         // processing, no whisper — until unmuted. Orb holds idle (no snap).
         if (muted) { ears.suspend(); await untilUnmuted(); if (!running) break; }
         waking = true;
-        await ears.listenForWake();                    // WAKE ("Fire and Forge")
+        const intent = await ears.listenForWake();     // WAKE ("Fire and Forge") / DISMISS
         waking = false;
         if (!running || muted) continue;                // muted mid-wait -> re-park
+        if (intent === 'dismiss') {                     // "bank the fire" / "stand down"
+          if (onDismiss) { try { onDismiss(); } catch (_) {} }
+          orb.setState('idle');
+          continue;                                     // no voice reply — just bank
+        }
         if (onWake) { try { onWake(); } catch (_) { /* wake hook must never break the loop */ } }
         orb.setState('listening');                     // idle -> listening (lerp)
         const { transcript } = await ears.capture();   // CAPTURE (ends on silence)
@@ -105,8 +110,9 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null }) {
   return {
     boot, tick,
     setMuted, toggleMute() { setMuted(!muted); }, get muted() { return muted; },
-    // test harness: fire the wake word on demand (test-mode ears)
+    // test harness: fire the wake / dismiss phrase on demand (test-mode ears)
     triggerWake() { if (ears && ears.triggerWake) ears.triggerWake(); },
+    triggerDismiss() { if (ears && ears.triggerDismiss) ears.triggerDismiss(); },
     stop() { running = false; if (ears) ears.stop(); },
     status() { return { online, mode, state: orb.stateName, offlineReason, muted }; },
   };

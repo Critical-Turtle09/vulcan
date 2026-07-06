@@ -13,6 +13,12 @@
 > - **Orb = WAVES** (Saturn ring retired): particle sphere whose outer contour is granular wave
 >   displacement of the house dust; audio-reactive (mic while listening, TTS envelope while
 >   speaking, calm heartbeat at idle, churn + constellations while thinking). Home scale ~60%.
+>   **+ 2–4 hairline bone wave-rings** (`orb.rings.*`) threading the orb — noise-displaced (never
+>   straight/circular), independently phased, audio-reactive like the body.
+> - **Overlay + voice dismiss:** the command center is a borderless always-on-top overlay that
+>   joins the ACTIVE Space/monitor (never native fullscreen). Wake routes through the same summon
+>   path as the hotkey (full ignition + reply). Dismiss phrase "Bank the fire" / "Stand down"
+>   (`voice.dismissPhrase(s)`) reverses to hidden; `Esc` banks (global only while resolved).
 > - **HUD = V.A.U.L.T** — hairline blueprint side columns: LEFT vitals, RIGHT command deck. No
 >   bottom bar. Real live state only.
 > - **Wake phrase = "Fire and Forge"** (`voice.wakeWord`).

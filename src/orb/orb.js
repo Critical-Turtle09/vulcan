@@ -177,11 +177,32 @@ export function createOrb() {
   const constNodes = new THREE.Points(cNodeGeo, cNodeMat);
   constNodes.renderOrder = 3;
 
+  // ---- wave-rings (Front B refinement, v1.3) — hairline bone contour rings
+  // threading the orb, NEVER straight or perfectly circular: each vertex is
+  // continuously displaced by noise (wavy, molten-surface read), each ring
+  // independently phased and tilted. Audio-reactive like the body. ----
+  const RG = O.rings || { count: 0, radii: [], segments: 128, noiseAmp: 0.2, noiseFreq: 2.6, audioGain: 0.5, speed: 0.4, tilts: [0], opacity: 0.5 };
+  const rings = [];
   const group = new THREE.Group();
   group.add(core, body, constLines, constNodes);
+  for (let i = 0; i < RG.count; i++) {
+    const seg = RG.segments;
+    const rpos = new Float32Array(seg * 3);
+    const rgeo = new THREE.BufferGeometry();
+    rgeo.setAttribute('position', new THREE.BufferAttribute(rpos, 3));
+    const rmat = new THREE.LineBasicMaterial({
+      color: color('data.bone'), transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, opacity: RG.opacity, linewidth: RG.lineWeight || 1,
+    });
+    const loop = new THREE.LineLoop(rgeo, rmat);
+    loop.renderOrder = 2;
+    group.add(loop);
+    rings.push({ geo: rgeo, pos: rpos, mat: rmat, seg, radius: (RG.radii[i] || 1) * R, tilt: RG.tilts[i % RG.tilts.length] || 0, phase: i * 1.73 });
+  }
 
   // ---- CPU wave (must match the GLSL so constellations ride the same sea) ----
   function rotY(v, a){ const c=Math.cos(a), s=Math.sin(a); return [c*v[0]+s*v[2], v[1], -s*v[0]+c*v[2]]; }
+  function rotX(v, a){ const c=Math.cos(a), s=Math.sin(a); return [v[0], c*v[1]-s*v[2], s*v[1]+c*v[2]]; }
   function waveFieldJS(n, t){
     const d1 = n[0]*DIR1.x + n[1]*DIR1.y + n[2]*DIR1.z;
     const d2 = n[0]*DIR2.x + n[1]*DIR2.y + n[2]*DIR2.z;
@@ -244,6 +265,24 @@ export function createOrb() {
     uni.uAgitation.value = cur.agitation; uni.uWaveAmp.value = waveAmp;
     heatTick = Math.max(0, heatTick - dt * 1000 / heatDecayMs);
     coreUni.uCoreGlow.value = cur.coreGlow; coreUni.uHeat.value = heatTick;
+
+    // ---- wave-rings: wavy (never circular), independently phased, audio-reactive
+    const ringAmp = RG.noiseAmp + RG.audioGain * cur.reactive * ampS;   // fraction of radius
+    for (const rg of rings) {
+      const p = rg.pos, seg = rg.seg, ph = rg.phase + t * RG.speed;
+      for (let j = 0; j < seg; j++) {
+        const th = j / seg * Math.PI * 2, ct = Math.cos(th), st = Math.sin(th);
+        const d1 = simplex3(ct * RG.noiseFreq, st * RG.noiseFreq, ph);              // radial wobble
+        const d2 = simplex3(ct * RG.noiseFreq + 5, st * RG.noiseFreq + 5, ph * 0.7); // out-of-plane
+        const rr = rg.radius * (1 + d1 * ringAmp);
+        let q = [ct * rr * breathe, d2 * ringAmp * R * 0.42 * breathe, st * rr * breathe];
+        q = rotX(q, rg.tilt);
+        q = rotY(q, spinAngle * 0.5 + rg.phase * 0.4);      // slow precession, per-ring phase
+        p[j*3] = q[0]; p[j*3+1] = q[1]; p[j*3+2] = q[2];
+      }
+      rg.geo.attributes.position.needsUpdate = true;
+      rg.mat.opacity = RG.opacity * reveal * (0.72 + 0.5 * cur.reactive * ampS);
+    }
 
     const cv = cur.constel;
     lineMat.opacity = cv * 0.5;

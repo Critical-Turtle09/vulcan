@@ -91,3 +91,34 @@ material transition — no hard cuts, no pop-in text. Re-run clean.
 
 _Measured headless via Playwright against the Vite render (byte-identical to the
 Electron full-screen render). Values are from the live render loop, not simulated._
+
+---
+
+## FINAL v1 PASS — re-audit after the 5 walkthrough fixes
+
+| Transition | Driver | maxStep | range | Verdict |
+|---|---|---|---|---|
+| **Wake → ignition** (FINDING 1, voice "Fire and Forge" from hidden) | `presence` | **0.044** | 1.00 | ✅ FLUID |
+| **Dismiss → bank** (FINDING 4, voice "Bank the fire" / "Stand down") | `presence` | **0.086** | 1.00 | ✅ FLUID |
+| **Wave-ring reactivity** (FINDING 5, sim audio while speaking) | `ampS` | 0.311 | peak 0.608 | ✅ RESPONSIVE (audio envelope: fast attack / slow decay, by design — same smoothed envelope that drives the body waves) |
+
+- **FINDING 1** — the wake phrase now routes through the *same* summon path as
+  Alt+Space (`requestSummon` → overlay + `ui:ignite`), so it plays the full
+  ignition with the voice reply riding it. Measured: wake from hidden →
+  presence 0 → 1 fluidly.
+- **FINDING 2** — cursor is `crosshair` (visible instrument reticle); a persistent
+  `ESC · BANK` affordance is shown while resolved (gated with the HUD chrome).
+- **FINDING 3** — the overlay is borderless, `fullscreenable:false`,
+  always-on-top `screen-saver`, `visibleOnAllWorkspaces`, sized to the active
+  display — it joins the current Space instead of opening a native-fullscreen
+  Space. (Electron main-process; verified by construction + syntax, not
+  browser-measurable.)
+- **FINDING 4** — the listener accepts the dismiss phrase while resolved and
+  reverses the ignition to hidden. Measured fluid above; `Esc` remains the
+  fallback (global shortcut registered only while resolved).
+- **FINDING 5** — 2–4 hairline wave-rings thread the orb, noise-displaced (never
+  circular), audio-reactive like the body: near-calm undulation at idle, surge
+  with the envelope while speaking (screenshots `f5-idle2` / `f5-speaking`).
+
+**FINAL VERDICT: PASS.** All five fixes land fluid; no regressions in the
+prior 15 transitions.

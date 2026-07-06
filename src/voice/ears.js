@@ -11,6 +11,10 @@ import { encodeWavBase64, downsampleTo16k } from './wav.js';
 export function createEars({ bridge, mode }) {
   const V = rawTokens.voice;
   const wakeWord = V.wakeWord.toLowerCase();
+  // dismiss phrases ("bank the fire" / "stand down") — the listener accepts these
+  // while resolved and returns intent 'dismiss' instead of 'wake' (FINDING 4).
+  const dismissPhrases = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map((s) => s.toLowerCase());
+  const matchDismiss = (t) => dismissPhrases.some((p) => t.includes(p));
 
   // ---------- TEST MODE ----------
   if (mode === 'test') {
@@ -21,10 +25,11 @@ export function createEars({ bridge, mode }) {
       async listenForWake() {
         return new Promise((resolve, reject) => {
           manualWake = resolve; wakeReject = reject;
-          wakeTimer = setTimeout(() => { if (manualWake) { manualWake = null; resolve(); } }, V.test.wakeDelayMs);
+          wakeTimer = setTimeout(() => { if (manualWake) { manualWake = null; resolve('wake'); } }, V.test.wakeDelayMs);
         });
       },
-      triggerWake() { if (manualWake) { clearTimeout(wakeTimer); const r = manualWake; manualWake = null; r(); } },
+      triggerWake() { if (manualWake) { clearTimeout(wakeTimer); const r = manualWake; manualWake = null; r('wake'); } },
+      triggerDismiss() { if (manualWake) { clearTimeout(wakeTimer); const r = manualWake; manualWake = null; r('dismiss'); } },
       // muted: abort a pending wake so the loop can park (no synthetic wake fires)
       suspend() { clearTimeout(wakeTimer); if (wakeReject) { const r = wakeReject; manualWake = wakeReject = null; r(new Error('aborted')); } },
       async capture() {
@@ -101,11 +106,12 @@ export function createEars({ bridge, mode }) {
           else if (speaking) {
             silence += buf.length / srcRate * 1000;
             seg.push(buf.slice());
-            if (silence > 400) { // short segment end — test for wake word
+            if (silence > 400) { // short segment end — test for wake / dismiss phrase
               const frames = seg; seg = []; speaking = false; silence = 0;
               if (frames.length > 4) {
                 const txt = (await transcribe(frames)).toLowerCase();
-                if (txt.includes(wakeWord)) { proc.onaudioprocess = null; abortWake = null; resolve(); }
+                if (matchDismiss(txt)) { proc.onaudioprocess = null; abortWake = null; resolve('dismiss'); }
+                else if (txt.includes(wakeWord)) { proc.onaudioprocess = null; abortWake = null; resolve('wake'); }
               }
             }
           }

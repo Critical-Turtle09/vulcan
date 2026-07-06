@@ -75,6 +75,21 @@ Explicitly rejected (from v0, "2002 video game"):
   TTS envelope while *speaking*, and settle to a near-calm sea + tiny breathing heartbeat at
   *idle*; *thinking* churns the sea and surfaces the network constellations (Skyfall read). Home
   scale is reduced (~60%, `orb.scale`). Network constellations survive as the thinking state.
+  **Wave-rings (refinement):** 2–4 HAIRLINE bone contour rings thread the orb at offset radii —
+  **lines**, but NEVER straight or perfectly circular: each is continuously noise-displaced
+  (wavy, molten-surface read) and independently phased, and is audio-reactive like the body
+  (calm undulation at idle → surge with mic/TTS). `orb.rings.*` tokens.
+- **VOICE = SUMMON + DISMISS.** The wake phrase routes through the SAME summon path as the
+  Alt+Space hotkey: from hidden, "Fire and Forge" plays the FULL ignition (sparks → surge →
+  condense → cool) with the voice reply riding the summon. While resolved, the listener also
+  accepts a **dismiss phrase** — "Bank the fire" (default) or "Stand down" (`voice.dismissPhrase`
+  / `voice.dismissPhrases`) → reverse ignition → hidden, underlying apps untouched. `Esc` banks
+  as a fallback (a global shortcut registered ONLY while resolved, so it never eats Esc elsewhere).
+- **OVERLAY, not a Space.** The command center is a borderless, always-on-top overlay that JOINS
+  the currently active Space + monitor — **never** native macOS fullscreen (which would open a
+  separate Space and yank the operator away). Say the phrase in any app and VULCAN resolves OVER
+  that screen; banking reveals the same apps, no Space animation, no app switch. The cursor stays
+  visible (instrument reticle) and an `ESC · BANK` affordance is always shown while resolved.
 - **HUD "V.A.U.L.T" (Front D extended) — side columns only.** LEFT column = **system vitals**
   (voice / wire / quotes status, mode, uptime, heat index). RIGHT column = **command deck**
   (active profile, directives, live wire-feed lines, recent events). Hairline Palantir blueprint
@@ -209,6 +224,10 @@ States (the sea is **audio-reactive**):
 - *listening* — waves stir to the operator's live MIC amplitude
 - *thinking* — the sea churns and network constellations surface (Skyfall read as a state, not the body)
 - *speaking* — waves surge to the TTS playback envelope (real analyser, never a formula)
+
+Threaded through the body are **2–4 hairline bone wave-rings** (`orb.rings.*`) — contour lines
+at offset radii, noise-displaced so they are never straight or circular, independently phased, and
+audio-reactive like the sea (calm undulation at idle → surge with mic/TTS).
 
 **MAP (C) — SUMMONED theater (v1.2, NO GLOBE).** There is no ambient globe — no globe anywhere, ever. Geography is not persistent; it is *summoned* only when needed. On summon, the interface transforms orb → theater in one continuous granular crossflow: the orb dissolves as the region's terrain forms from the same dust, and the orb re-forms small/docked. Return reverses identically — the orb re-forms center.
 - The theater is an **oblique 3D sculptural terrain of the relevant REGION** — the Top Gun: Maverick briefing-map read (REF-02): monochrome sculpted topography, thin precise white route lines and data marks, instrument realism; Avatar (REF-05/07) oblique angle. No atlas chrome.
