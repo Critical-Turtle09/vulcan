@@ -49,10 +49,23 @@ export function createEars({ bridge, mode }) {
   let ready = false, offline = false;
   let level = 0;   // running mic RMS — feeds the LISTENING waves (real amplitude)
 
+  // RL-5 v2 · PART 2 — MIC COEXISTENCE. Capture constraints ship from tokens. The
+  // processing flags (AEC/NS/AGC) are FALSE on purpose: enabling them on macOS routes
+  // capture through Apple's Voice-Processing I/O unit, which reconfigures the shared
+  // input device and breaks other apps' dictation (the operator's Wispr Flow). Raw
+  // shared HAL capture coexists — the wake VAD + whisper don't need the processing.
+  const C = V.capture || {};
+  const audioConstraints = {
+    channelCount:     C.channelCount ?? 1,
+    echoCancellation: C.echoCancellation ?? false,
+    noiseSuppression: C.noiseSuppression ?? false,
+    autoGainControl:  C.autoGainControl ?? false,
+  };
+
   async function init() {
     if (ready) return true;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       ctx = new (window.AudioContext || window.webkitAudioContext)();
       srcRate = ctx.sampleRate;
       source = ctx.createMediaStreamSource(stream);
@@ -86,7 +99,8 @@ export function createEars({ bridge, mode }) {
     return out;
   }
 
-  let abortWake = null;   // set while a wake-listen is pending; suspend() calls it
+  let abortWake = null;      // set while a wake-listen is pending; suspend() calls it
+  let abortCapture = null;   // set while an utterance capture is pending; suspend() calls it
 
   return {
     mode: 'live',
@@ -121,6 +135,9 @@ export function createEars({ bridge, mode }) {
     // record until sustained silence, then transcribe the utterance
     async capture() {
       return new Promise((resolve) => {
+        // PART 2 — muting mid-capture must release the mic NOW: suspend() calls this
+        // to end the capture immediately (empty transcript -> the loop re-parks muted).
+        abortCapture = () => { if (proc) proc.onaudioprocess = null; abortCapture = null; resolve({ transcript: '', aborted: true }); };
         let seg = [], silence = 0, started = false, elapsed = 0;
         onFrame(async (buf) => {
           elapsed += buf.length / srcRate * 1000;
@@ -129,7 +146,7 @@ export function createEars({ bridge, mode }) {
           if (rms > V['vad.threshold']) { started = true; silence = 0; }
           else if (started) silence += buf.length / srcRate * 1000;
           if ((started && silence > V.silenceTimeoutMs) || elapsed > V.captureMaxMs) {
-            proc.onaudioprocess = null;
+            proc.onaudioprocess = null; abortCapture = null;
             const txt = await transcribe(seg);
             resolve({ transcript: txt });
           }
@@ -141,6 +158,7 @@ export function createEars({ bridge, mode }) {
     // so unmuting resumes seamlessly with no re-prompt (permission persists).
     suspend() {
       if (abortWake) abortWake();
+      if (abortCapture) abortCapture();
       if (proc) { proc.onaudioprocess = null; proc.disconnect(); proc = null; }
       if (source) { source.disconnect(); source = null; }
       if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }

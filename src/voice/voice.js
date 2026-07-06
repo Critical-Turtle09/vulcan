@@ -62,6 +62,7 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         orb.setState('listening');                     // idle -> listening (lerp)
         const { transcript } = await ears.capture();   // CAPTURE (ends on silence)
         if (!running) break;
+        if (muted) continue;                            // muted mid-capture -> mic released, re-park
         // PART 6 — LOCAL REFLEX: short intents resolve locally + instantly and
         // skip the brain. A reflex may return a short confirmation to speak.
         const cmdIntent = onCommand ? await classify(transcript, bridge) : null;
@@ -97,9 +98,11 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     if (v === muted) return;
     muted = v;
     if (muted) {
-      // abort now only if we're actively listening for wake; a mid-exchange mute
-      // lets the current response finish, then the loop parks muted at idle.
-      if (ears && waking) ears.suspend();
+      // PART 2 — mute (M) FULLY RELEASES the mic immediately, in any state: suspend()
+      // aborts a pending wake OR capture, stops the tracks, and closes the audio
+      // graph (OS mic indicator off). A mid-exchange mute cannot leave the device
+      // held. TTS already in flight still finishes (mute is input, not output).
+      if (ears) ears.suspend();
     } else {
       if (unmuteResolve) { const r = unmuteResolve; unmuteResolve = null; r(); }
     }

@@ -41,3 +41,35 @@ process exit, and tray Quit / OS force-quit remain.
 *legitimate* first-summon shader compile blocks the main thread past 2 s. That is
 the safe response (operator never trapped); PART 3 removes the underlying stall so
 it won't trip in normal use.
+
+---
+
+## PART 2 — MIC COEXISTENCE  ✅
+
+**The failure:** VULCAN's always-on wake listener broke the operator's Wispr Flow
+dictation. Root cause: `getUserMedia({ echoCancellation:true, noiseSuppression:true })`.
+On macOS those constraints route capture through Apple's **Voice-Processing I/O
+unit (VPIO)**, which reconfigures the *shared* input device (sample rate, ducking,
+exclusive-ish grab) and starves other capture clients. VULCAN holding the mic open
+continuously then means no other app can dictate.
+
+**The fix:**
+
+| # | Requirement | Implementation |
+|---|---|---|
+| 1 | Shared, non-exclusive capture | Capture constraints now ship from `tokens.voice.capture` with `echoCancellation / noiseSuppression / autoGainControl = false` → plain shared HAL input, no VPIO. VAD + whisper don't need the processing. `src/voice/ears.js` reads the token |
+| 2 | Fully releases the device on mute (M) | `setMuted(true)` now calls `ears.suspend()` in **any** state (was: only while listening-for-wake). `suspend()` aborts a pending wake **or** capture, stops all tracks, and closes the audio graph — the OS mic indicator goes off immediately. TTS already in flight still finishes (mute is input, not output). The loop re-parks cleanly (`if (muted) continue` after capture) |
+| 3 | Never blocks other apps' dictation | Direct consequence of #1 — no VPIO means the mic is shared; other apps capture concurrently |
+
+**Verification:**
+- `npm run build:web` clean · `npm run audit` — **PASS 18/18** (mute-toggle flag included).
+- Real-Chromium capture check (`--use-fake-device-for-media-stream`) driving the
+  **exact tokenized constraints**: effective track settings report
+  `echoCancellation=false, noiseSuppression=false, autoGainControl=false` →
+  **no voice-processing engaged (PASS)**; `track.readyState === 'ended'` after
+  `stop()` → **device released**.
+
+**Operator-side confirmation (needs the real device — cannot be automated here):**
+with VULCAN resident and listening, start Wispr Flow dictation → it should now
+capture normally; press **M** in VULCAN → mic indicator drops instantly. The VPIO
+root cause is removed, so this is expected to pass; please confirm on the Mac.
