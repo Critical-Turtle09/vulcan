@@ -21,16 +21,19 @@ function glyphize(str) {
 }
 
 // deterministic per-glyph stagger (noise-ish, not linear) so text resolves as
-// granular matter — capped so a whole block never exceeds ~text block cap.
-function stagger(glyphs, baseDelayMs) {
-  const step = P['glyph.stagger.ms'];
-  const cap = rawTokens.motion['reveal.text.blockCap.ms'];
+// granular matter. The whole block is spread evenly across a span that is CAPPED
+// (spanCap) — critically, long blocks COMPRESS the per-glyph step to fit the cap
+// instead of piling every glyph at the cap (which would read as a pop-in). The
+// measured fluidity audit caught the pile-up; this is the fix.
+function stagger(glyphs, baseDelayMs, spanCap) {
+  const n = glyphs.length || 1;
+  const span = Math.min(n * P['glyph.stagger.ms'], spanCap);
+  const per = span / n;                    // shrinks for long blocks -> no pile-up
   let seed = 1337;
   glyphs.forEach((g, i) => {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    const jitter = (seed / 0x7fffffff) * step * 2;
-    const d = Math.min(baseDelayMs + i * step * 0.6 + jitter, baseDelayMs + cap);
-    g.style.transitionDelay = `${d.toFixed(0)}ms`;
+    const jitter = (seed / 0x7fffffff) * per * 0.6;   // < per, keeps it granular but monotonic-ish
+    g.style.transitionDelay = `${(baseDelayMs + i * per + jitter).toFixed(0)}ms`;
   });
 }
 
@@ -103,9 +106,10 @@ export function createPanels() {
     current = site; openId = site.id; closing = false;
     panelEl = buildPanel(site);
     drawFrame(panelEl);
-    // text resolves LAST — stagger every glyph after the frame begins drawing
+    // text resolves LAST — stagger every glyph across the block cap after the
+    // frame begins drawing (spread evenly, never piled -> no pop-in)
     const glyphs = Array.from(panelEl.querySelectorAll('.g'));
-    stagger(glyphs, P['text.delayMs']);
+    stagger(glyphs, P['text.delayMs'], rawTokens.motion['reveal.text.blockCap.ms']);
     requestAnimationFrame(() => requestAnimationFrame(() => panelEl.classList.add('resolve')));
     leader.style.opacity = '1';
   }
@@ -121,14 +125,20 @@ export function createPanels() {
     if (!panelEl || closing) return;
     closing = true; openId = null; current = null;
     const el = panelEl; panelEl = null;
-    el.classList.remove('resolve');                       // glyphs dissolve back
+    // re-stagger the glyphs to a SHORT dissolve span so they melt out granularly
+    // (not all at once) — and keep the element alive until that dissolve finishes.
+    const glyphs = Array.from(el.querySelectorAll('.g'));
+    const span = P['dissolve.ms'] * 0.55;
+    stagger(glyphs, 0, span);
+    el.classList.remove('resolve');                       // glyphs dissolve back, staggered
     const rect = el.querySelector('rect');
     if (rect) { const per = 2 * (el.offsetWidth + el.offsetHeight); rect.style.strokeDashoffset = per; }
     leader.style.opacity = '0';
+    const life = Math.max(P['dissolve.ms'], span + P.glyphMs + 40);   // never cut a glyph mid-fade
     setTimeout(() => {
       el.remove(); closing = false;
       if (pending) { const s = pending; pending = null; reallyOpen(s); }
-    }, P['dissolve.ms']);
+    }, life);
   }
 
   // reproject the tethered site each frame; keep the panel beside it and the
