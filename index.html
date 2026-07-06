@@ -21,7 +21,10 @@
       background-size: cover; background-position: center; }
     #void-over { position: fixed; inset: 0; z-index: 1; background: var(--void); opacity: 1; }
     #stage { position: fixed; inset: 0; display: block; z-index: 2; mix-blend-mode: lighten; }
-    #label-layer { position: fixed; inset: 0; pointer-events: none; }
+    /* HUD DOM layers MUST sit above the canvas (z2). Giving #stage a z-index for the
+       transparency backdrop silently occluded the V.A.U.L.T columns — this is the
+       regression fixed in Night II PART 2 (guarded in the audit harness). */
+    #label-layer { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
     #panel-layer { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
     /* ceremony title beat — mono-caps, centered, resolves in/out (JS-driven, no cut) */
     #ceremony-title {
@@ -89,7 +92,7 @@
 
     /* ---- V.A.U.L.T HUD — blueprint side columns (§6-D, no bottom bar) ---- */
     .vault-col {
-      position: fixed; top: var(--hud-margin-y); pointer-events: none;
+      position: fixed; top: var(--hud-margin-y); pointer-events: none; z-index: 4;
       font-family: var(--type-mono); text-transform: uppercase;
       letter-spacing: var(--label-track); width: var(--hud-col-w);
     }
@@ -129,18 +132,18 @@
     #vault-left::after  { left: 0;  border-left: 1px solid var(--panel-stroke); }
     #vault-right::after { right: 0; border-right: 1px solid var(--panel-stroke); }
 
-    #keys { position: fixed; right: var(--hud-margin-x); bottom: 30px; pointer-events: none;
+    #keys { position: fixed; right: var(--hud-margin-x); bottom: 30px; pointer-events: none; z-index: 4;
       font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
       text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.65; opacity: 0.72; }
     #keys b { color: var(--data-dim); font-weight: 500; }
     /* persistent exit affordance (FINDING 2) — always-visible while resolved */
-    #bank-hint { position: fixed; left: var(--hud-margin-x); bottom: 30px; pointer-events: none;
+    #bank-hint { position: fixed; left: var(--hud-margin-x); bottom: 30px; pointer-events: none; z-index: 4;
       font-family: var(--type-mono); font-size: 10.5px; letter-spacing: var(--label-track);
       text-transform: uppercase; color: var(--data-dim); }
     #bank-hint b { color: var(--data-bone); font-weight: 500; }
     #bank-hint .k { display: inline-block; border: 1px solid var(--panel-stroke); padding: 1px 5px; margin-right: 7px; color: var(--data-bone); }
     /* scene legend — bone mono-caps caption, centered above the key hints (theater only) */
-    #legend { position: fixed; left: 50%; transform: translateX(-50%); bottom: 32px; pointer-events: none;
+    #legend { position: fixed; left: 50%; transform: translateX(-50%); bottom: 32px; pointer-events: none; z-index: 4;
       font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
       text-transform: uppercase; color: var(--data-dim); white-space: nowrap;
       opacity: 0; transition: opacity 300ms ease; text-align: center; }

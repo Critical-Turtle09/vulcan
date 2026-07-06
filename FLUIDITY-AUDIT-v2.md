@@ -8,23 +8,24 @@ not a curve.
 
 | Transition | Driver | maxStep | Verdict | Notes |
 |---|---|---|---|---|
+| V.A.U.L.T sidebars visible | `occlusion` | 0 | ✅ | left=on-top · right=on-top · opacity=1 |
 | ignition ceremony | `presence` | 0.017 | ✅ | range=0.6 |
-| bank / quench | `presence` | 0.028 | ✅ | range=0.61 |
+| bank / quench | `presence` | 0.028 | ✅ | range=0.58 |
 | orb -> listening | `agitation` | 0.005 | ✅ | range=0.03 |
 | orb -> thinking | `agitation` | 0.065 | ✅ | range=0.34 |
 | orb -> speaking | `agitation` | 0.035 | ✅ | range=0.18 |
-| orb -> idle | `agitation` | 0.026 | ✅ | range=0.14 |
-| ring/body reactivity | `ampS` | 0.061 | ✅ | peak=0.24 · note=audio envelope — responsive by design |
+| orb -> idle | `agitation` | 0.026 | ✅ | range=0.1 |
+| ring/body reactivity | `ampS` | 0.064 | ✅ | peak=0.46 · note=audio envelope — responsive by design |
 | mute toggle | `flag` | 0 | ✅ | toggled=true |
 | summon taiwan | `summonP` | 0.05 | ✅ | range=0.77 |
 | wire ignition (flash+decay) | `heat` | 0.2 | ✅ | peak=0.32 · note=ignite is an intended flash |
 | quotes visible | `chips` | 0 | ✅ | visibleChips=1 |
-| panel open (per-glyph) | `glyph` | 0.236 | ✅ | range=1 |
-| panel close (dissolve) | `glyph` | 0.381 | ✅ | range=1 |
-| return home | `summonP` | 0.05 | ✅ | end=0.3 |
+| panel open (per-glyph) | `glyph` | 0.242 | ✅ | range=0.99 |
+| panel close (dissolve) | `glyph` | 0.433 | ✅ | range=0.99 |
+| return home | `summonP` | 0.05 | ✅ | end=0.22 |
 | profile switch | `crossflow` | 0 | ✅ | from=semiconductor · to=bonsai |
 | schematic condense | `reveal` | 0 | ✅ | note=dust condense (visual) |
 | schematic explode | `explodeP` | 0.1 | ✅ | note=lerped separation (visual) |
 
-**Result: PASS** — 17 checks.
+**Result: PASS** — 18 checks.
 

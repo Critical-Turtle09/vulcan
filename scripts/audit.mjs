@@ -62,6 +62,25 @@ try {
   const act = (fn, ...args) => page.evaluate(([f, a]) => window.__vulcanHome[f](...a), [fn, args]);
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  // 0) REGRESSION GUARD (Night II PART 2) — the V.A.U.L.T sidebars must be visible
+  // AND not occluded by the canvas at the resolved home (the transparency backdrop
+  // once gave #stage a z-index that silently covered them). elementFromPoint with a
+  // temporary pointer-events:auto is the true occlusion test.
+  await sleep(400);
+  const vault = await page.evaluate(() => {
+    const test = (id) => {
+      const el = document.getElementById(id); if (!el) return { onTop: false, opacity: 0 };
+      const prev = el.style.pointerEvents; el.style.pointerEvents = 'auto';
+      const r = el.getBoundingClientRect();
+      const top = document.elementFromPoint(r.left + Math.min(60, r.width / 2), r.top + 30);
+      el.style.pointerEvents = prev;
+      return { onTop: !!(top && top.closest && top.closest('#' + id)), opacity: +getComputedStyle(el).opacity };
+    };
+    return { left: test('vault-left'), right: test('vault-right') };
+  });
+  const vaultOk = vault.left.onTop && vault.right.onTop && vault.left.opacity > 0.9 && vault.right.opacity > 0.9;
+  record('V.A.U.L.T sidebars visible', 'occlusion', vaultOk ? 0 : 1, { left: vault.left.onTop ? 'on-top' : 'OCCLUDED', right: vault.right.onTop ? 'on-top' : 'OCCLUDED', opacity: vault.left.opacity });
+
   // 1) IGNITION ceremony + 2) BANK/quench
   await act('simDismiss'); await sleep(2000);
   await act('ignite'); const ig = await run('presence', 3200); record('ignition ceremony', 'presence', ig.maxStep, { range: +ig.range.toFixed(2) });

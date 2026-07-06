@@ -50,6 +50,17 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   regardless of focus. Verify keyboard-after-click doesn't switch Spaces on your
   setup. (Voice is the primary driver, so this is a minor caveat.)
 
+### PART 2 — Restore the V.A.U.L.T sidebars 🟢 FIXED
+- **Regression cause:** Night I's transparency work gave `#stage` a `z-index: 2`;
+  the V.A.U.L.T columns (+ keys / bank-hint / legend) had `z-index: auto` (0) →
+  the canvas painted **over** them, silently hiding the sidebars at the resolved home.
+- **Fix:** raised the HUD DOM layers above the canvas (`#label-layer` z3, `.vault-col`
+  / `#keys` / `#bank-hint` / `#legend` z4, panels z5, title z6). Left vitals + right
+  command deck are back exactly per spec v1.3 (`n2-vault-restored.jpeg`).
+- **Regression-tested:** added a "V.A.U.L.T sidebars visible" check to `npm run
+  audit` — a real occlusion test (temporary `pointer-events:auto` + `elementFromPoint`)
+  that fails if the columns are covered or transparent. Audit now **18/18 PASS**.
+
 ## Part log
 
 ### PART 1 — RL-4 signing pass 🟢
