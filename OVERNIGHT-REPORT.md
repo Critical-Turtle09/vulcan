@@ -19,7 +19,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 5 | Local voice fallback | 🟢 DONE (Kokoro deferred: py3.9) | provider chain elevenlabs→kokoro→say; say fallback tested |
 | 6 | Local reflexes (Ollama) | 🟢 DONE | regex reflexes verified; Ollama installed + llama3.2:1b + wired |
 | 7 | Profile drafts | 🟡 DRAFT | bonsai fleshed out (map off), political drafted (map on); default unchanged; +crash fix |
-| 8 | Regression harness | … | |
+| 8 | Regression harness | 🟢 DONE | `npm run audit` — 17 checks, frame-accurate, PASS; FLUIDITY-AUDIT-v2.md |
 | 9 | Docs pass | … | |
 | 10 | Media capture | … | |
 | 11 | Website draft | … | |
@@ -131,4 +131,20 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 - **Bug fixed:** switching profile while a region was summoned crashed `paintHud`
   (`regions()[currentRegion].name` on a region absent from the new profile) —
   now guarded (+ shows "DEVICE" for the schematic scene).
+
+### PART 8 — Regression harness 🟢
+- `scripts/audit.mjs` (Playwright, wired as **`npm run audit`**) drives EVERY
+  transition — both ceremonies, orb states + rings under sim audio, mute, summon,
+  wire ignition, quotes, panels, return, profile switch, schematic condense +
+  explode — and measures each for doctrine-11 fluidity (**maxStep < 0.5**).
+- **Frame-accurate** sampling: each trace samples its value every
+  `requestAnimationFrame` in-page (no multi-evaluate aliasing), panel triggers +
+  traces in one evaluate, glyph getter hold-last so DOM removal isn't scored as a
+  cut. Exits non-zero on any failure.
+- **17/17 PASS** (ignition 0.017, bank 0.028, summon 0.05, panel open 0.257 /
+  close 0.4, orb lerps <0.07). `FLUIDITY-AUDIT-v2.md` auto-generated + committed.
+- Debugging note: an early coarse-sampling run false-flagged the panels — root
+  cause was measurement aliasing (confirmed the panel lives its full ~408ms
+  dissolve), fixed by frame-rate sampling. (Durations read short under headless
+  rAF throttling; the maxStep fluidity metric is unaffected.)
 
