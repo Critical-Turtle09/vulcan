@@ -21,7 +21,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 7 | Profile drafts | 🟡 DRAFT | bonsai fleshed out (map off), political drafted (map on); default unchanged; +crash fix |
 | 8 | Regression harness | 🟢 DONE | `npm run audit` — 17 checks, frame-accurate, PASS; FLUIDITY-AUDIT-v2.md |
 | 9 | Docs pass | 🟢 DONE | README front door, generated TOKENS.md, ARCHITECTURE.md, .env.example updated |
-| 10 | Media capture | … | |
+| 10 | Media capture | 🟢 DONE | 11 stills + ignition.mp4/.gif; MEDIA-INDEX.md committed, media gitignored |
 | 11 | Website draft | … | |
 | 12 | Skill scaffold | … | |
 | 13 | Close-out | … | |
@@ -156,4 +156,13 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 - **ARCHITECTURE.md** — engine / organs / profiles / scenes with a system diagram.
 - `.env.example` updated (VULCAN_TTS_PROVIDER, KOKORO_BIN, VULCAN_DEV_URL — names
   only). Added `npm run tokens` + `npm run topo` scripts.
+
+### PART 10 — Media capture 🟢
+- `scripts/capture-media.mjs` (**`npm run media`**) captures 11 money-shot stills
+  (ignition kindle/strike/title, orb idle + speaking-rings, Taiwan summon, wire
+  ignition, panel resolve, schematic assembled/exploded, quench) + a 22-frame
+  ignition sequence, all at 1600×1000.
+- ffmpeg builds `ignition.mp4` (660K, h264) + `ignition.gif` (2M) from the sequence.
+- Heavy media **gitignored**; `MEDIA-INDEX.md` committed as the manifest with
+  regenerate steps. Verified stills non-blank (wire-ignition spot-checked).
 
