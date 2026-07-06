@@ -73,3 +73,56 @@ continuously then means no other app can dictate.
 with VULCAN resident and listening, start Wispr Flow dictation → it should now
 capture normally; press **M** in VULCAN → mic indicator drops instantly. The VPIO
 root cause is removed, so this is expected to pass; please confirm on the Mac.
+
+---
+
+## PART 3 — PACKAGED-APP PERFORMANCE / GLITCH HUNT  ✅
+
+**Method:** profiled the **packaged .app** (not dev) by launching the binary with
+`--remote-debugging-port` and attaching over CDP (`scripts/profile-packaged.mjs`),
+driving every state, and sampling real per-frame times.
+
+**The finding (before):** the app was pinned to **~23 ms/frame (~42 fps) in EVERY
+state** — a flat floor, not state-dependent spikes. Root cause: the full-screen
+post chain (UnrealBloom multi-pass + grade + output) running at **devicePixelRatio
+= 2** on the Retina/4K display — 4× the pixels through the most expensive passes,
+every frame. Occasional 40–70 ms spikes came from per-frame DOM churn (`paintHud`
+at 60 Hz, a per-frame `JSON.stringify` of the wire feed, constant style writes).
+
+**The fixes (all token-driven, `tokens.perf.*`):**
+1. **Cap render resolution** — `maxPixelRatio 1.5` (was uncapped→2). Fewer pixels
+   through every pass; visually indistinguishable at this scale (screenshots).
+2. **Adaptive resolution governor** — watches a rolling median frame time and scales
+   render resolution between `minRenderScale`(0.66)…1 to hold `budgetMs`, recovering
+   when there's headroom. This is the "degrade gracefully" path for heavier
+   hardware/scenes. (It settled at scale 1.0 here — the 1.5 cap alone met budget.)
+3. **Throttle HUD + feed DOM writes** to `hudHz` (6 Hz) instead of 60; drop the
+   per-frame `JSON.stringify`; write ceremony-title / void-floor / chrome-gate styles
+   **only when they change** (constant at rest). Kills the GC spikes.
+4. **Boot-time shader warmup** (`renderer.compile`) so the first summon of any scene
+   never stalls mid-ceremony (a stall would also trip the PART-1 watchdog).
+5. **`perf()` probe** on `window.__vulcanHome` (frame-time percentiles + governor
+   state) for this evidence and future audits.
+
+**Evidence — packaged before/after (median frame time / worst-case):**
+
+| State | BEFORE p50 | BEFORE p99 / max | AFTER p50 | AFTER p99 / max |
+|---|---|---|---|---|
+| ignition+resolve | 23.1 | 25.4 / 26.3 | **16.6** | 18.7 / 18.8 |
+| idle | 23.1 | 31.1 / 69.1 | **16.6** | 18.5 / 18.8 |
+| listening | 24.3 | 29.4 / 30.3 | **16.6** | 18.5 / 18.8 |
+| thinking | 23.0 | **40.0 / 58.8** | **16.7** | 18.1 / 18.3 |
+| speaking | 23.1 | 29.7 / **70.7** | **16.6** | 18.5 / 18.5 |
+| summon-taiwan | 23.0 | 25.8 / 26.3 | **16.6** | 18.2 / 35.4¹ |
+| theater-idle | 23.1 | 29.2 / 29.2 | **16.6** | 18.7 / 18.8 |
+| wire-event | 23.8 | 31.5 / 33.1 | **16.7** | 18.5 / 18.8 |
+| return-home | 22.9 | 26.9 / 27.7 | **16.7** | 18.1 / 18.4 |
+
+- **Every state now vsync-locks at 16.67 ms = 60 fps** (was ~42 fps everywhere).
+- Frames > 33 ms across the whole run: **5 → 1**. ¹the lone 35 ms is a single
+  terrain-upload frame on first summon.
+- Governor confirmed at `dpr 1.5 · renderScale 1 · 59.9 fps` idle & theater;
+  screenshots `p3-after-idle.jpeg` / `p3-after-taiwan.jpeg` show no visual
+  regression (wave-rings, particle field, site markers, HUD all intact).
+
+**Fluidity regression:** `npm run audit` — **PASS 18/18** with all perf changes in.

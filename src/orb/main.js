@@ -43,7 +43,15 @@ const backdrop = document.getElementById('backdrop');
 const voidOver = document.getElementById('void-over');
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
-const dpr = Math.min(window.devicePixelRatio || 1, 2);
+// RL-5 v2 · PART 3 — PACKAGED-APP PERF. Full-screen bloom+grade post at dpr=2 on a
+// Retina/4K display pinned every state to ~23ms (~42fps). Cap the render resolution
+// (maxPixelRatio) and let the adaptive governor scale it (renderScale) between
+// min/max to hold the frame budget — degrade resolution gracefully, never drop to a
+// stutter. `dpr` is the EFFECTIVE ratio the whole pipeline renders at each frame.
+const PERF = rawTokens.perf || {};
+const BASE_DPR = Math.min(window.devicePixelRatio || 1, PERF.maxPixelRatio ?? 2);
+let renderScale = 1;                 // governor multiplier: minRenderScale..1
+let dpr = BASE_DPR;                  // effective = BASE_DPR * renderScale
 renderer.setPixelRatio(dpr);
 const w0 = window.innerWidth, h0 = window.innerHeight;
 renderer.setSize(w0, h0);
@@ -86,6 +94,17 @@ scene.add(schematic.object);
 const panels = createPanels();
 
 const post = createPost(renderer, scene, camera, { w: w0, h: h0 }, { bloom: M['post.bloom'], grain: M['post.grain'] });
+
+// PART 3 — warm every shader program at BOOT so the first summon of any scene never
+// stalls mid-ceremony (a compile stall would also trip the PART-1 watchdog). The
+// summoned scenes are hidden until summoned; flip them visible for one compile pass
+// (runs before the window is shown), then restore. Fail-soft.
+try {
+  const tv = theater.object.visible, sv = schematic.object.visible;
+  theater.object.visible = true; schematic.object.visible = true;
+  renderer.compile(scene, camera);
+  theater.object.visible = tv; schematic.object.visible = sv;
+} catch (_) {}
 
 // ---- voice loop ----
 const params = new URLSearchParams(location.search);
@@ -402,8 +421,15 @@ quotes.boot();
 // ---- reveal + loop ----
 const formMs = O.formMs;
 let t = 0, initReveal = 0, lastMs = performance.now();
+// PART 3 — frame-time ring for the perf() probe (governor + before/after evidence)
+const perfRing = new Float32Array(180); let perfIdx = 0;
 let simAmp = null;   // audit hook: when set, a synthetic audio envelope drives the waves
 let lastFeedStr = '';
+// PART 3 — throttle the HUD/feed DOM writes (text at 60Hz was pure GC churn) and
+// skip constant per-frame style writes (ceremony title / void floor / chrome gate
+// only change during the ignition & bank ceremonies — write only when they move).
+const HUD_MS = 1000 / (PERF.hudHz || 6); let lastHudMs = 0;
+let lastTitleOp = -1, lastGateP = -1;
 
 function step(dt) {
   if (summonMode === 'summoning') { summonRaw = Math.min(summonRaw + dt / summonDurS, 1); if (summonRaw >= 1) summonMode = 'theater'; }
@@ -474,7 +500,11 @@ function paintLabels() {
 
 function frame() {
   const now = performance.now();
-  const dt = Math.min((now - lastMs) / 1000, 0.05); lastMs = now; t += dt;
+  const rawMs = now - lastMs;                    // true frame delta (pre-clamp) for perf
+  const dt = Math.min(rawMs / 1000, 0.05); lastMs = now; t += dt;
+  perfRing[perfIdx = (perfIdx + 1) % perfRing.length] = rawMs;
+  governor(rawMs);                               // PART 3 — adaptive resolution
+  const hudTick = now - lastHudMs >= HUD_MS; if (hudTick) lastHudMs = now;   // throttle DOM writes
   if (initReveal < 1) initReveal = Math.min(initReveal + dt * 1000 / formMs, 1);
 
   step(dt);
@@ -513,13 +543,20 @@ function frame() {
   if (igniting) {
     titleOp = smooth(IG['title.inAt'] - 0.02, IG['title.inAt'] + 0.06, presence) * (1 - smooth(IG['title.outAt'], IG['title.outAt'] + 0.08, presence));
   }
-  ceremonyTitle.style.opacity = titleOp.toFixed(3);
-  ceremonyTitle.style.transform = `translate(-50%,-50%) scale(${(0.955 + 0.055 * titleOp).toFixed(3)})`;
-  ceremonyTitle.style.filter = `blur(${(3.2 * (1 - titleOp)).toFixed(2)}px)`;
+  if (titleOp !== lastTitleOp) {                 // only during the title beat
+    lastTitleOp = titleOp;
+    ceremonyTitle.style.opacity = titleOp.toFixed(3);
+    ceremonyTitle.style.transform = `translate(-50%,-50%) scale(${(0.955 + 0.055 * titleOp).toFixed(3)})`;
+    ceremonyTitle.style.filter = `blur(${(3.2 * (1 - titleOp)).toFixed(2)}px)`;
+  }
   // void floor opacity = presence — during the ceremony the real screen shows
-  // beneath the sparks (lighten blend); when resolved it is opaque void.
-  voidOver.style.opacity = presence.toFixed(3);
-  gateChrome(presence);
+  // beneath the sparks (lighten blend); when resolved it is opaque void. Constant
+  // at rest -> write only when presence moves (ignition/bank).
+  if (presence !== lastGateP) {
+    lastGateP = presence;
+    voidOver.style.opacity = presence.toFixed(3);
+    gateChrome(presence);
+  }
 
   const mapOn = sceneKind === 'map' ? 1 : 0, schemOn = sceneKind === 'schematic' ? 1 : 0;
   const sceneReveal = initReveal * smooth(0.3, 0.95, summonP);
@@ -541,8 +578,10 @@ function frame() {
     if (!shown) orb.pulseHeat(1);        // no map for this region -> minimal orb heat tick
   }
   if (currentRegion) theater.setHeat(wire.heatForRegion(currentRegion));
-  const feedStr = JSON.stringify(wire.hudLines());
-  if (feedStr !== lastFeedStr) { lastFeedStr = feedStr; wireLines = wire.hudLines(); renderFeed(); }
+  if (hudTick) {   // PART 3 — feed lines are low-frequency; don't stringify every frame
+    const feedStr = JSON.stringify(wire.hudLines());
+    if (feedStr !== lastFeedStr) { lastFeedStr = feedStr; wireLines = wire.hudLines(); renderFeed(); }
+  }
 
   // PART 8: skip the heavy summoned-scene draw calls (60k-point terrain / schematic)
   // whenever they'd render nothing — at home they were still issuing full draws that
@@ -559,7 +598,7 @@ function frame() {
   panels.update(camera, window.innerWidth, window.innerHeight);
   post.setTime(t);
   post.composer.render();
-  paintHud();
+  if (hudTick) paintHud();                        // PART 3 — throttled (was 60Hz DOM churn)
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
@@ -570,6 +609,14 @@ window.__vulcanHome = {
   setState: (n) => { orb.setState(n); paintHud(); },
   state: () => ({ summonMode, summonRaw: +summonRaw.toFixed(4), summonP: +summonP.toFixed(4), region: currentRegion, orb: orb.stateName, initReveal: +initReveal.toFixed(3), routeActive: theater.active, routeHead: +theater.headU.toFixed(3), profile: activeProfileId() }),
   probe: () => orb.probe(),
+  // PART 3 — perf snapshot: frame-time percentiles + governor state (render scale)
+  perf: () => {
+    const a = Array.from(perfRing).filter((x) => x > 0 && x < 500).sort((p, q) => p - q);
+    if (!a.length) return null;
+    const q = (p) => a[Math.min(a.length - 1, Math.floor(p * a.length))];
+    return { n: a.length, p50: +q(0.5).toFixed(2), p95: +q(0.95).toFixed(2), max: +a[a.length - 1].toFixed(2),
+      fps: +(1000 / q(0.5)).toFixed(1), renderScale: +renderScale.toFixed(2), dpr: +dpr.toFixed(2) };
+  },
   regions: () => Object.keys(regions()),
   // STAGE A — panel controls / harness
   openSite: (i) => selectSiteIndex(i),
@@ -612,10 +659,47 @@ window.__vulcanHome = {
   setMuted: (v) => { voice.setMuted(v); paintHud(); },
 };
 
+// PART 3 — apply the current effective dpr across the whole pipeline (renderer,
+// post chain, orb resolution). Called on resize AND by the governor when it rescales.
+function applyResolution() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h);
+  post.setSize(w, h, dpr);
+  orb.setResolution(w * dpr, h * dpr);
+}
 window.addEventListener('resize', () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
-  renderer.setSize(w, h); post.setSize(w, h, dpr);
-  orb.setResolution(w * dpr, h * dpr);
+  applyResolution();
   ignition.resize(w / h);
 });
+
+// PART 3 — ADAPTIVE RESOLUTION GOVERNOR. Watch a rolling median frame time; if it
+// stays over budget, step the render scale down (cheaper pixels) toward the floor;
+// when it sits comfortably under, recover toward full. Adjustments are throttled
+// (a scale change reallocates render targets) and hysteretic (budget vs recover) so
+// it settles instead of oscillating. Honors prefers-reduced-motion by staying put.
+const govOn = PERF.governor !== false && !reduce;
+const GOV_WIN = 45;                 // frames per evaluation window
+const govSamples = new Float32Array(GOV_WIN);
+let govN = 0, govCooldown = 0;
+function governor(dtMs) {
+  if (!govOn) return;
+  govSamples[govN++] = dtMs;
+  if (govCooldown > 0) govCooldown--;
+  if (govN < GOV_WIN) return;
+  govN = 0;
+  // median of the window (robust to one-off GC spikes)
+  const s = Array.from(govSamples).sort((a, b) => a - b);
+  const med = s[GOV_WIN >> 1];
+  if (govCooldown > 0) return;
+  const min = PERF.minRenderScale ?? 0.66;
+  if (med > (PERF.budgetMs ?? 19) && renderScale > min) {
+    renderScale = Math.max(min, renderScale - 0.12);
+    dpr = BASE_DPR * renderScale; applyResolution(); govCooldown = 2;   // ~2 windows to settle
+  } else if (med < (PERF.recoverMs ?? 14.5) && renderScale < 1) {
+    renderScale = Math.min(1, renderScale + 0.08);
+    dpr = BASE_DPR * renderScale; applyResolution(); govCooldown = 2;
+  }
+}
