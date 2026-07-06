@@ -64,6 +64,8 @@ export function injectCSSVars() {
   root.setProperty('--panel-value-px', `${pn['value.px']}px`);
   root.setProperty('--panel-row-gap', `${pn['row.gap']}px`);
   root.setProperty('--glyph-ms', `${pn.glyphMs}ms`);
+  // STAGE C — tethered quote marks
+  root.setProperty('--quote-px', `${raw.quotes['mark.px']}px`);
 }
 
 // deterministic pick within a [min,max] token range, seeded so it never uses

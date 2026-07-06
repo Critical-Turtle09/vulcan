@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('vulcan', {
   transcribe: (wavBase64) => ipcRenderer.invoke('voice:transcribe', wavBase64),
   // ORGAN: THE WIRE — poll the active profile's RSS feeds (main-side, keyless)
   wirePoll: (feeds) => ipcRenderer.invoke('wire:poll', feeds),
+  // ORGAN: QUOTES — poll the active profile's symbols (main-side, keyless)
+  quotePoll: (symbols) => ipcRenderer.invoke('quotes:poll', symbols),
 });

@@ -14,6 +14,7 @@ import { createVoice } from '../voice/voice.js';
 import { createTheater } from '../map/theater.js';
 import { createPanels } from '../map/panels.js';
 import { createWire } from '../wire.js';
+import { createQuotes } from '../quotes.js';
 import {
   activeProfile, activeProfileId, regions, regionByKey, mapEnabled,
   setActive, nextProfile,
@@ -79,6 +80,8 @@ const voice = createVoice({ orb, bridge, forceTest });
 
 // ORGAN: THE WIRE — polls the active profile's feeds, ignites molten heat
 const wire = createWire({ bridge, getProfile: activeProfile });
+// ORGAN: QUOTES — polls the active profile's symbols, greyscale marks on terrain
+const quotes = createQuotes({ bridge, getProfile: activeProfile });
 
 // ---- summon state machine ----
 let summonMode = 'home';       // home | summoning | theater | dismissing
@@ -123,6 +126,36 @@ function selectSiteIndex(i) {
 const labelPool = Array.from({ length: 8 }, () => {
   const el = document.createElement('div'); el.className = 'site-label'; labelLayer.appendChild(el); return el;
 });
+
+// ---- quote chips (DOM, tethered near org sites; greyscale, no green/red) ----
+const quoteChipPool = Array.from({ length: 8 }, () => {
+  const el = document.createElement('div'); el.className = 'quote-chip'; labelLayer.appendChild(el); return el;
+});
+function fmtPrice(p) { return p >= 1000 ? p.toFixed(0) : p.toFixed(2); }
+function paintQuotes() {
+  const w = window.innerWidth, h = window.innerHeight;
+  const fade = smooth(0.6, 0.96, summonP);
+  const list = (inTheaterNow() && fade > 0.02) ? quotes.forRegion(currentRegion) : [];
+  const perSite = {};   // stack multiple symbols on the same site
+  let used = 0;
+  for (let i = 0; i < list.length && used < quoteChipPool.length; i++) {
+    const q = list[i]; const site = theater.sites[q.siteIdx];
+    if (!site || !q.quote) continue;                       // no mark without a real value
+    const el = quoteChipPool[used++];
+    const proj = site.world.clone().project(camera);
+    const vis = proj.z < 1;
+    if (!vis) { el.style.opacity = '0'; continue; }
+    const stack = (perSite[q.siteIdx] = (perSite[q.siteIdx] || 0) + 1) - 1;
+    const sx = (proj.x * 0.5 + 0.5) * w, sy = (-proj.y * 0.5 + 0.5) * h;
+    const up = q.quote.pct >= 0;
+    const caret = up ? '▲' : '▼';               // direction encodes sign; colour stays greyscale
+    const pct = `${up ? '+' : ''}${(q.quote.pct * 100).toFixed(2)}%`;
+    el.innerHTML = `<span class="qs">${q.label}</span><span class="qp">${fmtPrice(q.quote.price)}</span><span class="qd">${caret} ${pct}</span>`;
+    el.style.opacity = (0.92 * fade).toFixed(2);
+    el.style.transform = `translate(${sx + 14}px, ${sy + 16 + stack * 16}px)`;
+  }
+  for (let i = used; i < quoteChipPool.length; i++) quoteChipPool[i].style.opacity = '0';
+}
 
 // ---- V.A.U.L.T HUD ----
 const vt = {
@@ -179,6 +212,9 @@ function paintHud() {
   const ws = wire.status();
   vt.wire.textContent = ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : `OFFLINE · ${ws.offlineReason || 'STANDBY'}`;
   vt.wire.className = 'v ' + (ws.online ? '' : (ws.offlineReason === 'STANDBY' ? 'dim' : 'heat'));
+  const qs = quotes.status();
+  vt.quotes.textContent = qs.online ? `LIVE · ${qs.count} SYM${qs.stale ? ' · STALE' : ''}` : `OFFLINE · ${qs.offlineReason || 'STANDBY'}`;
+  vt.quotes.className = 'v ' + (qs.online ? (qs.stale ? 'dim' : '') : (qs.offlineReason === 'STANDBY' ? 'dim' : 'heat'));
   vt.heat.textContent = heatIndex.toFixed(2);
   vt.heat.className = 'v ' + (heatIndex > 0.01 ? 'heat' : 'dim');
   const up = Math.floor((performance.now() - bootMs) / 1000);
@@ -197,7 +233,7 @@ function switchProfile() {
   // HUD command deck re-forms: fade rows out, repopulate, fade in (fluid, no cut)
   const rows = document.querySelectorAll('#vault-left .vault-row');
   rows.forEach((r) => { r.style.opacity = '0'; });
-  wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset();     // re-target feeds/heat
+  wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset(); quotes.reset();   // re-target feeds/heat/symbols
   setTimeout(() => { populateProfileHud(); renderFeed(); revealHud(); }, PROF['crossflow.ms'] * 0.4);
 }
 
@@ -234,6 +270,7 @@ renderFeed();
 revealHud();
 voice.boot().then(paintHud);
 wire.boot();
+quotes.boot();
 
 // ---- reveal + loop ----
 const formMs = O.formMs;
@@ -310,6 +347,7 @@ function frame() {
   orb.update(dt, t, orbReveal, dpr);
   theater.update(dt, t, terrainReveal, dpr);
   paintLabels();
+  paintQuotes();
   if (panels.isOpen && !inTheaterNow()) panels.close();   // leaving theater dissolves the panel
   panels.update(camera, window.innerWidth, window.innerHeight);
   post.setTime(t);
@@ -333,7 +371,7 @@ window.__vulcanHome = {
   sites: () => theater.sites.map((s) => s.id),
   // profile controls
   profile: () => activeProfileId(),
-  setProfile: (id) => { if (setActive(id)) { dismiss(); populateProfileHud(); renderFeed(); wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset(); } },
+  setProfile: (id) => { if (setActive(id)) { dismiss(); populateProfileHud(); renderFeed(); wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset(); quotes.reset(); } },
   switchProfile: () => switchProfile(),
   // audit: drive the reactive waves with a synthetic envelope (0..1). null = off.
   simAudio: (on) => { simAmp = on ? ((tt) => 0.5 + 0.42 * Math.sin(tt * 5.0) * Math.sin(tt * 1.3)) : null; if (!on) orb.setAmplitude(0); },
@@ -342,6 +380,9 @@ window.__vulcanHome = {
   wireStatus: () => wire.status(),
   wireHeat: () => wire.heatIndex(),
   wireLines: () => wire.hudLines(),
+  // STAGE C — quotes harness: seed a synthetic quote (sym, price, pct)
+  quotesInject: (sym, price, pct) => quotes.injectTest(sym, price, pct),
+  quotesStatus: () => quotes.status(),
   // voice harness
   triggerWake: () => voice.triggerWake(),
   voiceStatus: () => voice.status(),
