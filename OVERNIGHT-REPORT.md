@@ -22,7 +22,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 8 | Regression harness | 🟢 DONE | `npm run audit` — 17 checks, frame-accurate, PASS; FLUIDITY-AUDIT-v2.md |
 | 9 | Docs pass | 🟢 DONE | README front door, generated TOKENS.md, ARCHITECTURE.md, .env.example updated |
 | 10 | Media capture | 🟢 DONE | 11 stills + ignition.mp4/.gif; MEDIA-INDEX.md committed, media gitignored |
-| 11 | Website draft | … | |
+| 11 | Website draft | 🟡 DRAFT | /site single page, house aesthetic; static, no deploy, waitlist front-end only |
 | 12 | Skill scaffold | … | |
 | 13 | Close-out | … | |
 
@@ -165,4 +165,14 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 - ffmpeg builds `ignition.mp4` (660K, h264) + `ignition.gif` (2M) from the sequence.
 - Heavy media **gitignored**; `MEDIA-INDEX.md` committed as the manifest with
   regenerate steps. Verified stills non-blank (wire-ignition spot-checked).
+
+### PART 11 — Website draft 🟡 DRAFT
+- `site/index.html` — single-page landing in the **house aesthetic** (void ·
+  bone · molten · blueprint chrome · Martian Mono + Archivo): sticky nav, hero
+  ("Your desk, at the anvil.") over a ceremony still, **capabilities triptych**
+  (Voice / Summon / Scenes), scene split, **spec sheet**, **waitlist form
+  (front-end only — no submit/store)**, persistent "DRAFT · FOR OPERATOR REVIEW".
+- Committed hero/scene images as `.jpg` (downscaled from the money shots).
+- **Static, no deploy, no payments.** Rendered + screenshot-verified
+  (`http://localhost:5273/site/`).
 
