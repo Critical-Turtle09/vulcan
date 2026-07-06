@@ -34,6 +34,12 @@ const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true });
 renderer.setClearColor(color('void'), 1);
+// §1a — the canvas LIGHTEN-composites over #backdrop (desktop capture) and
+// #void-over (opacity = presence). During the ceremony the real screen shows
+// beneath the sparks; when resolved the void floor is opaque and the look is
+// unchanged (lighten(void, void) = void). No canvas-alpha / compositor gamble.
+const backdrop = document.getElementById('backdrop');
+const voidOver = document.getElementById('void-over');
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -97,8 +103,8 @@ const voice = createVoice({
 // ---- THE IGNITION state machine (system-wide summon / bank) ----
 let presence = 1;            // command-center presence: 1 resolved (default) .. 0 hidden
 let ignMode = 'resolved';    // resolved | kindling | banking | hidden
-const ignTotalS = (IG['surge.ms'] + IG['condense.ms'] + IG['cool.ms']) / 1000;
-const ignBankS = IG['bank.ms'] / 1000;
+const ignTotalS = IG['ceremony.ms'] / 1000;   // ignition ceremony (~3s, own token)
+const ignBankS = IG['bank.ms'] / 1000;         // the quench (~1.8s)
 function ignite() { if (ignMode === 'kindling') return; presence = 0; ignMode = 'kindling'; }   // kindle from the edges
 function bank() { if (ignMode === 'banking' || ignMode === 'hidden') return; ignMode = 'banking'; }  // reverse -> hide
 function onBanked() { if (bridge.requestHide) bridge.requestHide(); }
@@ -296,6 +302,9 @@ window.addEventListener('pointerdown', (e) => {
 if (bridge.onIgnite) bridge.onIgnite(() => ignite());
 if (bridge.onBank) bridge.onBank(() => bank());
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintHud(); });
+// §1a — the active-display snapshot becomes the ceremony backdrop (real screen
+// beneath the sparks). null (no permission) -> stays void; fail-soft.
+if (bridge.onBackdrop) bridge.onBackdrop((url) => { backdrop.style.backgroundImage = url ? `url(${url})` : 'none'; });
 
 populateProfileHud();
 renderFeed();
@@ -321,6 +330,7 @@ function step(dt) {
 
 // command-center chrome fades in as the fire resolves (last, after the orb)
 const hudEls = [document.getElementById('vault-left'), document.getElementById('vault-right'), document.getElementById('keys'), document.getElementById('bank-hint')];
+const ceremonyTitle = document.getElementById('ceremony-title');
 function gateChrome(p) { const o = smooth(0.64, 1.0, p).toFixed(3); for (const el of hudEls) if (el) el.style.opacity = o; }
 
 function paintLabels() {
@@ -366,6 +376,29 @@ function frame() {
   const orbGate = smooth(0.28, 0.96, presence);
   const orbReveal = initReveal * (1 - dissolveDip) * orbGate;
   ignition.setP(presence); ignition.setTime(t); ignition.setPixelRatio(dpr);
+  // CEREMONY (§ignition): the anvil STRIKE throws the surge (kindling only), the
+  // QUENCH cools to steam-grey (banking), and the VULCAN title beats in/out.
+  const at = IG['strike.at'], hw = IG['strike.width'];
+  const igniting = ignMode === 'kindling' || ignMode === 'held';   // 'held' = audit freeze
+  let strikeW = 0, strikeFlash = 0;
+  if (igniting) {
+    strikeW = smooth((at - hw / 2), (at + hw / 2), presence);
+    strikeFlash = Math.sin(strikeW * Math.PI);
+  } else if (ignMode === 'resolved') { strikeW = 1; }
+  ignition.setShock(strikeW);
+  ignition.setStrike(strikeFlash);
+  ignition.setQuench(ignMode === 'banking' ? Math.min((1 - presence) * 1.4, 1) : 0);
+  // title beat (igniting only — never reappears on bank)
+  let titleOp = 0;
+  if (igniting) {
+    titleOp = smooth(IG['title.inAt'] - 0.02, IG['title.inAt'] + 0.06, presence) * (1 - smooth(IG['title.outAt'], IG['title.outAt'] + 0.08, presence));
+  }
+  ceremonyTitle.style.opacity = titleOp.toFixed(3);
+  ceremonyTitle.style.transform = `translate(-50%,-50%) scale(${(0.955 + 0.055 * titleOp).toFixed(3)})`;
+  ceremonyTitle.style.filter = `blur(${(3.2 * (1 - titleOp)).toFixed(2)}px)`;
+  // void floor opacity = presence — during the ceremony the real screen shows
+  // beneath the sparks (lighten blend); when resolved it is opaque void.
+  voidOver.style.opacity = presence.toFixed(3);
   gateChrome(presence);
 
   const terrainReveal = initReveal * smooth(0.3, 0.95, summonP);

@@ -18,4 +18,5 @@ contextBridge.exposeInMainWorld('vulcan', {
   onIgnite: (cb) => ipcRenderer.on('ui:ignite', () => cb()),
   onBank: (cb) => ipcRenderer.on('ui:bank', () => cb()),
   onMute: (cb) => ipcRenderer.on('ui:mute', () => cb()),
+  onBackdrop: (cb) => ipcRenderer.on('ui:backdrop', (_e, url) => cb(url)),  // §1a active-display snapshot
 });

@@ -88,8 +88,19 @@ Explicitly rejected (from v0, "2002 video game"):
 - **OVERLAY, not a Space.** The command center is a borderless, always-on-top overlay that JOINS
   the currently active Space + monitor — **never** native macOS fullscreen (which would open a
   separate Space and yank the operator away). Say the phrase in any app and VULCAN resolves OVER
-  that screen; banking reveals the same apps, no Space animation, no app switch. The cursor stays
-  visible (instrument reticle) and an `ESC · BANK` affordance is always shown while resolved.
+  that screen; banking reveals the same apps, no Space animation, no app switch, focus restored
+  to the app that was frontmost. The cursor stays visible (instrument reticle) and an `ESC · BANK`
+  affordance is always shown while resolved. During the ceremony the **real screen shows beneath
+  the sparks** (the canvas lighten-composites over an active-display snapshot; the void floor
+  fades in as it resolves) — the opaque-void deviation is rejected.
+- **THE CEREMONY (own duration tokens, EXEMPT from the reveal band).** Summon and bank are
+  signature moments, not ordinary reveals. **IGNITION (~3s, `ignition.ceremony.ms`):** sparks
+  kindle over the visible screen → an abstract **hammer-on-anvil STRIKE** (one molten hairline
+  shockwave ring thrown from the impact — particle/hairline read, never clipart) throws the surge
+  → sparks condense and cool → a **"VULCAN" mono-caps title beat** resolves in and dissolves into
+  the orb + V.A.U.L.T. **BANK (~1.8s, `ignition.bank.ms`) — THE QUENCH:** heat drains outward,
+  steam-spark pull upward, steel cooling to grey as the real screen is revealed. One continuous
+  material both directions; no cuts. `ignition.*` tokens (`strike.*`, `title.*`, `bank.ms`).
 - **HUD "V.A.U.L.T" (Front D extended) — side columns only.** LEFT column = **system vitals**
   (voice / wire / quotes status, mode, uptime, heat index). RIGHT column = **command deck**
   (active profile, directives, live wire-feed lines, recent events). Hairline Palantir blueprint

@@ -9,7 +9,7 @@
 // keeps the wake listener + audio alive while hidden (backgroundThrottling off).
 // Esc banks the fire ALWAYS while resolved (a global shortcut registered only
 // while the overlay is up, so it never swallows Esc from other apps when hidden).
-import { app, BrowserWindow, Tray, Menu, screen, session, systemPreferences, globalShortcut, ipcMain, nativeImage } from 'electron';
+import { app, BrowserWindow, Tray, Menu, screen, session, systemPreferences, globalShortcut, ipcMain, nativeImage, desktopCapturer } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -82,6 +82,23 @@ function registerBankEsc() {
 }
 function unregisterBankEsc() { try { globalShortcut.unregister('Escape'); } catch (_) {} }
 
+// §1a — snapshot the ACTIVE display and hand it to the renderer as the ceremony
+// backdrop, so the operator sees their real screen beneath the kindling sparks
+// (the canvas lighten-composites over it; void fades in as it resolves). Fail-soft:
+// no screen-recording permission -> null -> renderer falls back to the void floor.
+async function sendBackdrop() {
+  if (!win) return;
+  try {
+    const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const sources = await desktopCapturer.getSources({
+      types: ['screen'],
+      thumbnailSize: { width: Math.round(disp.size.width / 2), height: Math.round(disp.size.height / 2) },
+    });
+    const src = sources.find((s) => String(s.display_id) === String(disp.id)) || sources[0];
+    win.webContents.send('ui:backdrop', (src && src.thumbnail && !src.thumbnail.isEmpty()) ? src.thumbnail.toDataURL() : null);
+  } catch (_) { win.webContents.send('ui:backdrop', null); }
+}
+
 function showOverlay() {
   if (!win) return;
   win.setBounds(activeBounds());               // resolve over whatever screen the operator is on
@@ -90,9 +107,15 @@ function showOverlay() {
   win.show();                                  // shows on the CURRENT Space (not native fullscreen)
   registerBankEsc();
 }
-function hideOverlay() { unregisterBankEsc(); if (win) win.hide(); }
+// §1b — hide WITHOUT leaving VULCAN active: on macOS app.hide() returns focus to
+// the app that was frontmost before the summon (not the desktop).
+function hideOverlay() {
+  unregisterBankEsc();
+  if (win) win.hide();
+  if (process.platform === 'darwin') { try { app.hide(); } catch (_) {} }
+}
 
-function summon() { const wasHidden = !win.isVisible(); showOverlay(); if (wasHidden) win.webContents.send('ui:ignite'); }
+function summon() { const wasHidden = !win.isVisible(); sendBackdrop(); showOverlay(); if (wasHidden) win.webContents.send('ui:ignite'); }
 function toggleOverlay() {
   if (win.isVisible()) win.webContents.send('ui:bank');   // renderer runs the bank, then requestHide
   else summon();
