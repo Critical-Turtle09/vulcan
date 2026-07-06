@@ -541,6 +541,12 @@ function frame() {
   const feedStr = JSON.stringify(wire.hudLines());
   if (feedStr !== lastFeedStr) { lastFeedStr = feedStr; wireLines = wire.hudLines(); renderFeed(); }
 
+  // PART 8: skip the heavy summoned-scene draw calls (60k-point terrain / schematic)
+  // whenever they'd render nothing — at home they were still issuing full draws that
+  // only produced alpha-0 fragments. update() still runs (cheap) to keep state coherent.
+  theater.object.visible = terrainReveal > 0.001;
+  schematic.object.visible = schemReveal > 0.001;
+
   orb.update(dt, t, orbReveal, dpr);
   theater.update(dt, t, terrainReveal, dpr);
   schematic.update(dt, t, schemReveal, explodeP, dpr);

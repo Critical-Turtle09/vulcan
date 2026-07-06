@@ -215,7 +215,8 @@ export function createOrb() {
     });
     const line = new Line2(lgeo, lmat);
     line.renderOrder = molten ? 4 : 2;
-    group.add(line);
+    line.frustumCulled = false;   // PART 8: rings ride the orb center + we skip
+    group.add(line);              // per-frame bounds recompute (in-place buffer write)
     ringMats.push(lmat);
 
     // clustered dots — a few beads bunched along the contour (never evenly strewn),
@@ -347,7 +348,16 @@ export function createOrb() {
         lp[j*3] = q[0]; lp[j*3+1] = q[1]; lp[j*3+2] = q[2];
       }
       lp[seg*3] = lp[0]; lp[seg*3+1] = lp[1]; lp[seg*3+2] = lp[2];   // close the loop
-      rg.lgeo.setPositions(lp);
+      // PART 8: write straight into Line2's interleaved instance buffer instead of
+      // setPositions() (which reallocates the buffer + recomputes bounds every
+      // frame — GC churn). Buffer is allocated once at buildRing; we just refill it.
+      const ib = rg.lgeo.attributes.instanceStart.data, arr = ib.array;
+      for (let j = 0; j < seg; j++) {
+        const a = j*3, b = a+3, o = j*6;
+        arr[o]=lp[a]; arr[o+1]=lp[a+1]; arr[o+2]=lp[a+2];
+        arr[o+3]=lp[b]; arr[o+4]=lp[b+1]; arr[o+5]=lp[b+2];
+      }
+      ib.needsUpdate = true;
       let op = rg.baseOpacity * reveal * audioLift;
       if (rg.molten) op = Math.min(1, op + heatTick * 0.4);          // heat flush
       rg.lmat.opacity = op;
