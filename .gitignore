@@ -36,3 +36,6 @@ media/*.gif
 media/*.mp4
 media/*.webm
 media/seq-*/
+
+# PART 6 packaged app (regenerate: npm run pack)
+release/

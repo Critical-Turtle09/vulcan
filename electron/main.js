@@ -94,7 +94,12 @@ function createWindow() {
   // float above everything, on the active Space (and over other apps' fullscreen)
   win.setAlwaysOnTop(true, OVERLAY_LEVEL);
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
-  win.once('ready-to-show', () => { if (!DIAG) showOverlay(); });
+  // launched as a hidden login item -> boot resident to the tray + wake listener,
+  // no overlay flash (the operator summons with the wake word / hotkey when ready)
+  win.once('ready-to-show', () => {
+    const openedHidden = app.isPackaged && app.getLoginItemSettings().wasOpenedAsHidden;
+    if (!DIAG && !openedHidden) showOverlay();
+  });
 
   // resident: closing hides to the tray, it does not quit (only the tray Quit does)
   win.on('close', (e) => { if (!isQuitting) { e.preventDefault(); hideOverlay(); } });
@@ -106,7 +111,24 @@ function createWindow() {
     if (msg.includes('[voice]')) console.log('RENDERER', msg);
   });
 
-  win.loadURL(DEV_URL);
+  // PART 6 — dev loads the vite server (hot reload + byte-identical audit); the
+  // PACKAGED .app has no dev server, so it loads the built renderer over file://
+  // (vite base:'./' → relative assets). asar:false keeps tokens.json/profiles/.env
+  // as plain files the main process can still fs-read at runtime.
+  if (app.isPackaged) win.loadFile(path.join(ROOT, 'dist', 'index.html'));
+  else win.loadURL(DEV_URL);
+}
+
+// PART 6 — LOGIN ITEM. VULCAN is summoned at login on the Mac mini: register as an
+// open-at-login item, launched HIDDEN (openAsHidden) so it boots resident to the
+// tray + wake listener without flashing the overlay. Only in the packaged .app —
+// never register the dev binary (electron) as a login item. Operator-toggleable
+// from the tray; the checkbox reflects the live OS setting.
+function loginItemEnabled() {
+  try { return app.getLoginItemSettings().openAtLogin; } catch (_) { return false; }
+}
+function setLoginItem(enabled) {
+  try { app.setLoginItemSettings({ openAtLogin: enabled, openAsHidden: true }); } catch (_) {}
 }
 
 // Esc banks ALWAYS while resolved — registered globally only while the overlay is
@@ -167,6 +189,8 @@ function buildTray() {
       { type: 'separator' },
       { label: 'Mute Mic (M)', click: () => win.webContents.send('ui:mute') },
       { type: 'separator' },
+      { label: 'Open at Login', type: 'checkbox', checked: loginItemEnabled(), enabled: app.isPackaged, click: (mi) => setLoginItem(mi.checked) },
+      { type: 'separator' },
       { label: 'Quit VULCAN', click: () => { isQuitting = true; app.quit(); } },
     ]);
     tray.setContextMenu(menu);
@@ -184,6 +208,10 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => {
     cb(permission === 'media' || permission === 'audioCapture');
   });
+
+  // PART 6 — default open-at-login ON for the packaged .app (first run); the operator
+  // can uncheck it in the tray. Never touches login items for the dev binary.
+  if (app.isPackaged && !app.getLoginItemSettings().openAtLogin) setLoginItem(true);
 
   createWindow();
   buildTray();

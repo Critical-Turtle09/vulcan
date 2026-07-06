@@ -12,15 +12,17 @@
     "tokens": "node scripts/gen-tokens.mjs",
     "topo": "node scripts/build-topo.mjs",
     "media": "node scripts/capture-media.mjs",
+    "build:web": "vite build",
+    "pack": "npm run build:web && electron-packager . VULCAN --platform=darwin --arch=arm64 --out=release --overwrite --asar=false --app-bundle-id=com.siliconforge.vulcan --app-category-type=public.app-category.productivity --ignore=\"^/release($|/)\" --ignore=\"^/\\.playwright-mcp\" --ignore=\"^/dev($|/)\" --ignore=\"^/site($|/)\" --ignore=\"^/scripts($|/)\" --ignore=\"^/[^/]+\\.(png|jpeg)$\" --ignore=\"^/data/topo/[^/]+\\.geojson$\" --ignore=\"^/media($|/)\" --ignore=\"ignition-diagnostic\\.log$\"",
     "start": "concurrently -k \"vite\" \"wait-on tcp:5273 && electron .\""
   },
-  "dependencies": {
-    "three": "^0.185.1"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@electron/packager": "^20.0.2",
     "concurrently": "^10.0.3",
     "electron": "^43.0.0",
     "playwright": "^1.61.1",
+    "three": "^0.185.1",
     "vite": "^8.1.3",
     "wait-on": "^9.0.10"
   }
