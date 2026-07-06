@@ -13,7 +13,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | Part | Title | Status | Notes |
 |---|---|---|---|
 | 1 | RL-4 signing pass (summon/bank/rings/ceremony) | 🟢 DONE (1a/1b need Electron visual confirm) | ceremony both dirs, rings×6, transparency via lighten+snapshot |
-| 2 | Real geography | … | |
+| 2 | Real geography | 🟡 DRAFT | real Natural Earth land/sea wired + rendering; relief derived (not DEM), legibility a morning tune |
 | 3 | Molten ink + legends | … | |
 | 4 | Scene library groundwork (schematic DRAFT) | … | |
 | 5 | Local voice fallback | … | |
@@ -52,4 +52,19 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   hammer-on-anvil **shockwave ring** `p1-shock.jpeg` → condense/cool → **VULCAN
   title beat** `p1-title.jpeg` → orb+HUD). BANK ~1.8s quench (steam-grey drain).
   Fluidity: ignition maxStep 0.039, bank 0.056 — both fluid, no cuts.
+
+### PART 2 — Real geography 🟡 DRAFT
+- Fetched **Natural Earth 50m** land + coastline (**PUBLIC DOMAIN**; source/license
+  in `data/topo/README.md`), cached in `data/topo/` (raw geojson gitignored,
+  re-fetchable; processed per-region grids committed).
+- `scripts/build-topo.mjs` rasterizes each region bbox (added to
+  `profiles/…regions[*].topo`) → `data/topo/<region>.json` (land/sea mask, derived
+  relief, coastline flags). Taiwan land=7084 coast=3048 cells, etc.
+- `src/topo.js` + `theater.js` sample the real grid (bilinear height, bright
+  coastline dots) instead of procedural noise; `main.js` passes the region id.
+  `p2-taiwan-real`/`p2-korea-real`: real relief renders (raised peninsulas, sea).
+- **DRAFT / morning tune:** the OUTLINE is real (Natural Earth mask); fine elevation
+  is DERIVED (coast-low/interior-high proxy), not a sampled DEM. Map-shape
+  legibility from the fixed low-oblique camera is subtle — a real DEM (ETOPO/SRTM)
+  subset + a camera/contrast pass are the upgrades. World-strip not yet added.
 

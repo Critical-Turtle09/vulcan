@@ -125,7 +125,7 @@ function summon(regionId) {
   if (!regs[regionId] || !mapEnabled()) return;
   if (summonMode !== 'home') return;
   currentRegion = regionId;
-  theater.setRegion(regs[regionId]);
+  theater.setRegion(regs[regionId], regionId);
   summonMode = 'summoning';           // feedback <100ms: transition begins next frame
 }
 function dismiss() { if (summonMode === 'theater' || summonMode === 'summoning') summonMode = 'dismissing'; }

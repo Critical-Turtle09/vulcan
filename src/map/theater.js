@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { color } from '../tokens.js';
 import rawTokens from '../../tokens.json';
 import { simplex3 } from '../noise.js';
+import { getTopo, sampleHeight, coastAt } from '../topo.js';
 
 const M = rawTokens.map;
 const smooth = (e0, e1, x) => { const t = Math.min(Math.max((x - e0) / (e1 - e0), 0), 1); return t * t * (3 - 2 * t); };
@@ -26,12 +27,27 @@ export function createTheater() {
   const spanX = M['terrain.spanX'], spanZ = M['terrain.spanZ'];
   const count = gx * gz;
 
+  // PART 2 — when a region has cached REAL topography (Natural Earth), terrainH
+  // samples it (real coastlines/relief); otherwise it falls back to procedural.
+  let curTopo = null;
+  function terrainH(wx, wz, seed) {
+    if (curTopo) {
+      const u = wx / spanX + 0.5, v = wz / spanZ + 0.5;
+      const base = sampleHeight(curTopo, u, v) * M['terrain.heightAmp'];
+      // fine dot-field texture so land/sea aren't smooth plateaus
+      const tex = simplex3(wx * 0.16 + seed, wz * 0.16, 0) * 0.4;
+      return base + tex;
+    }
+    return heightAt(wx, wz, seed);
+  }
+
   // ---- terrain geometry: base grid + CPU height/normal attributes ----
   const pos = new Float32Array(count * 3);
   const aHeight = new Float32Array(count);
   const aNormal = new Float32Array(count * 3);
   const aSeed = new Float32Array(count);
   const aScatter = new Float32Array(count * 3);
+  const aCoast = new Float32Array(count);   // 1 = coastline cell (bright bone)
   let r = 71755; const rnd = () => { r = (r * 1103515245 + 12345) & 0x7fffffff; return r / 0x7fffffff; };
   let i = 0;
   for (let z = 0; z < gz; z++) for (let x = 0; x < gx; x++) {
@@ -48,6 +64,7 @@ export function createTheater() {
   geo.setAttribute('aNormal', new THREE.BufferAttribute(aNormal, 3));
   geo.setAttribute('aSeed', new THREE.BufferAttribute(aSeed, 1));
   geo.setAttribute('aScatter', new THREE.BufferAttribute(aScatter, 3));
+  geo.setAttribute('aCoast', new THREE.BufferAttribute(aCoast, 1));
 
   const tUni = {
     uReveal: { value: 0 }, uTime: { value: 0 }, uPixelRatio: { value: 1 },
@@ -60,25 +77,26 @@ export function createTheater() {
   const terrain = new THREE.Points(geo, new THREE.ShaderMaterial({
     uniforms: tUni, transparent: true, depthWrite: false, blending: THREE.NormalBlending,
     vertexShader: /* glsl */`
-      attribute float aHeight, aSeed; attribute vec3 aNormal, aScatter;
+      attribute float aHeight, aSeed, aCoast; attribute vec3 aNormal, aScatter;
       uniform float uReveal, uTime, uPixelRatio, uPointSize, uAmb, uKey;
       uniform vec3 uKeyDir;
-      varying float vH, vAlpha, vLight;
+      varying float vH, vAlpha, vLight, vCoast;
       void main(){
         vec3 p = position; p.y = aHeight;
         vH = clamp(aHeight / 8.0 + 0.5, 0.0, 1.0);
+        vCoast = aCoast;
         vLight = uAmb + uKey * clamp(dot(normalize(aNormal), uKeyDir), 0.0, 1.0);
         float local = clamp((uReveal - aSeed*0.6)/0.4, 0.0, 1.0); local = local*local*(3.0-2.0*local);
         p.y += sin(uTime*0.5 + aSeed*6.28) * 0.03;
         vec3 world = mix(position + aScatter, p, local);
         vec4 mv = modelViewMatrix * vec4(world, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = clamp(uPointSize * uPixelRatio * (300.0 / -mv.z), 1.5, 7.0);
+        gl_PointSize = clamp(uPointSize * (1.0 + aCoast*0.6) * uPixelRatio * (300.0 / -mv.z), 1.5, 7.0);
         vAlpha = mix(0.8, 1.0, vH) * local;
       }`,
     fragmentShader: /* glsl */`
       uniform vec3 uDeep, uMid, uHigh, uHaze; uniform float uAlbedo;
-      varying float vH, vAlpha, vLight;
+      varying float vH, vAlpha, vLight, vCoast;
       void main(){
         vec2 c = gl_PointCoord - 0.5; float d = length(c);
         float a = smoothstep(0.5, 0.32, d); if (a*vAlpha <= 0.002) discard;
@@ -86,7 +104,8 @@ export function createTheater() {
         col = mix(col, uHaze, smoothstep(0.7, 1.0, vH) * 0.5);
         col = mix(uDeep, col, smoothstep(0.0, 0.15, vH));
         col *= uAlbedo * vLight;
-        gl_FragColor = vec4(col, a * vAlpha);
+        col = mix(col, uHaze * 2.4, vCoast);          // coastline reads as a bright bone thread
+        gl_FragColor = vec4(col, a * (vAlpha + vCoast*0.4));
       }`,
   }));
   terrain.frustumCulled = false;
@@ -187,32 +206,35 @@ export function createTheater() {
 
   function clearGroup(g) { while (g.children.length) { const c = g.children.pop(); c.geometry.dispose(); if (c.material.dispose) c.material.dispose(); } }
 
-  // takes the region data object directly (from the active profile — the engine
-  // is domain-blind, spec v1.3). Returns the resolved sites so callers can tether
-  // heat / quotes to real ground positions.
-  function setRegion(regionObj) {
+  // takes the region data object + id (from the active profile — the engine is
+  // domain-blind). Loads REAL topography for the region if cached (PART 2), else
+  // procedural. Returns the resolved sites so callers can tether heat / quotes.
+  function setRegion(regionObj, regionId) {
     region = regionObj;
+    curTopo = getTopo(regionId);
     const seed = region.seed;
 
-    // recompute terrain heights + normals for this region
+    // recompute terrain heights + normals (+ coastline flags) for this region
     const e = spanX / (gx - 1);
     let k = 0;
     for (let z = 0; z < gz; z++) for (let x = 0; x < gx; x++) {
       const wx = pos[k * 3], wz = pos[k * 3 + 2];
-      const h = heightAt(wx, wz, seed);
+      const h = terrainH(wx, wz, seed);
       aHeight[k] = h;
-      const hx = heightAt(wx + e, wz, seed), hz = heightAt(wx, wz + e, seed);
+      const hx = terrainH(wx + e, wz, seed), hz = terrainH(wx, wz + e, seed);
       const nx = h - hx, ny = e, nz = h - hz;
       const inv = 1 / Math.hypot(nx, ny, nz);
       aNormal[k * 3] = nx * inv; aNormal[k * 3 + 1] = ny * inv; aNormal[k * 3 + 2] = nz * inv;
+      aCoast[k] = curTopo ? coastAt(curTopo, wx / spanX + 0.5, wz / spanZ + 0.5) : 0;
       k++;
     }
     geo.attributes.aHeight.needsUpdate = true;
     geo.attributes.aNormal.needsUpdate = true;
+    geo.attributes.aCoast.needsUpdate = true;
 
     // sites on the ground
     sites = region.sites.map((s) => {
-      const y = heightAt(s.x, s.z, seed) + M['site.lift'];
+      const y = terrainH(s.x, s.z, seed) + M['site.lift'];
       return { ...s, world: new THREE.Vector3(s.x, y, s.z) };
     });
     sites.forEach((s, idx) => {
@@ -249,8 +271,8 @@ export function createTheater() {
     // lanes (strait) — faint static arcs
     clearGroup(laneGroup);
     for (const ln of (region.lanes || [])) {
-      const ay = heightAt(ln.ax, ln.az, seed) + M['site.lift'];
-      const by = heightAt(ln.bx, ln.bz, seed) + M['site.lift'];
+      const ay = terrainH(ln.ax, ln.az, seed) + M['site.lift'];
+      const by = terrainH(ln.bx, ln.bz, seed) + M['site.lift'];
       const a = new THREE.Vector3(ln.ax, ay, ln.az), b = new THREE.Vector3(ln.bx, by, ln.bz);
       const pts = [];
       for (let s = 0; s <= 40; s++) { const t = s / 40; const p = new THREE.Vector3().lerpVectors(a, b, t); p.y += Math.sin(t * Math.PI) * 0.8; pts.push(p); }

@@ -15,6 +15,7 @@
     "regions": {
       "taiwan": {
         "key": "t", "name": "TAIWAN", "seed": 3.4,
+        "topo": { "lonMin": 117.6, "lonMax": 122.6, "latMin": 21.7, "latMax": 25.7 },
         "sites": [
           { "id": "hsinchu",  "name": "TSMC · HSINCHU",    "x": -3.5, "z": -8.0, "alert": 0,
             "dossier": { "role": "LEADING-EDGE FAB", "node": "N3 / N5", "org": "TSMC",
@@ -38,6 +39,7 @@
       },
       "eu": {
         "key": "v", "name": "VELDHOVEN / EU", "seed": 11.7,
+        "topo": { "lonMin": 3.0, "lonMax": 14.5, "latMin": 49.8, "latMax": 54.2 },
         "sites": [
           { "id": "asml",      "name": "ASML · VELDHOVEN", "x":  0.0, "z":  0.5, "alert": 0,
             "dossier": { "role": "EUV LITHOGRAPHY", "node": "0.33 / 0.55 NA", "org": "ASML",
@@ -57,6 +59,7 @@
       },
       "namerica": {
         "key": "n", "name": "N. AMERICA", "seed": 6.9,
+        "topo": { "lonMin": -124.5, "lonMax": -109.5, "latMin": 31.5, "latMax": 44.5 },
         "sites": [
           { "id": "nvidia",  "name": "NVIDIA · SANTA CLARA", "x": -8.0, "z":  3.0, "alert": 0,
             "dossier": { "role": "FABLESS DESIGN HQ", "node": "DESIGN", "org": "NVIDIA",
@@ -76,6 +79,7 @@
       },
       "korea": {
         "key": "k", "name": "KOREA", "seed": 15.2,
+        "topo": { "lonMin": 125.2, "lonMax": 130.2, "latMin": 34.0, "latMax": 38.6 },
         "sites": [
           { "id": "samsung", "name": "SAMSUNG · HWASEONG", "x": -5.0, "z": -2.0, "alert": 0,
             "dossier": { "role": "MEMORY + FOUNDRY", "node": "DRAM / N3 GAA", "org": "SAMSUNG",
