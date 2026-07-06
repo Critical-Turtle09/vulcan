@@ -156,6 +156,14 @@ export function createTheater() {
   }));
   siteMarks.renderOrder = 3;
 
+  // ---- country borders (PART 5): admin-0 political boundaries, clipped to the
+  // region + riding the terrain — a quiet blueprint hairline, distinct from the
+  // bright bone coastline. Real Natural Earth data; empty where there is no LAND
+  // border in view (e.g. Taiwan — the strait is maritime, not a border). ----
+  const borderMat = new THREE.LineBasicMaterial({ color: color('data.faint'), transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+  const borderGroup = new THREE.Group();
+  let regionLabelData = [];   // [{ name, world, edge }] — country labels for the DOM layer
+
   // ---- routes (per region): thin arcs + traveling glow, and the standing lanes ----
   const routeGroup = new THREE.Group();
   const laneMat = new THREE.LineBasicMaterial({ color: color('data.faint'), transparent: true, opacity: 0, depthWrite: false });
@@ -178,7 +186,7 @@ export function createTheater() {
   marker.renderOrder = 4;
 
   const group = new THREE.Group();
-  group.add(terrain, laneGroup, routeGroup, siteMarks, marker);
+  group.add(terrain, borderGroup, laneGroup, routeGroup, siteMarks, marker);
 
   // ---- per-region state ----
   let region = null, sites = [], routeCurves = [], routeMeshes = [];
@@ -284,6 +292,20 @@ export function createTheater() {
       laneGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), laneMat));
     }
 
+    // borders (PART 5): (u,v) polylines -> world, each vertex lifted onto the terrain
+    clearGroup(borderGroup);
+    const uvToWorld = (u, v) => { const wx = (u - 0.5) * spanX, wz = (v - 0.5) * spanZ; return new THREE.Vector3(wx, terrainH(wx, wz, seed) + M['border.lift'], wz); };
+    for (const line of (curTopo && curTopo.borders) || []) {
+      const pts = line.map(([u, v]) => uvToWorld(u, v));
+      if (pts.length < 2) continue;
+      const bl = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), borderMat);
+      bl.frustumCulled = false;
+      borderGroup.add(bl);
+    }
+
+    // country labels (PART 5): sit at ground level; the DOM layer tethers text
+    regionLabelData = ((curTopo && curTopo.labels) || []).map((l) => ({ name: l.name, edge: l.edge, world: uvToWorld(l.u, l.v) }));
+
     active = 0; headU = 0; holdT = 0; phase = 'run';
   }
 
@@ -307,6 +329,7 @@ export function createTheater() {
     sUni.uTime.value = t; sUni.uPixelRatio.value = pixelRatio; sUni.uReveal.value = reveal;
     mUni.uPixelRatio.value = pixelRatio;
     laneMat.opacity = M['route.baseAlpha'] * 0.7 * reveal;
+    borderMat.opacity = M['border.alpha'] * reveal;
 
     // route reveal + heat tint (heat = min of the two endpoint site heats)
     const rts = (region && region.routes) || [];
@@ -347,8 +370,13 @@ export function createTheater() {
   // organs to tether marks to real ground. Empty until setRegion runs.
   function siteById(id) { return sites.find((s) => s.id === id) || null; }
 
+  // country labels for the current region (world positions) — the DOM layer paints
+  // them as tethered mono-caps; `edge` marks an off-view country (dimmer indicator)
+  function regionLabels() { return regionLabelData; }
+  function hasBorders() { return borderGroup.children.length > 0; }
+
   return {
-    object: group, setRegion, update, siteScreens, setHeat,
+    object: group, setRegion, update, siteScreens, setHeat, regionLabels, hasBorders,
     get region() { return region; }, get sites() { return sites; }, siteById,
     get active() { return active; }, get headU() { return headU; },
   };

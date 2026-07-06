@@ -47,6 +47,14 @@
       border: 1px solid var(--panel-stroke); transform: translate(-2px,-50%) rotate(45deg);
     }
 
+    /* ---- PART 5 · country labels (quiet geographic context on the theater) ---- */
+    .country-label {
+      position: absolute; top: 0; left: 0; pointer-events: none; will-change: transform, opacity;
+      font-family: var(--type-mono); font-size: 12px; letter-spacing: 0.22em;
+      text-transform: uppercase; color: var(--data-dim); white-space: nowrap;
+      opacity: 0; transition: opacity 200ms linear; text-shadow: 0 0 10px rgba(5,6,7,0.95);
+    }
+
     /* ---- STAGE C · tethered quote marks (greyscale, no green/red) ---- */
     .quote-chip {
       position: absolute; top: 0; left: 0; pointer-events: none; will-change: transform, opacity;

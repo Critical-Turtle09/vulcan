@@ -199,6 +199,42 @@ const labelPool = Array.from({ length: 8 }, () => {
   const el = document.createElement('div'); el.className = 'site-label'; labelLayer.appendChild(el); return el;
 });
 
+// ---- country labels (PART 5): the region's political names, quiet ground context
+// beneath the fab site marks. `edge` countries (in view but centroid off-screen)
+// read dimmer with a › indicator. ----
+const countryPool = Array.from({ length: 10 }, () => {
+  const el = document.createElement('div'); el.className = 'country-label'; labelLayer.appendChild(el); return el;
+});
+function paintCountryLabels(fade) {
+  const list = (fade > 0.02 && inTheaterNow()) ? theater.regionLabels() : [];
+  const w = window.innerWidth, h = window.innerHeight;
+  // safe band — clear of the V.A.U.L.T columns (edges) and top/bottom chrome. A
+  // country whose ground point falls outside the frame is clamped to the band edge
+  // with a caret pointing its way (honest off-view indicator), de-collided vertically.
+  const L = 250, R = w - 250, T = 92, B = h - 116;
+  const usedY = { l: [], r: [] };
+  for (let i = 0; i < countryPool.length; i++) {
+    const el = countryPool[i], d = list[i];
+    if (!d) { el.style.opacity = '0'; continue; }
+    const p = d.world.clone().project(camera);
+    if (p.z >= 1) { el.style.opacity = '0'; continue; }
+    let x = (p.x * 0.5 + 0.5) * w, y = (-p.y * 0.5 + 0.5) * h;
+    const off = d.edge || x < L || x > R || y < T || y > B;
+    let text = d.name;
+    if (off) {
+      const side = x < w / 2 ? 'l' : 'r';
+      x = side === 'l' ? L : R;
+      y = Math.min(B, Math.max(T, y));
+      while (usedY[side].some((yy) => Math.abs(yy - y) < 26)) y += 26;
+      usedY[side].push(y);
+      text = side === 'l' ? `‹ ${d.name}` : `${d.name} ›`;
+    }
+    el.textContent = text;
+    el.style.opacity = ((off ? 0.42 : 0.62) * fade).toFixed(2);
+    el.style.transform = `translate(-50%,-50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+  }
+}
+
 // ---- quote chips (DOM, tethered near org sites; greyscale, no green/red) ----
 const quoteChipPool = Array.from({ length: 8 }, () => {
   const el = document.createElement('div'); el.className = 'quote-chip'; labelLayer.appendChild(el); return el;
@@ -395,10 +431,12 @@ const legendEl = document.getElementById('legend');
 function legendFor(regionId) {
   const p = activeProfile();
   const name = regions()[regionId] ? regions()[regionId].name : '';
+  const hasBorders = theater.hasBorders();
   return `${name}<span class="sep">·</span>${(p.eyebrow || p.name)}`
     + `<span class="sep">|</span><span class="hl">MOLTEN</span> ROUTES + SITES`
     + `<span class="sep">·</span><span class="hl">◆</span> HEAT = LIVE WIRE EVENT`
-    + `<span class="sep">·</span>GREY = EQUITY`;
+    + `<span class="sep">·</span>GREY = EQUITY`
+    + `<span class="sep">·</span>▬ COAST${hasBorders ? '<span class="sep">·</span>─ BORDER' : ''}`;
 }
 
 function legendSchematic() {
@@ -428,6 +466,7 @@ function paintLabels() {
       }
     } else { el.style.opacity = '0'; }
   }
+  paintCountryLabels(sceneKind === 'schematic' ? 0 : fade);
 }
 
 function frame() {

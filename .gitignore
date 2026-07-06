@@ -25,9 +25,10 @@ s[0-9A-E]-*.png
 s[0-9A-E]-*.jpeg
 *.jpeg
 
-# topo raw sources (re-fetchable; processed <region>.json are committed)
+# topo raw sources (re-fetchable; processed <region>.json + admin0_labels.json are committed)
 data/topo/land.geojson
 data/topo/coastline.geojson
+data/topo/boundary_lines.geojson
 
 # captured media (heavy; regenerate with npm run media). MEDIA-INDEX.md is committed.
 media/*.png
