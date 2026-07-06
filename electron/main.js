@@ -155,16 +155,28 @@ function unregisterBankEsc() { try { globalShortcut.unregister('Escape'); } catc
 // backdrop, so the operator sees their real screen beneath the kindling sparks
 // (the canvas lighten-composites over it; void fades in as it resolves). Fail-soft:
 // no screen-recording permission -> null -> renderer falls back to the void floor.
+// RL-6 — ONE fresh, native-resolution snapshot of the ACTIVE display, captured
+// BEFORE the overlay covers the screen (summon awaits this), so the snapshot is the
+// real screen only — never VULCAN's own window, never a mid-fade frame. Full physical
+// resolution (scaleFactor) = 1:1 alignment with the live screen, no scale mismatch;
+// JPEG keeps the payload small over IPC. The renderer paints it no-repeat at
+// 100%x100%, so it reads as a single seamless screen (no ghosting/tiling).
 async function sendBackdrop() {
   if (!win) return;
   try {
     const disp = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const scale = disp.scaleFactor || 1;
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize: { width: Math.round(disp.size.width / 2), height: Math.round(disp.size.height / 2) },
+      thumbnailSize: { width: Math.round(disp.size.width * scale), height: Math.round(disp.size.height * scale) },
     });
     const src = sources.find((s) => String(s.display_id) === String(disp.id)) || sources[0];
-    win.webContents.send('ui:backdrop', (src && src.thumbnail && !src.thumbnail.isEmpty()) ? src.thumbnail.toDataURL() : null);
+    let url = null;
+    if (src && src.thumbnail && !src.thumbnail.isEmpty()) {
+      const jpeg = src.thumbnail.toJPEG(85);
+      if (jpeg && jpeg.length) url = `data:image/jpeg;base64,${jpeg.toString('base64')}`;
+    }
+    win.webContents.send('ui:backdrop', url);
   } catch (_) { win.webContents.send('ui:backdrop', null); }
 }
 
@@ -221,7 +233,16 @@ function hideOverlay() {
   diagLog('bank/hide');
 }
 
-function summon() { const wasHidden = !win.isVisible(); sendBackdrop(); showOverlay(); if (wasHidden) win.webContents.send('ui:ignite'); diagLog('summon'); }
+// RL-6 — capture the CLEAN live screen BEFORE showing the overlay, so the backdrop is
+// a single coherent snapshot of the real screen (no VULCAN in it, no stale frame).
+// Only when coming from hidden (a re-summon while visible carries no ceremony).
+async function summon() {
+  const wasHidden = !win.isVisible();
+  if (wasHidden) await sendBackdrop();
+  showOverlay();
+  if (wasHidden) win.webContents.send('ui:ignite');
+  diagLog('summon');
+}
 function toggleOverlay() {
   if (win.isVisible()) win.webContents.send('ui:bank');   // renderer runs the bank, then requestHide
   else summon();

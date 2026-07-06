@@ -146,3 +146,37 @@ Delivered instead:
 
 **Safety/perf items (PARTS 1–3) were already complete before the pivot** and remain
 in force.
+
+---
+
+## RL-6 — SUMMON BACKDROP GHOSTING  ✅ (post-signing cosmetic)
+
+**The failure:** during ignition/quench the underlay showed multiple ghosted copies
+of window chrome (e.g. three Chrome tab bars at the edges) instead of one clean
+screen.
+
+**Root causes (three, all fixed):**
+1. **Race with the overlay.** `summon()` fired `sendBackdrop()` (async) but showed the
+   window synchronously right after — the desktop snapshot could catch VULCAN's own
+   window or a mid-fade frame. Now `summon()` **awaits the capture BEFORE showing**
+   the overlay, so the snapshot is purely the live screen.
+2. **Tiling.** `#backdrop` used the `background` shorthand (which resets
+   `background-repeat` to the default `repeat`); the fix sets **`no-repeat`** +
+   **`background-size: 100% 100%`** so the whole-display capture fills edge-to-edge as
+   a single copy (this was the ghosting vector).
+3. **Scale mismatch.** The capture was taken at half resolution. Now it captures at
+   the display's **native resolution** (`size × scaleFactor`) as one JPEG — 1:1 with
+   the live screen.
+
+**Verification:**
+- Electron capture probe (`scripts/backdrop-probe.cjs`): **1** screen source, **1**
+  matching the active display, thumbnail **5120×2880 = native** (2560×1440 ×2),
+  aspect **1.7778 == screen**, single JPEG. **PASS**.
+- Live visual (`scripts/verify-backdrop-dev.mjs`): summoned over a real Chrome window
+  with three visible tabs → backdrop is **one** image, `no-repeat`, `100% 100%`,
+  5120×2880, aspect matches screen. Screenshot `rl6-backdrop-chrome.jpeg` shows a
+  single coherent desktop (one menu bar, one tab strip, one dock) beneath the sparks —
+  **no ghosting**.
+- `.app` repacked with the fix. (The unsigned repack lacks Screen Recording TCC, so
+  the live capture was verified via the dev binary, which holds the grant; the
+  operator's signed app already has the grant and runs the identical code.)

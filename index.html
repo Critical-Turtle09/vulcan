@@ -17,8 +17,13 @@
        #backdrop) sits at the bottom; #void-over fades the void floor in as the
        ceremony resolves (opacity = presence); the canvas LIGHTEN-composites on top,
        so its dark void areas reveal the floor while bright sparks/orb glow over it. */
-    #backdrop  { position: fixed; inset: 0; z-index: 0; background: var(--void);
-      background-size: cover; background-position: center; }
+    /* RL-6 — the fresh full-display capture paints as ONE seamless screen: no-repeat
+       (default 'repeat' was the ghosting/tiling vector) and 100% 100% so it fills the
+       overlay edge-to-edge, 1:1 with the live screen (the capture IS the whole active
+       display). background-color (not the 'background' shorthand, which would reset
+       these) keeps the void fallback when there's no snapshot. */
+    #backdrop  { position: fixed; inset: 0; z-index: 0; background-color: var(--void);
+      background-repeat: no-repeat; background-size: 100% 100%; background-position: center; }
     #void-over { position: fixed; inset: 0; z-index: 1; background: var(--void); opacity: 1; }
     #stage { position: fixed; inset: 0; display: block; z-index: 2; mix-blend-mode: lighten; }
     /* HUD DOM layers MUST sit above the canvas (z2). Giving #stage a z-index for the
