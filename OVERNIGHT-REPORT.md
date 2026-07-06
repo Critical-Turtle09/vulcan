@@ -23,7 +23,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 9 | Docs pass | 🟢 DONE | README front door, generated TOKENS.md, ARCHITECTURE.md, .env.example updated |
 | 10 | Media capture | 🟢 DONE | 11 stills + ignition.mp4/.gif; MEDIA-INDEX.md committed, media gitignored |
 | 11 | Website draft | 🟡 DRAFT | /site single page, house aesthetic; static, no deploy, waitlist front-end only |
-| 12 | Skill scaffold | … | |
+| 12 | Skill scaffold | 🟢 DONE | 4 SKILL.md drafts (build-protocol, profile/wire/scene authoring), docs only |
 | 13 | Close-out | … | |
 
 ---
@@ -175,4 +175,12 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 - Committed hero/scene images as `.jpg` (downscaled from the money shots).
 - **Static, no deploy, no payments.** Rendered + screenshot-verified
   (`http://localhost:5273/site/`).
+
+### PART 12 — Skill scaffold 🟢
+- `.claude/skills/` with 4 SKILL.md drafts (conductor prep), encoding what
+  CLAUDE.md + repo history establish — **documentation only, no behavior change**:
+  - `vulcan-build-protocol` — working rules, §7 acceptance, doctrine 11, cadence.
+  - `profile-authoring` — the profile schema + rules (domain-blind engine).
+  - `wire-feed-tuning` — the wire pipeline (score→ignite→propagate→decay) + levers.
+  - `scene-authoring` — the condense-from-dust pattern + summon-machine wiring.
 
