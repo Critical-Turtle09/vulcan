@@ -12,7 +12,7 @@ import { createMouth } from './mouth.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createVoice({ orb, bridge, forceTest = false }) {
+export function createVoice({ orb, bridge, forceTest = false, onWake = null }) {
   let running = false, cfg = null, ears = null, mouth = null, brain = createBrain();
   let mode = 'idle', online = false, offlineReason = '';
   let muted = !!rawTokens.voice.startMuted;   // chosen state, not a fault
@@ -49,9 +49,10 @@ export function createVoice({ orb, bridge, forceTest = false }) {
         // processing, no whisper — until unmuted. Orb holds idle (no snap).
         if (muted) { ears.suspend(); await untilUnmuted(); if (!running) break; }
         waking = true;
-        await ears.listenForWake();                    // WAKE
+        await ears.listenForWake();                    // WAKE ("Fire and Forge")
         waking = false;
         if (!running || muted) continue;                // muted mid-wait -> re-park
+        if (onWake) { try { onWake(); } catch (_) { /* wake hook must never break the loop */ } }
         orb.setState('listening');                     // idle -> listening (lerp)
         const { transcript } = await ears.capture();   // CAPTURE (ends on silence)
         if (!running) break;

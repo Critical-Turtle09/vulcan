@@ -15,6 +15,7 @@ import { createTheater } from '../map/theater.js';
 import { createPanels } from '../map/panels.js';
 import { createWire } from '../wire.js';
 import { createQuotes } from '../quotes.js';
+import { createIgnition } from '../ignition.js';
 import {
   activeProfile, activeProfileId, regions, regionByKey, mapEnabled,
   setActive, nextProfile,
@@ -24,6 +25,7 @@ injectCSSVars();
 const O = rawTokens.orb;
 const M = rawTokens.map;
 const PROF = rawTokens.profile;
+const IG = rawTokens.ignition;
 const smooth = (e0, e1, x) => { const t = Math.min(Math.max((x - e0) / (e1 - e0), 0), 1); return t * t * (3 - 2 * t); };
 
 const canvas = document.getElementById('stage');
@@ -59,6 +61,10 @@ const DOCK_POS = new THREE.Vector3(...M['orb.dockPos']);
 const HOME_SCALE = M['orb.homeScale'] * O.scale;   // v1.3 — reduced home scale
 const DOCK_SCALE = M['orb.dockScale'];
 
+// THE IGNITION — molten sparks (camera-parented, edge->orb screen space)
+const ignition = createIgnition({ homePos: HOME_POS, homeScale: HOME_SCALE, orbRadius: O.radius, fov: M['camera.fov'], aspect: w0 / h0 });
+camera.add(ignition.object);
+
 // theater — summoned terrain (world space)
 const theater = createTheater();
 scene.add(theater.object);
@@ -76,7 +82,18 @@ const bridge = window.vulcan || {
   async tts() { return { ok: false }; },
   async transcribe() { return { ok: false }; },
 };
-const voice = createVoice({ orb, bridge, forceTest });
+// wake-from-hidden: if VULCAN is banked (overlay hidden), "Fire and Forge" shows
+// the window and re-ignites the command center; otherwise wake just proceeds.
+const voice = createVoice({ orb, bridge, forceTest, onWake: () => { if (presence < 0.5) { if (bridge.requestShow) bridge.requestShow(); ignite(); } } });
+
+// ---- THE IGNITION state machine (system-wide summon / bank) ----
+let presence = 1;            // command-center presence: 1 resolved (default) .. 0 hidden
+let ignMode = 'resolved';    // resolved | kindling | banking | hidden
+const ignTotalS = (IG['surge.ms'] + IG['condense.ms'] + IG['cool.ms']) / 1000;
+const ignBankS = IG['bank.ms'] / 1000;
+function ignite() { if (ignMode === 'kindling') return; presence = 0; ignMode = 'kindling'; }   // kindle from the edges
+function bank() { if (ignMode === 'banking' || ignMode === 'hidden') return; ignMode = 'banking'; }  // reverse -> hide
+function onBanked() { if (bridge.requestHide) bridge.requestHide(); }
 
 // ORGAN: THE WIRE — polls the active profile's feeds, ignites molten heat
 const wire = createWire({ bridge, getProfile: activeProfile });
@@ -249,9 +266,11 @@ window.addEventListener('keydown', (e) => {
   }
   if (k === rawTokens.voice.muteKey) { voice.toggleMute(); paintHud(); return; }
   if (k === PROF.switchKey) { switchProfile(); return; }
-  if (e.key === '0' || e.key === 'Escape') {
-    if (panels.isOpen) { panels.close(); return; }   // Esc closes the panel first
-    dismiss(); return;
+  if (e.key === '0') { dismiss(); return; }           // 0 -> back to orb home
+  if (e.key === 'Escape') {
+    if (panels.isOpen) { panels.close(); return; }    // 1) close the panel
+    if (summonMode !== 'home') { dismiss(); return; } // 2) leave the theater
+    bank(); return;                                    // 3) bank the fire (hide overlay)
   }
   const rbk = regionByKey();
   if (rbk[k]) summon(rbk[k]);
@@ -264,6 +283,11 @@ window.addEventListener('pointerdown', (e) => {
   if (s) panels.open(s);
   else if (panels.isOpen) panels.close();
 });
+
+// Electron drives ignite/bank/mute from the global hotkey + tray (STAGE D)
+if (bridge.onIgnite) bridge.onIgnite(() => ignite());
+if (bridge.onBank) bridge.onBank(() => bank());
+if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintHud(); });
 
 populateProfileHud();
 renderFeed();
@@ -282,7 +306,14 @@ function step(dt) {
   if (summonMode === 'summoning') { summonRaw = Math.min(summonRaw + dt / summonDurS, 1); if (summonRaw >= 1) summonMode = 'theater'; }
   else if (summonMode === 'dismissing') { summonRaw = Math.max(summonRaw - dt / summonDurS, 0); if (summonRaw <= 0) { summonMode = 'home'; currentRegion = null; } }
   summonP = smooth(0, 1, summonRaw);
+  // ignition presence — kindle up / bank down ('held' = frozen for the audit)
+  if (ignMode === 'kindling') { presence = Math.min(presence + dt / ignTotalS, 1); if (presence >= 1) ignMode = 'resolved'; }
+  else if (ignMode === 'banking') { presence = Math.max(presence - dt / ignBankS, 0); if (presence <= 0) { ignMode = 'hidden'; onBanked(); } }
 }
+
+// command-center chrome fades in as the fire resolves (last, after the orb)
+const hudEls = [document.getElementById('vault-left'), document.getElementById('vault-right'), document.getElementById('keys')];
+function gateChrome(p) { const o = smooth(0.64, 1.0, p).toFixed(3); for (const el of hudEls) if (el) el.style.opacity = o; }
 
 function paintLabels() {
   const inTheater = summonP > 0.4 && currentRegion;
@@ -323,7 +354,11 @@ function frame() {
   dock.position.lerpVectors(HOME_POS, DOCK_POS, dockL);
   dock.scale.setScalar(THREE.MathUtils.lerp(HOME_SCALE, DOCK_SCALE, dockL));
   const dissolveDip = Math.min(Math.sin(summonP * Math.PI) * 1.25, 1);
-  const orbReveal = initReveal * (1 - dissolveDip);
+  // ignition: the orb condenses in from the sparks as the fire resolves
+  const orbGate = smooth(0.28, 0.96, presence);
+  const orbReveal = initReveal * (1 - dissolveDip) * orbGate;
+  ignition.setP(presence); ignition.setTime(t); ignition.setPixelRatio(dpr);
+  gateChrome(presence);
 
   const terrainReveal = initReveal * smooth(0.3, 0.95, summonP);
   scene.fog.density = M['terrain.fogDensity'] * summonP;
@@ -375,6 +410,11 @@ window.__vulcanHome = {
   switchProfile: () => switchProfile(),
   // audit: drive the reactive waves with a synthetic envelope (0..1). null = off.
   simAudio: (on) => { simAmp = on ? ((tt) => 0.5 + 0.42 * Math.sin(tt * 5.0) * Math.sin(tt * 1.3)) : null; if (!on) orb.setAmplitude(0); },
+  // STAGE D — ignition harness
+  ignite: () => ignite(),
+  bank: () => bank(),
+  ignitionState: () => ({ presence: +presence.toFixed(3), mode: ignMode }),
+  __holdPresence: (p) => { presence = Math.max(0, Math.min(1, p)); ignMode = 'held'; },   // audit: freeze a phase
   // STAGE B — wire harness: ignite a synthetic event (region, site index, title)
   wireInject: (region, siteIdx, title) => wire.injectTest(region, siteIdx, title),
   wireStatus: () => wire.status(),
@@ -394,4 +434,5 @@ window.addEventListener('resize', () => {
   const w = window.innerWidth, h = window.innerHeight;
   camera.aspect = w / h; camera.updateProjectionMatrix();
   renderer.setSize(w, h); post.setSize(w, h, dpr);
+  ignition.resize(w / h);
 });
