@@ -15,7 +15,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 | 1 | RL-4 signing pass (summon/bank/rings/ceremony) | 🟢 DONE (1a/1b need Electron visual confirm) | ceremony both dirs, rings×6, transparency via lighten+snapshot |
 | 2 | Real geography | 🟡 DRAFT | real Natural Earth land/sea wired + rendering; relief derived (not DEM), legibility a morning tune |
 | 3 | Molten ink + legends | 🟢 DONE | molten working-ink on scenes, ink.* tokens, per-scene legend, role labels |
-| 4 | Scene library groundwork (schematic DRAFT) | … | |
+| 4 | Scene library groundwork (schematic DRAFT) | 🟡 DRAFT | registry + device/schematic v0 (condense + explode), procedural |
 | 5 | Local voice fallback | … | |
 | 6 | Local reflexes (Ollama) | … | |
 | 7 | Profile drafts | … | |
@@ -77,4 +77,16 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 - Per-scene **LEGEND** (bone mono-caps, theater only) + role-context labels
   ("TSMC · HSINCHU · FAB"). HUD swept — no orphan strings.
 - CLAUDE.md §3 ink-doctrine amendment recorded. Equity quotes stay greyscale.
+
+### PART 4 — Scene library groundwork 🟡 DRAFT
+- `src/scenes/index.js`: scene-type **registry** (map=live, schematic=draft,
+  graph/timeline=planned) the future brain routes into.
+- `src/scenes/schematic.js`: procedural **GPU device** — board · GPU die · HBM×6 ·
+  VRM×8, house-material dust that **condenses from scatter** on summon; **EXPLODE**
+  (`E`) separates components along axes, die runs molten-hot. Tethered part labels
+  with legend context. No external 3D — pure primitives. `scene.*` tokens.
+- Summon with `X`; wired into the shared orb→scene crossflow (own reveal gate,
+  fog off). `p4-assembled` / `p4-exploded` (die lifts, HBM out, VRM forward).
+- **DRAFT:** dim house-material read + basic labels; brightness, per-part legend
+  panels, and graph/timeline scenes are follow-ups.
 

@@ -16,6 +16,7 @@ import { createPanels } from '../map/panels.js';
 import { createWire } from '../wire.js';
 import { createQuotes } from '../quotes.js';
 import { createIgnition } from '../ignition.js';
+import { createSchematic } from '../scenes/schematic.js';
 import {
   activeProfile, activeProfileId, regions, regionByKey, mapEnabled,
   setActive, nextProfile,
@@ -75,6 +76,11 @@ camera.add(ignition.object);
 const theater = createTheater();
 scene.add(theater.object);
 
+// PART 4 — device/schematic scene (procedural GPU board), placed on the table
+const schematic = createSchematic();
+schematic.object.position.set(0, 0, -3);
+scene.add(schematic.object);
+
 // STAGE A — tethered blueprint panels (site dossiers from the active profile)
 const panels = createPanels();
 
@@ -118,18 +124,27 @@ const quotes = createQuotes({ bridge, getProfile: activeProfile });
 let summonMode = 'home';       // home | summoning | theater | dismissing
 let summonRaw = 0, summonP = 0;
 let currentRegion = null;
+let sceneKind = 'map';         // map | schematic (PART 4)
+let explodeP = 0, explodeTarget = 0;   // schematic exploded-view (0 assembled .. 1)
 const summonDurS = M['summon.durationMs'] / 1000;
 
 function summon(regionId) {
   const regs = regions();
   if (!regs[regionId] || !mapEnabled()) return;
   if (summonMode !== 'home') return;
-  currentRegion = regionId;
+  sceneKind = 'map'; currentRegion = regionId;
   theater.setRegion(regs[regionId], regionId);
   summonMode = 'summoning';           // feedback <100ms: transition begins next frame
 }
+function summonSchematic() {
+  if (summonMode !== 'home') return;
+  sceneKind = 'schematic'; currentRegion = null; explodeP = 0; explodeTarget = 0;
+  summonMode = 'summoning';
+}
 function dismiss() { if (summonMode === 'theater' || summonMode === 'summoning') summonMode = 'dismissing'; }
-const inTheaterNow = () => summonP > 0.5 && currentRegion;
+// in a summoned scene (map region OR schematic)
+const inSceneNow = () => summonP > 0.5 && (currentRegion || sceneKind === 'schematic');
+const inTheaterNow = () => summonP > 0.5 && currentRegion;   // map-only (site picking)
 
 // STAGE A — site selection. Returns the resolved site nearest a screen point
 // within a pixel radius, or null. Also drives number-key + click selection.
@@ -280,6 +295,8 @@ window.addEventListener('keydown', (e) => {
   }
   if (k === rawTokens.voice.muteKey) { voice.toggleMute(); paintHud(); return; }
   if (k === PROF.switchKey) { switchProfile(); return; }
+  if (k === 'x') { summonSchematic(); return; }                       // PART 4 — device/schematic
+  if (k === 'e' && inSceneNow() && sceneKind === 'schematic') { explodeTarget = explodeTarget > 0.5 ? 0 : 1; return; }
   if (e.key === '0') { dismiss(); return; }           // 0 -> back to orb home
   if (e.key === 'Escape') {
     if (panels.isOpen) { panels.close(); return; }    // 1) close the panel
@@ -354,12 +371,19 @@ function legendFor(regionId) {
     + `<span class="sep">·</span>GREY = EQUITY`;
 }
 
+function legendSchematic() {
+  return `GPU DEVICE<span class="sep">·</span>PARAMETRIC SCHEMATIC (DRAFT)`
+    + `<span class="sep">|</span>DUST = HOUSE MATERIAL`
+    + `<span class="sep">·</span><span class="hl">E</span> = EXPLODE`
+    + `<span class="sep">·</span>DIE RUNS HOT`;
+}
 function paintLabels() {
-  const inTheater = summonP > 0.4 && currentRegion;
+  const inScene = summonP > 0.4 && (currentRegion || sceneKind === 'schematic');
   const fade = smooth(0.55, 0.95, summonP);
-  legendEl.style.opacity = inTheater ? fade.toFixed(2) : '0';
-  if (inTheater && legendEl.dataset.region !== currentRegion) { legendEl.innerHTML = legendFor(currentRegion); legendEl.dataset.region = currentRegion; }
-  const screens = inTheater ? theater.siteScreens(camera) : [];
+  legendEl.style.opacity = inScene ? fade.toFixed(2) : '0';
+  const legendKey = sceneKind === 'schematic' ? 'schematic' : currentRegion;
+  if (inScene && legendEl.dataset.region !== legendKey) { legendEl.innerHTML = sceneKind === 'schematic' ? legendSchematic() : legendFor(currentRegion); legendEl.dataset.region = legendKey; }
+  const screens = !inScene ? [] : (sceneKind === 'schematic' ? schematic.partScreens(explodeP) : theater.siteScreens(camera));
   for (let i = 0; i < labelPool.length; i++) {
     const el = labelPool[i];
     if (i < screens.length) {
@@ -425,8 +449,12 @@ function frame() {
   voidOver.style.opacity = presence.toFixed(3);
   gateChrome(presence);
 
-  const terrainReveal = initReveal * smooth(0.3, 0.95, summonP);
-  scene.fog.density = M['terrain.fogDensity'] * summonP;
+  const mapOn = sceneKind === 'map' ? 1 : 0, schemOn = sceneKind === 'schematic' ? 1 : 0;
+  const sceneReveal = initReveal * smooth(0.3, 0.95, summonP);
+  const terrainReveal = sceneReveal * mapOn;
+  const schemReveal = sceneReveal * schemOn;
+  scene.fog.density = M['terrain.fogDensity'] * summonP * mapOn;
+  explodeP += (explodeTarget - explodeP) * Math.min(dt * 3.2, 1);   // exploded-view lerp
 
   voice.tick();
   // audit hook: synthetic audio envelope so wave reactivity is drivable headless
@@ -446,6 +474,7 @@ function frame() {
 
   orb.update(dt, t, orbReveal, dpr);
   theater.update(dt, t, terrainReveal, dpr);
+  schematic.update(dt, t, schemReveal, explodeP, dpr);
   paintLabels();
   paintQuotes();
   if (panels.isOpen && !inTheaterNow()) panels.close();   // leaving theater dissolves the panel
@@ -469,6 +498,10 @@ window.__vulcanHome = {
   closePanel: () => panels.close(),
   panelOpen: () => panels.isOpen,
   sites: () => theater.sites.map((s) => s.id),
+  // PART 4 — scene harness
+  summonSchematic: () => summonSchematic(),
+  explode: (on) => { explodeTarget = on ? 1 : 0; },
+  sceneKind: () => sceneKind,
   // profile controls
   profile: () => activeProfileId(),
   setProfile: (id) => { if (setActive(id)) { dismiss(); populateProfileHud(); renderFeed(); wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset(); quotes.reset(); } },
