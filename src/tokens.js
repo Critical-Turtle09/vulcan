@@ -55,6 +55,15 @@ export function injectCSSVars() {
   root.setProperty('--hud-feed-px', `${h['feed.px']}px`);
   root.setProperty('--hud-reg', `${h['reg.size']}px`);
   root.setProperty('--hud-reveal-ms', `${h['reveal.ms']}ms`);
+  // STAGE A — tethered blueprint panels
+  const pn = raw.panel;
+  root.setProperty('--panel-w', `${pn.width}px`);
+  root.setProperty('--panel-pad', `${pn.pad}px`);
+  root.setProperty('--panel-title-px', `${pn['title.px']}px`);
+  root.setProperty('--panel-label-px', `${pn['label.px']}px`);
+  root.setProperty('--panel-value-px', `${pn['value.px']}px`);
+  root.setProperty('--panel-row-gap', `${pn['row.gap']}px`);
+  root.setProperty('--glyph-ms', `${pn.glyphMs}ms`);
 }
 
 // deterministic pick within a [min,max] token range, seeded so it never uses

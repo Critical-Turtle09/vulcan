@@ -12,6 +12,7 @@ import { createPost } from '../post.js';
 import { createOrb } from './orb.js';
 import { createVoice } from '../voice/voice.js';
 import { createTheater } from '../map/theater.js';
+import { createPanels } from '../map/panels.js';
 import {
   activeProfile, activeProfileId, regions, regionByKey, mapEnabled,
   setActive, nextProfile,
@@ -60,6 +61,9 @@ const DOCK_SCALE = M['orb.dockScale'];
 const theater = createTheater();
 scene.add(theater.object);
 
+// STAGE A — tethered blueprint panels (site dossiers from the active profile)
+const panels = createPanels();
+
 const post = createPost(renderer, scene, camera, { w: w0, h: h0 }, { bloom: M['post.bloom'], grain: M['post.grain'] });
 
 // ---- voice loop ----
@@ -87,6 +91,29 @@ function summon(regionId) {
   summonMode = 'summoning';           // feedback <100ms: transition begins next frame
 }
 function dismiss() { if (summonMode === 'theater' || summonMode === 'summoning') summonMode = 'dismissing'; }
+const inTheaterNow = () => summonP > 0.5 && currentRegion;
+
+// STAGE A — site selection. Returns the resolved site nearest a screen point
+// within a pixel radius, or null. Also drives number-key + click selection.
+function siteAtScreen(px, py, radius = 64) {
+  if (!inTheaterNow()) return null;
+  const w = window.innerWidth, h = window.innerHeight;
+  let best = null, bestD = radius * radius;
+  for (const s of theater.sites) {
+    const p = s.world.clone().project(camera);
+    if (p.z > 1) continue;
+    const sx = (p.x * 0.5 + 0.5) * w, sy = (-p.y * 0.5 + 0.5) * h;
+    const d = (sx - px) * (sx - px) + (sy - py) * (sy - py);
+    if (d < bestD) { bestD = d; best = s; }
+  }
+  return best;
+}
+function selectSiteIndex(i) {
+  if (!inTheaterNow()) return false;
+  const s = theater.sites[i];
+  if (s) { panels.open(s); return true; }
+  return false;
+}
 
 // ---- site labels (DOM, tethered; theater only) ----
 const labelPool = Array.from({ length: 8 }, () => {
@@ -169,13 +196,30 @@ function switchProfile() {
 
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
-  const orbKeys = { '1': 'idle', '2': 'listening', '3': 'thinking', '4': 'speaking' };
-  if (orbKeys[e.key]) { orb.setState(orbKeys[e.key]); return; }
+  // digits: in the theater they select a site (open its dossier panel); at home
+  // they drive the orb state (1-4). The theater docks the orb, so no collision.
+  if (/^[1-9]$/.test(e.key)) {
+    if (inTheaterNow()) { if (selectSiteIndex(+e.key - 1)) return; }
+    const orbKeys = { '1': 'idle', '2': 'listening', '3': 'thinking', '4': 'speaking' };
+    if (orbKeys[e.key]) { orb.setState(orbKeys[e.key]); return; }
+    return;
+  }
   if (k === rawTokens.voice.muteKey) { voice.toggleMute(); paintHud(); return; }
   if (k === PROF.switchKey) { switchProfile(); return; }
-  if (e.key === '0' || e.key === 'Escape') { dismiss(); return; }
+  if (e.key === '0' || e.key === 'Escape') {
+    if (panels.isOpen) { panels.close(); return; }   // Esc closes the panel first
+    dismiss(); return;
+  }
   const rbk = regionByKey();
   if (rbk[k]) summon(rbk[k]);
+});
+
+// click a site mark to open its dossier; click empty ground to dismiss the panel
+window.addEventListener('pointerdown', (e) => {
+  if (!inTheaterNow()) return;
+  const s = siteAtScreen(e.clientX, e.clientY);
+  if (s) panels.open(s);
+  else if (panels.isOpen) panels.close();
 });
 
 populateProfileHud();
@@ -245,6 +289,8 @@ function frame() {
   orb.update(dt, t, orbReveal, dpr);
   theater.update(dt, t, terrainReveal, dpr);
   paintLabels();
+  if (panels.isOpen && !inTheaterNow()) panels.close();   // leaving theater dissolves the panel
+  panels.update(camera, window.innerWidth, window.innerHeight);
   post.setTime(t);
   post.composer.render();
   paintHud();
@@ -259,6 +305,11 @@ window.__vulcanHome = {
   state: () => ({ summonMode, summonRaw: +summonRaw.toFixed(4), summonP: +summonP.toFixed(4), region: currentRegion, orb: orb.stateName, initReveal: +initReveal.toFixed(3), routeActive: theater.active, routeHead: +theater.headU.toFixed(3), profile: activeProfileId() }),
   probe: () => orb.probe(),
   regions: () => Object.keys(regions()),
+  // STAGE A — panel controls / harness
+  openSite: (i) => selectSiteIndex(i),
+  closePanel: () => panels.close(),
+  panelOpen: () => panels.isOpen,
+  sites: () => theater.sites.map((s) => s.id),
   // profile controls
   profile: () => activeProfileId(),
   setProfile: (id) => { if (setActive(id)) { dismiss(); populateProfileHud(); renderFeed(); wireLines = []; heatIndex = 0; } },
