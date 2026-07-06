@@ -139,6 +139,13 @@
       text-transform: uppercase; color: var(--data-dim); }
     #bank-hint b { color: var(--data-bone); font-weight: 500; }
     #bank-hint .k { display: inline-block; border: 1px solid var(--panel-stroke); padding: 1px 5px; margin-right: 7px; color: var(--data-bone); }
+    /* scene legend — bone mono-caps caption, centered above the key hints (theater only) */
+    #legend { position: fixed; left: 50%; transform: translateX(-50%); bottom: 32px; pointer-events: none;
+      font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
+      text-transform: uppercase; color: var(--data-dim); white-space: nowrap;
+      opacity: 0; transition: opacity 300ms ease; text-align: center; }
+    #legend .hl { color: var(--signal-molten); }
+    #legend .sep { color: var(--data-faint); margin: 0 8px; }
   </style>
 </head>
 <body>
@@ -183,6 +190,8 @@
     <div><b>1–4</b> ORB STATE · <b>M</b> MUTE · <b>P</b> PROFILE</div>
   </div>
   <div id="bank-hint"><span class="k">ESC</span>BANK THE FIRE</div>
+  <!-- scene LEGEND (PART 3) — what this is + what the marks mean; theater only -->
+  <div id="legend"></div>
   <script type="module" src="/src/orb/main.js"></script>
 </body>
 </html>

@@ -333,16 +333,40 @@ const hudEls = [document.getElementById('vault-left'), document.getElementById('
 const ceremonyTitle = document.getElementById('ceremony-title');
 function gateChrome(p) { const o = smooth(0.64, 1.0, p).toFixed(3); for (const el of hudEls) if (el) el.style.opacity = o; }
 
+// role context for a site label (PART 3) — "TSMC · HSINCHU" -> "… · FAB"
+function roleTag(site) {
+  const r = ((site.dossier && site.dossier.role) || '').toUpperCase();
+  if (/PORT/.test(r)) return 'PORT';
+  if (/EUV|LITHO/.test(r)) return 'EUV';
+  if (/MEMORY/.test(r)) return 'MEMORY';
+  if (/DESIGN|FABLESS/.test(r)) return 'DESIGN';
+  if (/FAB/.test(r)) return 'FAB';
+  return '';
+}
+// scene legend (PART 3) — what this is + what the marks mean
+const legendEl = document.getElementById('legend');
+function legendFor(regionId) {
+  const p = activeProfile();
+  const name = regions()[regionId] ? regions()[regionId].name : '';
+  return `${name}<span class="sep">·</span>${(p.eyebrow || p.name)}`
+    + `<span class="sep">|</span><span class="hl">MOLTEN</span> ROUTES + SITES`
+    + `<span class="sep">·</span><span class="hl">◆</span> HEAT = LIVE WIRE EVENT`
+    + `<span class="sep">·</span>GREY = EQUITY`;
+}
+
 function paintLabels() {
   const inTheater = summonP > 0.4 && currentRegion;
   const fade = smooth(0.55, 0.95, summonP);
+  legendEl.style.opacity = inTheater ? fade.toFixed(2) : '0';
+  if (inTheater && legendEl.dataset.region !== currentRegion) { legendEl.innerHTML = legendFor(currentRegion); legendEl.dataset.region = currentRegion; }
   const screens = inTheater ? theater.siteScreens(camera) : [];
   for (let i = 0; i < labelPool.length; i++) {
     const el = labelPool[i];
     if (i < screens.length) {
       const proj = screens[i].world.clone().project(camera);
       const vis = proj.z < 1 && fade > 0.02;
-      el.textContent = screens[i].site.name;
+      const tag = roleTag(screens[i].site);
+      el.textContent = tag ? `${screens[i].site.name} · ${tag}` : screens[i].site.name;
       el.style.opacity = vis ? (0.9 * fade).toFixed(2) : '0';
       if (vis) {
         const x = (proj.x * 0.5 + 0.5) * window.innerWidth, y = (-proj.y * 0.5 + 0.5) * window.innerHeight;

@@ -172,6 +172,13 @@ Explicitly rejected (from v0, "2002 video game"):
 }
 ```
 
+- **Ink-doctrine amendment (PART 3).** On **summoned scenes** (theater/schematic/etc.) molten is
+  the **working data ink** — routes, site dots, and data marks are a restrained molten; a HEAT
+  EVENT distinguishes itself by **intensity + motion** (forge-hot, pulse, propagation, bloom), not
+  by being the only orange. Equity **quotes stay greyscale** (price is never heat). The **ambient
+  orb-home** state keeps the strict discipline below. Resting intensities live in `ink.*` for retune.
+  Every summoned scene carries a one-line bone mono-caps **LEGEND** (what it is + what marks mean);
+  labels carry role context ("TSMC · HSINCHU · FAB"). No unexplained text.
 - Molten heat appears on **<2% of any frame's pixels** in ambient state. If heat is common, heat is meaningless.
 - Event recency is encoded as **heat**: ignite at `signal.forge` → settle to `signal.molten` + bloom flash → cool toward `signal.cooled` → archive at `data.faint`.
 - No other hues. No blues, no greens, no gradients-as-decoration. Molten is never used for price (quotes stay greyscale value + delta mark). Friend/foe, if ever needed, is bone vs molten.

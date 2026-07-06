@@ -118,9 +118,11 @@ export function createTheater() {
   sGeo.setAttribute('aSeed', new THREE.BufferAttribute(sSeed, 1));
   sGeo.setAttribute('aAlert', new THREE.BufferAttribute(sAlert, 1));
   sGeo.setDrawRange(0, 0);
+  const INK = rawTokens.ink;
   const sUni = {
     uTime: { value: 0 }, uReveal: { value: 0 }, uPixelRatio: { value: 1 },
     uSize: { value: M['site.size'] }, uBone: { value: color('data.bone') }, uMolten: { value: color('signal.molten') },
+    uForge: { value: color('signal.forge') }, uRest: { value: INK['site.rest'] }, uHeat: { value: INK['site.heat'] },
     uPulseLo: { value: M['site.pulse'][0] },
   };
   const siteMarks = new THREE.Points(sGeo, new THREE.ShaderMaterial({
@@ -140,13 +142,15 @@ export function createTheater() {
         vPulse *= fl;
       }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uBone, uMolten; varying float vAlert, vPulse;
+      uniform vec3 uBone, uMolten, uForge; uniform float uRest, uHeat; varying float vAlert, vPulse;
       void main(){
         vec2 c = gl_PointCoord-0.5; float d = length(c);
         float core = smoothstep(0.42,0.12,d), halo = smoothstep(0.5,0.3,d);
         if((core+halo)*vPulse <= 0.002) discard;
-        vec3 col = mix(uBone, uMolten, step(0.01, vAlert));   // molten heat hook (STAGE B drives aAlert)
-        col *= 1.0 + vAlert*1.9;
+        // molten is the WORKING DATA INK (PART 3): sites rest at a restrained molten;
+        // a HEAT event distinguishes by INTENSITY (forge-hot) + size + pulse, not by
+        // being the only orange.
+        vec3 col = mix(uMolten, uForge, clamp(vAlert,0.0,1.0)) * (uRest + vAlert*uHeat);
         gl_FragColor = vec4(col, (core+halo*0.22)*vPulse);
       }`,
   }));
@@ -161,15 +165,15 @@ export function createTheater() {
   const mPos = new Float32Array(3);
   const mGeo = new THREE.BufferGeometry();
   mGeo.setAttribute('position', new THREE.BufferAttribute(mPos, 3));
-  const mUni = { uSize: { value: M['route.markerSize'] }, uPixelRatio: { value: 1 }, uOn: { value: 0 }, uBone: { value: color('data.bone') } };
+  const mUni = { uSize: { value: M['route.markerSize'] }, uPixelRatio: { value: 1 }, uOn: { value: 0 }, uForge: { value: color('signal.forge') } };
   const marker = new THREE.Points(mGeo, new THREE.ShaderMaterial({
     uniforms: mUni, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: /* glsl */`
       uniform float uSize, uPixelRatio, uOn; varying float vOn;
       void main(){ vOn = uOn; vec4 mv = modelViewMatrix*vec4(position,1.0); gl_Position = projectionMatrix*mv; gl_PointSize = uSize*uOn*uPixelRatio*(300.0/-mv.z); }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uBone; varying float vOn;
-      void main(){ vec2 c=gl_PointCoord-0.5; float d=length(c); float core=smoothstep(0.5,0.08,d); if(core*vOn<=0.002) discard; gl_FragColor=vec4(uBone*1.5, core*vOn); }`,
+      uniform vec3 uForge; varying float vOn;
+      void main(){ vec2 c=gl_PointCoord-0.5; float d=length(c); float core=smoothstep(0.5,0.08,d); if(core*vOn<=0.002) discard; gl_FragColor=vec4(uForge*1.6, core*vOn); }`,
   }));
   marker.renderOrder = 4;
 
@@ -184,22 +188,23 @@ export function createTheater() {
     return new THREE.ShaderMaterial({
       uniforms: {
         uHead: { value: 1 }, uTrail: { value: M['route.trailDecay'] }, uGlow: { value: 0 }, uReveal: { value: 0 },
-        uBase: { value: M['route.baseAlpha'] }, uBone: { value: color('data.bone') },
-        uHeat: { value: 0 }, uMolten: { value: color('signal.molten') },
+        uBase: { value: INK['route.alpha'] }, uRest: { value: INK['route.rest'] }, uHeatK: { value: INK['route.heat'] },
+        uHeat: { value: 0 }, uMolten: { value: color('signal.molten') }, uForge: { value: color('signal.forge') },
       },
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: /* glsl */`
         attribute float aParam; varying float vP;
         void main(){ vP = aParam; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
       fragmentShader: /* glsl */`
-        uniform float uHead,uTrail,uGlow,uReveal,uBase,uHeat; uniform vec3 uBone,uMolten; varying float vP;
+        uniform float uHead,uTrail,uGlow,uReveal,uBase,uHeat,uRest,uHeatK; uniform vec3 uMolten,uForge; varying float vP;
         void main(){
           float glow = smoothstep(uHead-uTrail, uHead, vP) * step(vP, uHead) * uGlow;
-          // molten heat crawls the lane when it connects two hot sites (Apes grammar)
-          float a = (uBase + glow + uHeat*0.5) * uReveal;
+          // routes are MOLTEN working ink (PART 3): a restrained molten lane; the
+          // traversal head brightens it, and a wire HEAT event pushes it forge-hot.
+          float a = (uBase + glow*0.6 + uHeat*0.5) * uReveal;
           if(a <= 0.002) discard;
-          vec3 col = mix(uBone, uMolten, uHeat);
-          gl_FragColor = vec4(col*(1.0+glow*1.7 + uHeat*1.6), a);
+          vec3 col = mix(uMolten, uForge, uHeat) * (uRest + glow*uHeatK + uHeat*uHeatK);
+          gl_FragColor = vec4(col, a);
         }`,
     });
   }

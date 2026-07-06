@@ -14,7 +14,7 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
 |---|---|---|---|
 | 1 | RL-4 signing pass (summon/bank/rings/ceremony) | 🟢 DONE (1a/1b need Electron visual confirm) | ceremony both dirs, rings×6, transparency via lighten+snapshot |
 | 2 | Real geography | 🟡 DRAFT | real Natural Earth land/sea wired + rendering; relief derived (not DEM), legibility a morning tune |
-| 3 | Molten ink + legends | … | |
+| 3 | Molten ink + legends | 🟢 DONE | molten working-ink on scenes, ink.* tokens, per-scene legend, role labels |
 | 4 | Scene library groundwork (schematic DRAFT) | … | |
 | 5 | Local voice fallback | … | |
 | 6 | Local reflexes (Ollama) | … | |
@@ -67,4 +67,14 @@ Legend: 🟢 done · 🟡 draft/partial · 🔴 blocked/skipped
   is DERIVED (coast-low/interior-high proxy), not a sampled DEM. Map-shape
   legibility from the fixed low-oblique camera is subtle — a real DEM (ETOPO/SRTM)
   subset + a camera/contrast pass are the upgrades. World-strip not yet added.
+
+### PART 3 — Molten ink + legends 🟢
+- Site dots, route lines, and the traversal marker on summoned scenes are now
+  **molten working-ink**; a wire HEAT event distinguishes by intensity (forge-hot),
+  size, and pulse/propagation — not by being the only orange.
+- `ink.*` tokens (`site.rest/heat`, `route.rest/heat/alpha`) expose resting
+  restraint for the morning retune (`site.rest` 0.55→0.32). `p3-molten-ink`/`p3-ink2`.
+- Per-scene **LEGEND** (bone mono-caps, theater only) + role-context labels
+  ("TSMC · HSINCHU · FAB"). HUD swept — no orphan strings.
+- CLAUDE.md §3 ink-doctrine amendment recorded. Equity quotes stay greyscale.
 
