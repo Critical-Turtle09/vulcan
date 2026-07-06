@@ -126,8 +126,12 @@ export function createOrb() {
   }));
   body.renderOrder = 1;
 
-  // ---- dark core (Gargantua) — occludes back dust, faint fresnel rim ----
-  const coreUni = { uCoreGlow:{value:0.34}, uStage:{value:color('stage')}, uHaze:{value:color('haze')} };
+  // ---- dark core (Gargantua) — occludes back dust, faint fresnel rim. A molten
+  // HEAT tick flashes the rim when the wire ignites an event with no map up (§B). ----
+  const coreUni = {
+    uCoreGlow:{value:0.34}, uHeat:{value:0},
+    uStage:{value:color('stage')}, uHaze:{value:color('haze')}, uMolten:{value:color('signal.molten')},
+  };
   const core = new THREE.Mesh(
     new THREE.SphereGeometry(O.coreRadius, 64, 48),
     new THREE.ShaderMaterial({
@@ -136,10 +140,11 @@ export function createOrb() {
         varying vec3 vN; varying vec3 vV;
         void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vV=normalize(-mv.xyz); gl_Position=projectionMatrix*mv; }`,
       fragmentShader:/* glsl */`
-        uniform float uCoreGlow; uniform vec3 uStage,uHaze; varying vec3 vN; varying vec3 vV;
+        uniform float uCoreGlow,uHeat; uniform vec3 uStage,uHaze,uMolten; varying vec3 vN; varying vec3 vV;
         void main(){
           float fres = pow(1.0 - max(dot(vN,vV),0.0), 3.0);
           vec3 col = mix(uStage, uHaze, fres*uCoreGlow);
+          col += uMolten * fres * uHeat * 1.7;    // molten rim tick — the forge sparks
           gl_FragColor = vec4(col, 1.0);
         }`,
     })
@@ -211,10 +216,13 @@ export function createOrb() {
   // a strobe. reactive weight per state gates whether audio moves the waves.
   const A = { attack: O['audio.attack'], decay: O['audio.decay'] };
   let extAmp = 0, ampS = 0;
+  let heatTick = 0;                      // molten rim flash, decays over wire.tick.decayMs
+  const heatDecayMs = (rawTokens.wire && rawTokens.wire['tick.decayMs']) || 7000;
 
   function setState(name){ if (STATES[name]) targetName = name; }
   function setStateIndex(i){ if (order[i]) targetName = order[i]; }
   function setAmplitude(a){ extAmp = Math.max(0, Math.min(1, a || 0)); }
+  function pulseHeat(v = 1){ heatTick = Math.min(1, Math.max(heatTick, v)); }
 
   function update(dt, t, reveal, pixelRatio){
     const tgt = STATES[targetName];
@@ -234,7 +242,8 @@ export function createOrb() {
     uni.uTime.value = t; uni.uReveal.value = reveal; uni.uPixelRatio.value = pixelRatio;
     uni.uSpin.value = spinAngle; uni.uBreathe.value = breathe;
     uni.uAgitation.value = cur.agitation; uni.uWaveAmp.value = waveAmp;
-    coreUni.uCoreGlow.value = cur.coreGlow;
+    heatTick = Math.max(0, heatTick - dt * 1000 / heatDecayMs);
+    coreUni.uCoreGlow.value = cur.coreGlow; coreUni.uHeat.value = heatTick;
 
     const cv = cur.constel;
     lineMat.opacity = cv * 0.5;
@@ -256,8 +265,8 @@ export function createOrb() {
   }
 
   return {
-    object: group, setState, setStateIndex, setAmplitude, update,
+    object: group, setState, setStateIndex, setAmplitude, pulseHeat, update,
     get stateName(){ return targetName; },
-    probe(){ return { ...cur, ampS }; },
+    probe(){ return { ...cur, ampS, heatTick }; },
   };
 }

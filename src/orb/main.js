@@ -13,6 +13,7 @@ import { createOrb } from './orb.js';
 import { createVoice } from '../voice/voice.js';
 import { createTheater } from '../map/theater.js';
 import { createPanels } from '../map/panels.js';
+import { createWire } from '../wire.js';
 import {
   activeProfile, activeProfileId, regions, regionByKey, mapEnabled,
   setActive, nextProfile,
@@ -75,6 +76,9 @@ const bridge = window.vulcan || {
   async transcribe() { return { ok: false }; },
 };
 const voice = createVoice({ orb, bridge, forceTest });
+
+// ORGAN: THE WIRE — polls the active profile's feeds, ignites molten heat
+const wire = createWire({ bridge, getProfile: activeProfile });
 
 // ---- summon state machine ----
 let summonMode = 'home';       // home | summoning | theater | dismissing
@@ -172,6 +176,9 @@ function paintHud() {
   vt.voice.textContent = s.online ? (s.muted ? 'MUTED' : STATE_HINTS[orb.stateName] || 'LIVE')
     : `OFFLINE · ${s.offlineReason || 'UNAVAILABLE'}`;
   vt.voice.className = 'v ' + (s.online ? (s.muted ? 'dim' : '') : 'heat');
+  const ws = wire.status();
+  vt.wire.textContent = ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : `OFFLINE · ${ws.offlineReason || 'STANDBY'}`;
+  vt.wire.className = 'v ' + (ws.online ? '' : (ws.offlineReason === 'STANDBY' ? 'dim' : 'heat'));
   vt.heat.textContent = heatIndex.toFixed(2);
   vt.heat.className = 'v ' + (heatIndex > 0.01 ? 'heat' : 'dim');
   const up = Math.floor((performance.now() - bootMs) / 1000);
@@ -190,7 +197,7 @@ function switchProfile() {
   // HUD command deck re-forms: fade rows out, repopulate, fade in (fluid, no cut)
   const rows = document.querySelectorAll('#vault-left .vault-row');
   rows.forEach((r) => { r.style.opacity = '0'; });
-  wireLines = []; heatIndex = 0;
+  wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset();     // re-target feeds/heat
   setTimeout(() => { populateProfileHud(); renderFeed(); revealHud(); }, PROF['crossflow.ms'] * 0.4);
 }
 
@@ -226,11 +233,13 @@ populateProfileHud();
 renderFeed();
 revealHud();
 voice.boot().then(paintHud);
+wire.boot();
 
 // ---- reveal + loop ----
 const formMs = O.formMs;
 let t = 0, initReveal = 0, lastMs = performance.now();
 let simAmp = null;   // audit hook: when set, a synthetic audio envelope drives the waves
+let lastFeedStr = '';
 
 function step(dt) {
   if (summonMode === 'summoning') { summonRaw = Math.min(summonRaw + dt / summonDurS, 1); if (summonRaw >= 1) summonMode = 'theater'; }
@@ -286,6 +295,18 @@ function frame() {
   // audit hook: synthetic audio envelope so wave reactivity is drivable headless
   if (simAmp !== null) orb.setAmplitude(simAmp(t));
 
+  // ---- wire heat: decay, route to theater / orb, feed the HUD ----
+  wire.tick(dt * 1000);
+  heatIndex = wire.heatIndex();
+  const ignited = wire.drainIgnitions();
+  for (const ig of ignited) {
+    const shown = inTheaterNow() && ig.region === currentRegion;
+    if (!shown) orb.pulseHeat(1);        // no map for this region -> minimal orb heat tick
+  }
+  if (currentRegion) theater.setHeat(wire.heatForRegion(currentRegion));
+  const feedStr = JSON.stringify(wire.hudLines());
+  if (feedStr !== lastFeedStr) { lastFeedStr = feedStr; wireLines = wire.hudLines(); renderFeed(); }
+
   orb.update(dt, t, orbReveal, dpr);
   theater.update(dt, t, terrainReveal, dpr);
   paintLabels();
@@ -312,13 +333,15 @@ window.__vulcanHome = {
   sites: () => theater.sites.map((s) => s.id),
   // profile controls
   profile: () => activeProfileId(),
-  setProfile: (id) => { if (setActive(id)) { dismiss(); populateProfileHud(); renderFeed(); wireLines = []; heatIndex = 0; } },
+  setProfile: (id) => { if (setActive(id)) { dismiss(); populateProfileHud(); renderFeed(); wireLines = []; heatIndex = 0; lastFeedStr = ''; wire.reset(); } },
   switchProfile: () => switchProfile(),
   // audit: drive the reactive waves with a synthetic envelope (0..1). null = off.
   simAudio: (on) => { simAmp = on ? ((tt) => 0.5 + 0.42 * Math.sin(tt * 5.0) * Math.sin(tt * 1.3)) : null; if (!on) orb.setAmplitude(0); },
-  // wire/quotes organs push here (STAGE B/C)
-  __setHeat: (v) => { heatIndex = v; },
-  __setWireLines: (lines) => { wireLines = lines; renderFeed(); },
+  // STAGE B — wire harness: ignite a synthetic event (region, site index, title)
+  wireInject: (region, siteIdx, title) => wire.injectTest(region, siteIdx, title),
+  wireStatus: () => wire.status(),
+  wireHeat: () => wire.heatIndex(),
+  wireLines: () => wire.hudLines(),
   // voice harness
   triggerWake: () => voice.triggerWake(),
   voiceStatus: () => voice.status(),

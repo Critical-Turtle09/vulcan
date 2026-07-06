@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('vulcan', {
   config: () => ipcRenderer.invoke('voice:config'),
   tts: (text) => ipcRenderer.invoke('voice:tts', text),
   transcribe: (wavBase64) => ipcRenderer.invoke('voice:transcribe', wavBase64),
+  // ORGAN: THE WIRE — poll the active profile's RSS feeds (main-side, keyless)
+  wirePoll: (feeds) => ipcRenderer.invoke('wire:poll', feeds),
 });

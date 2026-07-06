@@ -5,6 +5,7 @@ import { app, BrowserWindow, session, systemPreferences } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadEnv, registerVoiceIpc } from './voice-main.js';
+import { registerWireIpc } from './wire-main.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -47,6 +48,7 @@ function createWindow() {
 
 app.whenReady().then(() => {
   registerVoiceIpc();
+  registerWireIpc();
 
   // grant the renderer's getUserMedia(audio) request; the OS-level TCC prompt
   // fires on first capture. Declining -> renderer shows VOICE OFFLINE, keys work.

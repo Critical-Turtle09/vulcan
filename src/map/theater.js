@@ -117,7 +117,7 @@ export function createTheater() {
         float fl = clamp((uReveal - aSeed*0.4)/0.6, 0.0, 1.0); fl = fl*fl*(3.0-2.0*fl);
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
-        gl_PointSize = uSize*(1.0+aAlert*1.5)*fl*uPixelRatio*(300.0/-mv.z);
+        gl_PointSize = uSize*(1.0+aAlert*0.85)*fl*uPixelRatio*(300.0/-mv.z);
         vPulse *= fl;
       }`,
     fragmentShader: /* glsl */`
@@ -127,7 +127,7 @@ export function createTheater() {
         float core = smoothstep(0.42,0.12,d), halo = smoothstep(0.5,0.3,d);
         if((core+halo)*vPulse <= 0.002) discard;
         vec3 col = mix(uBone, uMolten, step(0.01, vAlert));   // molten heat hook (STAGE B drives aAlert)
-        col *= 1.0 + vAlert*2.5;
+        col *= 1.0 + vAlert*1.9;
         gl_FragColor = vec4(col, (core+halo*0.22)*vPulse);
       }`,
   }));
@@ -166,18 +166,21 @@ export function createTheater() {
       uniforms: {
         uHead: { value: 1 }, uTrail: { value: M['route.trailDecay'] }, uGlow: { value: 0 }, uReveal: { value: 0 },
         uBase: { value: M['route.baseAlpha'] }, uBone: { value: color('data.bone') },
+        uHeat: { value: 0 }, uMolten: { value: color('signal.molten') },
       },
       transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
       vertexShader: /* glsl */`
         attribute float aParam; varying float vP;
         void main(){ vP = aParam; gl_Position = projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
       fragmentShader: /* glsl */`
-        uniform float uHead,uTrail,uGlow,uReveal,uBase; uniform vec3 uBone; varying float vP;
+        uniform float uHead,uTrail,uGlow,uReveal,uBase,uHeat; uniform vec3 uBone,uMolten; varying float vP;
         void main(){
           float glow = smoothstep(uHead-uTrail, uHead, vP) * step(vP, uHead) * uGlow;
-          float a = (uBase + glow) * uReveal;
+          // molten heat crawls the lane when it connects two hot sites (Apes grammar)
+          float a = (uBase + glow + uHeat*0.5) * uReveal;
           if(a <= 0.002) discard;
-          gl_FragColor = vec4(uBone*(1.0+glow*1.7), a);
+          vec3 col = mix(uBone, uMolten, uHeat);
+          gl_FragColor = vec4(col*(1.0+glow*1.7 + uHeat*1.6), a);
         }`,
     });
   }
@@ -257,6 +260,14 @@ export function createTheater() {
     active = 0; headU = 0; holdT = 0; phase = 'run';
   }
 
+  // STAGE B — apply the wire organ's per-site molten heat. map: { siteId: level }.
+  // Sites ignite molten (sAlert); routes tint where both endpoints are hot.
+  function setHeat(map) {
+    if (!region) return;
+    for (let i = 0; i < sites.length; i++) sAlert[i] = (map && map[sites[i].id]) || 0;
+    sGeo.attributes.aAlert.needsUpdate = true;
+  }
+
   function sampleRoute(idx, u) {
     const rc = routeCurves[idx]; if (!rc) return new THREE.Vector3();
     const p = new THREE.Vector3().lerpVectors(rc.a, rc.b, u);
@@ -270,8 +281,13 @@ export function createTheater() {
     mUni.uPixelRatio.value = pixelRatio;
     laneMat.opacity = M['route.baseAlpha'] * 0.7 * reveal;
 
-    // route reveal on all routes
-    for (const mat of routeMeshes) mat.uniforms.uReveal.value = reveal;
+    // route reveal + heat tint (heat = min of the two endpoint site heats)
+    const rts = (region && region.routes) || [];
+    for (let i = 0; i < routeMeshes.length; i++) {
+      routeMeshes[i].uniforms.uReveal.value = reveal;
+      const r = rts[i];
+      routeMeshes[i].uniforms.uHeat.value = r ? Math.min(sAlert[r[0]] || 0, sAlert[r[1]] || 0) : 0;
+    }
 
     // traversal only runs once the theater is essentially up
     const live = reveal > 0.92 && routeMeshes.length > 0;
@@ -305,7 +321,7 @@ export function createTheater() {
   function siteById(id) { return sites.find((s) => s.id === id) || null; }
 
   return {
-    object: group, setRegion, update, siteScreens,
+    object: group, setRegion, update, siteScreens, setHeat,
     get region() { return region; }, get sites() { return sites; }, siteById,
     get active() { return active; }, get headU() { return headU; },
   };
