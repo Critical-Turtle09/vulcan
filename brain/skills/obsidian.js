@@ -13,9 +13,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { ROOT } from '../env.js';
+import { loadTokens, writeLocalTokens } from '../tokens.js';
 
-const TOKENS = path.join(ROOT, 'tokens.json');
 // The local Obsidian registry — the app records every vault it has opened here.
 const REGISTRY = path.join(os.homedir(), 'Library', 'Application Support', 'obsidian', 'obsidian.json');
 
@@ -41,7 +40,7 @@ class VaultError extends Error {}
 let cachedVault = null;
 
 function readTokens() {
-  try { return JSON.parse(fs.readFileSync(TOKENS, 'utf8')); } catch (_) { return {}; }
+  return loadTokens();   // committed tokens.json + the gitignored local overlay (vault_path)
 }
 
 function resolveVault() {
@@ -61,14 +60,11 @@ function resolveVault() {
   return cachedVault;
 }
 
-// Persist the single discovered vault into tokens.json so the choice survives
-// restarts. Best-effort — the path is already cached in-process either way.
+// Persist the single discovered vault into the LOCAL overlay (tokens.local.json,
+// gitignored) so the choice survives restarts WITHOUT writing a /Users path into
+// the committed tokens.json. Best-effort — the path is already cached in-process.
 function recordVault(p) {
-  try {
-    const tk = readTokens();
-    tk.obsidian = { ...(tk.obsidian || {}), vault_path: p };
-    fs.writeFileSync(TOKENS, JSON.stringify(tk, null, 2) + '\n');
-  } catch (_) { /* recording is best-effort */ }
+  writeLocalTokens({ obsidian: { vault_path: p } });
 }
 
 // ---- write containment ------------------------------------------------------

@@ -10,6 +10,10 @@ npm-debug.log*
 .env
 .env.local
 
+# machine-local token overlay (deep-merges over tokens.json in brain/tokens.js).
+# Holds machine paths (obsidian.vault_path) so no /Users path lands in the tree.
+tokens.local.json
+
 # audit artifacts (self-screenshots + playwright scratch)
 .playwright-mcp/
 slice0-*.png

@@ -37,7 +37,8 @@ export function readLedger() {
   let led = null;
   try { led = JSON.parse(fs.readFileSync(LEDGER, 'utf8')); } catch (_) { /* fresh */ }
   const day = today();
-  if (!led || led.date !== day) led = { date: day, calls: [], total_usd: 0 };
+  if (!led || led.date !== day) led = { date: day, calls: [], total_usd: 0, tts_chars: 0 };
+  if (typeof led.tts_chars !== 'number') led.tts_chars = 0;   // backfill pre-SLICE-V ledgers
   return led;
 }
 
@@ -85,5 +86,33 @@ export function status() {
     total_usd: led.total_usd,
     remaining_usd: Number((DAILY_CAP_USD - led.total_usd).toFixed(6)),
     cap_usd: DAILY_CAP_USD,
+    tts_chars: led.tts_chars || 0,
   };
+}
+
+// --- SLICE V: THE VOICE — TTS character meter (same daily ledger) -------------
+// Cloud TTS (ElevenLabs) is the only metered tier; local voice (kokoro/say) and
+// cache replays cost nothing and are never metered. The count resets with the day
+// via readLedger's rollover, exactly like the $ cap.
+
+// Record cloud TTS characters against today's ledger. Returns the new daily total.
+export function meterTts(chars) {
+  const led = readLedger();
+  led.tts_chars = (led.tts_chars || 0) + Math.max(0, Math.floor(chars) || 0);
+  writeLedger(led);
+  return led.tts_chars;
+}
+
+// Characters spoken via cloud TTS so far today.
+export function ttsCharsToday() {
+  return readLedger().tts_chars || 0;
+}
+
+// Test/drill helper: plant today's tts_chars (e.g. at the cap) without touching
+// the $ spend. Returns the planted total.
+export function setTtsChars(chars) {
+  const led = readLedger();
+  led.tts_chars = Math.max(0, Math.floor(chars) || 0);
+  writeLedger(led);
+  return led.tts_chars;
 }

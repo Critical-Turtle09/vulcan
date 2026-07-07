@@ -32,6 +32,7 @@ async function main() {
     console.log(`  calls:      ${s.calls}`);
     console.log(`  spent:      ${usd(s.total_usd)} / ${usd(s.cap_usd)}`);
     console.log(`  remaining:  ${usd(s.remaining_usd)}`);
+    console.log(`  tts_chars:  ${s.tts_chars}`);   // SLICE V — cloud TTS characters metered today
     return;
   }
 

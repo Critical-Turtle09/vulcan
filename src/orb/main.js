@@ -443,7 +443,7 @@ if (bridge.onBank) bridge.onBank(() => bank());
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintHud(); });
 // B1 SYNAPSE — the constitution's announce hook speaks WRITE announcements
 // through the SAME v1 voice output (main sends brain:speak before the effect).
-if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text));
+if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' }));
 // RL-5 v2 · PART 1 — SAFETY. Main already hid the window (emergency hotkey / watchdog);
 // snap straight to the hidden state (no ceremony) so the next summon ignites clean.
 if (bridge.onForceHide) bridge.onForceHide(() => { presence = 0; ignMode = 'hidden'; });

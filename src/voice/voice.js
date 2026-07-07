@@ -92,7 +92,9 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         const [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
         if (onAnswer) { try { onAnswer(answer, transcript); } catch (_) { /* presentation must never break the loop */ } }
         orb.setState('speaking');                      // thinking -> speaking
-        await mouth.speak(answer.text, { synthetic });  // SPEAK the answer OR the confirm prompt
+        // SLICE V — a confirm PROMPT must always speak (announce-class); tag it so the
+        // engine treats it as always-permitted local-if-over-budget, like announce.
+        await mouth.speak(answer.text, { synthetic, kind: answer && answer.needsConfirm ? 'confirm' : 'answer' });
         // B2 HANDS — a WRITE_CONFIRM answer needs a SPOKEN confirmation. Announce
         // (spoken above) → LISTEN for "confirm"/"cancel" through this same loop →
         // resolve. Anything but an explicit confirm aborts.
@@ -104,7 +106,7 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
           const final = await brain.confirm(answer, decision);
           if (onAnswer) { try { onAnswer(final, transcript); } catch (_) { /* never break the loop */ } }
           orb.setState('speaking');
-          await mouth.speak(final.text, { synthetic });   // spoken acknowledgment either way
+          await mouth.speak(final.text, { synthetic, kind: 'confirm' });   // spoken acknowledgment either way
         }
         orb.setAmplitude(0);                           // -> speaking -> idle (lerp back)
       } catch (e) {
@@ -148,11 +150,11 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   // B1 SYNAPSE — speak arbitrary text through the SAME v1 mouth (the constitution
   // announce hook uses this so WRITE announcements are spoken aloud). Drives the
   // speaking state so the orb + rings ride the envelope like any other utterance.
-  async function say(text) {
+  async function say(text, { kind = 'answer' } = {}) {
     if (!mouth || !text) return;
     const synthetic = (mode === 'test') || !(cfg && cfg.hasKey);
     orb.setState('speaking');
-    await mouth.speak(text, { synthetic });
+    await mouth.speak(text, { synthetic, kind });
     orb.setAmplitude(0);
     orb.setState('idle');
   }

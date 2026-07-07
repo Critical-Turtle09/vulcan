@@ -91,13 +91,13 @@ export function createMouth({ bridge }) {
   // synthetic=true -> generate speech-like audio (test/offline). Otherwise request
   // ElevenLabs audio via the bridge; if the bridge is offline, fall back to synth
   // so the loop still completes visibly (caller decides whether that path is used).
-  async function speak(text, { synthetic = false } = {}) {
+  async function speak(text, { synthetic = false, kind = 'answer' } = {}) {
     const words = (text || '').trim().split(/\s+/).length || 1;
     const durS = Math.max(1.2, Math.min(words * 0.42, V.test.speakMs / 1000 * 2));
     if (synthetic) return play(synth(durS));
 
     try {
-      const res = await bridge.tts(text);
+      const res = await bridge.tts(text, kind);
       if (res && res.ok && res.audioBase64) {
         lastProvider = res.provider || 'cloud';   // elevenlabs | kokoro | say
         const bytes = Uint8Array.from(atob(res.audioBase64), (c) => c.charCodeAt(0));
