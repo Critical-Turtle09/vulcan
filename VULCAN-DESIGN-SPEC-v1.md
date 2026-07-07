@@ -6,6 +6,25 @@
 <!-- v1.2: ambient globe deleted; home is the orb, geography is summoned (Front C). -->
 <!-- v1.3 FORGE AMENDMENT: accent → MOLTEN ORANGE; orb ring → audio-reactive WAVES; HUD → V.A.U.L.T
      side columns; wake phrase → "Fire and Forge"; engine domain-blind via profiles/ mode system. -->
+<!-- v1.4 COMMAND CENTER PIVOT: retrieval + presentation, not generation; panels are the primary
+     answer surface; scene library deferred to v3. -->
+<!-- v1.5 THE ATTENDANT: one-utterance-per-wake struck → DORMANT⇄ATTENTIVE hot session; mission
+     narrows to the Bonsai command center (semiconductor/political archived to v3). -->
+
+> **v1.5 THE ATTENDANT (deltas over v1.4):**
+> - **Session = DORMANT ⇄ ATTENTIVE (one-utterance-per-wake STRUCK).** DORMANT: resident, wake
+>   phrase only. ATTENTIVE: hot mic, every utterance is a command, **no re-wake between
+>   exchanges** (capture → conduct → present+speak → back to listening). "Fire and Forge" →
+>   ATTENTIVE; "Bank the fire" / "Stand down" → DORMANT. **Auto-dormant** after
+>   `voice.session.idle_to_dormant_min` (default 5) min of silence, announced with one spoken
+>   line first. A quiet ATTENDING mark on orb + HUD reads the hot state (Doctrine 11, no bars).
+> - **Self-hear forbidden:** ears hard-gated shut while VULCAN speaks (speak-gate + watchdog);
+>   re-open only on true playback completion.
+> - **Re-arm is law:** summon → multi-exchange → bank → re-summon works every time (10 cycles, no
+>   degradation). Ears re-acquire a clean capture graph each listen — a live TTS playback or
+>   device change must never leave the wake listener permanently deaf (the v1.4 real-ears defect).
+> - **Mission purity:** `bonsai` is the launch + active default; `semiconductor`/`political`
+>   archived out of active scope to v3 (in-tree, off the `P` switch). `voice.session.*` tokens.
 
 > **v1.3 FORGE AMENDMENT (deltas over v1.1/v1.2):**
 > - **Accent = MOLTEN ORANGE** (`signal.molten #EA6A1E`, flash `signal.forge #FF8A3D`, decay

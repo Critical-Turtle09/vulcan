@@ -1,14 +1,19 @@
-// The MODE SYSTEM (spec v1.3). The engine is domain-blind: every organ (map,
-// wire, quotes, HUD, panels) reads the ACTIVE PROFILE, never a hardcoded domain.
-// Profiles live in /profiles/*.json. semiconductor is the launch default; bonsai
-// is a scaffolded starter. Switching crossflows (subscribers re-form granularly).
+// The MODE SYSTEM (spec v1.3 · MISSION PURITY v1.5). The engine is domain-blind:
+// every organ (map, wire, quotes, HUD, panels) reads the ACTIVE PROFILE, never a
+// hardcoded domain. Profiles live in /profiles/*.json.
+//   v1.5 THE ATTENDANT — MISSION PURITY: VULCAN is the Bonsai command center.
+//   `bonsai` is the launch + active default and the ONLY profile in active scope
+//   (ORDER). `semiconductor` and `political` are ARCHIVED to v3 — kept in-tree and
+//   importable (dev/v3 only, via setActive) but OUT of ORDER, so the `P` switch and
+//   nextProfile() never surface them. Switching crossflows (subscribers re-form).
 import rawTokens from '../tokens.json';
-import semiconductor from '../profiles/semiconductor.json';
 import bonsai from '../profiles/bonsai.json';
+// ARCHIVED to v3 (out of active scope; importable for dev/v3 only) —
+import semiconductor from '../profiles/semiconductor.json';
 import political from '../profiles/political.json';
 
-const PROFILES = { semiconductor, bonsai, political };
-const ORDER = ['semiconductor', 'bonsai', 'political'];   // semiconductor stays launch default
+const PROFILES = { bonsai, semiconductor, political };
+const ORDER = ['bonsai'];   // v1.5 MISSION PURITY — bonsai is the only active profile
 
 let activeId = rawTokens.profile.default;
 const subs = new Set();

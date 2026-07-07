@@ -7,19 +7,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 VULCAN — Silicon Forge Intelligence. A Jarvis-style GPU/semiconductor supply-chain terminal. It runs
 full-screen on a Mac mini, summoned at login or by wake word. Sibling project to Hermes.
 
-**Current state: Phase 2 (BUILD) → v1.4 COMMAND CENTER PIVOT.** The design spec is LOCKED
-(v1.3 "FORGE AMENDMENT" + v1.4 "COMMAND CENTER PIVOT" — see below). Built so far: terrain
-material test (Slice 0), the orb (Slice 1), the voice organ (ORGAN 1), the map rework
-(Slice 2R), the Forge amendment (molten palette, wave-orb, V.A.U.L.T HUD, mode/profile
-system), and RL-5 v2 stabilization (system-safety escapes, mic coexistence, packaged 60fps).
-**v1.4 sharpens the mission: RETRIEVAL + PRESENTATION, not generation** — the conductor (v2)
-routes spoken intent to tools and presents results in **blueprint panels**, now the primary
-answer surface (`panels.present(content)`). The summonable **scene library (map/device/graph/
-timeline) is deferred to v3** — dormant in-tree, keys are dev-only and off the HUD legend. The
-interface is **orb-home**: VULCAN is the centered orb by default. The engine is
-**domain-blind** — every organ reads the ACTIVE PROFILE (`profiles/*.json`); `semiconductor`
-is the launch default, `bonsai` a scaffolded starter. Every visual value ships from
-`tokens.json`; nothing is hardcoded in a component.
+**Current state: Phase 2 (BUILD) → v2 THE CONDUCTOR · v1.5 THE ATTENDANT.** The design spec is
+LOCKED (v1.3 "FORGE AMENDMENT" + v1.4 "COMMAND CENTER PIVOT" + v1.5 "THE ATTENDANT" — see below).
+Built so far: terrain material test (Slice 0), the orb (Slice 1), the voice organ (ORGAN 1), the
+map rework (Slice 2R), the Forge amendment (molten palette, wave-orb, V.A.U.L.T HUD, mode/profile
+system), RL-5 v2 stabilization (system-safety escapes, mic coexistence, packaged 60fps), and the
+conductor spine (B0–B4: Haiku router, repo + Obsidian + wire skills, spoken answers). **v1.4
+sharpens the mission: RETRIEVAL + PRESENTATION, not generation** — the conductor (v2) routes
+spoken intent to tools and presents results in **blueprint panels**, now the primary answer
+surface (`panels.present(content)`). **v1.5 makes the session HOT: one-utterance-per-wake is
+struck — VULCAN holds a DORMANT⇄ATTENTIVE session** (see below), and the mission narrows to the
+**Bonsai command center** (`semiconductor`/`political` archived to v3). The summonable **scene
+library (map/device/graph/timeline) is deferred to v3** — dormant in-tree, keys are dev-only and
+off the HUD legend. The interface is **orb-home**: VULCAN is the centered orb by default. The
+engine is **domain-blind** — every organ reads the ACTIVE PROFILE (`profiles/*.json`); `bonsai`
+is the launch default. Every visual value ships from `tokens.json`; nothing is hardcoded in a
+component.
 
 ## Phases
 
@@ -64,6 +67,42 @@ Explicitly rejected (from v0, "2002 video game"):
 > §3/§6/§8.) Canonical copy: `VULCAN-DESIGN-SPEC-v1.md`. Every visual decision derives from
 > the operator's reference corpus (REF-01…14). Nothing here is a default; if a choice must
 > deviate during build, flag it — never silently substitute.
+
+### THE ATTENDANT (v1.5) — the session becomes hot, the mission narrows
+
+> **SPEC v1.5 "THE ATTENDANT" — LOCKED.** Two amendments over v1.4. (a) The **session model**
+> changes: one-utterance-per-wake is STRUCK. (b) **Mission purity**: VULCAN is the Bonsai
+> command center; the other domains are archived. The visual identity, the ceremony, and the
+> answer-panel surface are untouched — this changes *when VULCAN is listening* and *what it is
+> for*, never the house material.
+
+- **SESSION MODEL — DORMANT ⇄ ATTENTIVE (one-utterance-per-wake is STRUCK).** VULCAN holds two
+  session states:
+  - **DORMANT** — the app is up and resident, but the ears listen for **the wake phrase only**.
+    Nothing else is heard. The orb rests at idle; the HUD shows no ATTENDING mark. This is the
+    default at launch and after a bank/timeout.
+  - **ATTENTIVE** — a **hot session**: the mic is open and **every utterance is a
+    question/command**. There is **no re-wake between exchanges** — capture → conduct → present +
+    speak → **return to listening**, repeatedly, until the operator banks or the session times
+    out. A quiet **ATTENDING** mark on the HUD + orb reads the hot state (Doctrine 11 transitions,
+    no bottom bars).
+  - **"Fire and Forge" → ATTENTIVE** (full ignition from hidden, as v1.3). **"Bank the fire" /
+    "Stand down" → DORMANT** (the quench; from hidden-or-resolved). `Esc`/tray bank as fallback.
+  - **AUTO-DORMANT** after `voice.session.idle_to_dormant_min` (default **5**) minutes of silence
+    in ATTENTIVE. Before it drops, VULCAN **speaks one line** ("Banking the fire — say Fire and
+    Forge when you need me.") so the transition is never silent. Any utterance resets the timer.
+- **SELF-HEAR IS FORBIDDEN.** In ATTENTIVE the ears must be **hard-gated shut while VULCAN
+  speaks** (the speak-gate, with the v-watchdog release) and only re-open to capture once
+  playback truly completes. VULCAN's own voice may never be captured as a command.
+- **RE-ARM IS THE LAW.** Summon → multi-exchange → bank → **re-summon must work every time**,
+  ten cycles without degradation. The ears **re-acquire a clean capture graph** each listen
+  rather than trusting one long-lived stream — a live TTS playback or a device change must never
+  leave the wake listener permanently deaf (the v1.4 real-ears defect; see the S1 root-cause note).
+- **MISSION PURITY — VULCAN IS THE BONSAI COMMAND CENTER.** `bonsai` is the **launch + active
+  default** profile. `semiconductor` and `political` are **struck from active scope** — their
+  `profiles/*.json` stay in-tree but are **archived under the v3 note** (out of the profile
+  ORDER, not offered by the `P` switch). Wire feeds retarget fully to the mission in the next
+  slice; this slice moves the **scope**, not the feeds. `voice.session.*` tokens.
 
 ### COMMAND CENTER PIVOT (v1.4) — foundation decision, amends the mission
 
@@ -141,8 +180,9 @@ Explicitly rejected (from v0, "2002 video game"):
 - **WAKE PHRASE — "Fire and Forge"** (`voice.wakeWord`). "Vulcan" is retired as a wake word.
 - **MODE SYSTEM — profiles, domain-blind engine.** `profiles/*.json` describe a domain
   (entities, wire feeds + keywords, quote symbols, panel dossiers, map on/off, HUD metrics). The
-  engine reads the ACTIVE profile and never hardcodes a domain. `semiconductor.json` is the v1
-  launch default; `bonsai.json` is a scaffolded starter (placeholder entities, map disabled).
+  engine reads the ACTIVE profile and never hardcodes a domain. **(Superseded by v1.5 THE
+  ATTENDANT — mission purity: `bonsai.json` is now the launch + active default; `semiconductor`
+  and `political` are archived out of active scope to v3, kept in-tree but off the `P` switch.)**
   Switch via key `P` (or command) with a granular crossflow. `profile.*` tokens.
 
 ### 0 · HOW TO READ THIS (Claude Code)
