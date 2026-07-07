@@ -9,6 +9,8 @@ import { ROOT } from './env.js';
 import { ask, MODEL_POLICY, hasKey } from './client.js';
 import { allow, charge, status as ledgerStatus } from './governor.js';
 import { route } from './router.js';   // B1 SYNAPSE — Haiku REFLEX/SYNTH classifier
+import { matchSkill, actionPrompt } from './skills/index.js';   // B2 HANDS — skills
+import { execute, getMode, actionClass } from './constitution.js';
 
 // tokens.json drives the reflex endpoint (reflex.ollama.*), same as v1.
 let rawTokens = {};
@@ -53,7 +55,68 @@ async function reflex(text) {
   }
 }
 
-export async function conduct(text, { model = MODEL_POLICY.SYNTH } = {}) {
+const logAnnounce = (t) => console.log(`[ANNOUNCE] ${t}`);
+
+// B2 HANDS — run a matched skill action through the constitution and shape the
+// result for the conductor: a blueprint panel ({title, lines}) + a one-line
+// spoken summary. READS are free and silent.
+async function runSkill(m, { confirm = null, announce = logAnnounce } = {}) {
+  const klass = actionClass(m.action);
+  const base = { route: 'SKILL', skill: m.skillId, action: m.action, cost_usd: 0, day_total_usd: ledgerStatus().total_usd };
+
+  if (klass === 'READ') {
+    const r = await execute(m.action, m.detail, { announce: () => {} });   // silent + free
+    const res = r.result || {};
+    return { ...base, text: res.speak || '', panel: { title: res.title, lines: res.lines } };
+  }
+
+  // WRITE / WRITE_CONFIRM in AWAY → queue to the report, never execute.
+  if (getMode() === 'AWAY') {
+    await execute(m.action, m.detail, { announce });
+    return { ...base, queued: true, text: 'Away mode — queued to the report. Nothing left the machine.', panel: { title: 'REPO · QUEUED', lines: ['AWAY MODE', `${m.action} — QUEUED, NOT EXECUTED`] } };
+  }
+
+  if (klass === 'WRITE') {
+    const r = await execute(m.action, m.detail, { announce });
+    const res = r.result || {};
+    return { ...base, text: res.speak || 'Done.', panel: { title: res.title, lines: res.lines } };
+  }
+
+  // WRITE_CONFIRM in PRESENT — with an inline decision (CLI/harness) resolve now;
+  // otherwise return a needsConfirm result for the voice loop to speak + capture.
+  if (confirm === 'confirm' || confirm === 'cancel') {
+    return resolveConfirm({ skill: m.skillId, action: m.action, detail: m.detail, decision: confirm }, { announce });
+  }
+  const prompt = actionPrompt(m.skillId, m.action, m.detail);
+  return { ...base, needsConfirm: true, detail: m.detail, confirmPrompt: prompt, text: prompt, panel: { title: 'REPO · CONFIRM', lines: [prompt] } };
+}
+
+// Resolve a WRITE_CONFIRM once the operator's spoken decision is known. The
+// constitution enforces the gate — the action runs ONLY on 'confirm'. Re-checks
+// AWAY (mode may have flipped between prompt and decision) → queue, never execute.
+export async function resolveConfirm({ skill, action, detail, decision }, { announce = logAnnounce } = {}) {
+  const base = { route: 'SKILL', skill, action, cost_usd: 0, day_total_usd: ledgerStatus().total_usd };
+  if (getMode() === 'AWAY') {
+    await execute(action, detail, { announce });
+    return { ...base, queued: true, aborted: true, text: 'Away mode — queued to the report. Nothing left the machine.', panel: { title: 'REPO · TAG', lines: ['AWAY MODE', 'QUEUED — NOT EXECUTED'] } };
+  }
+  const r = await execute(action, detail, { announce, confirm: async () => (decision === 'confirm' ? 'confirm' : 'cancel') });
+  if (r.confirmed) {
+    const res = r.result || {};
+    return { ...base, confirmed: true, text: res.speak || 'Done.', panel: { title: res.title, lines: res.lines } };
+  }
+  return { ...base, confirmed: false, aborted: true, text: 'Cancelled. No tag was created; nothing left the machine.', panel: { title: 'REPO · TAG', lines: ['CANCELLED', 'NO TAG CREATED'] } };
+}
+
+export async function conduct(text, { model = MODEL_POLICY.SYNTH, confirm = null, tag = null } = {}) {
+  // B2 HANDS — deterministic skill match FIRST: local, no Anthropic key, no
+  // router tokens. This is the ONLY path that can execute a WRITE_CONFIRM.
+  const m = matchSkill(text);
+  if (m) {
+    if (tag && m.action === 'repo.tag') m.detail = { ...m.detail, tag };   // explicit tag override
+    return runSkill(m, { confirm });
+  }
+
   const reflexModel = (rawTokens.reflex && rawTokens.reflex['ollama.model']) || 'ollama';
 
   const bank = async (reason) => {
@@ -78,6 +141,8 @@ export async function conduct(text, { model = MODEL_POLICY.SYNTH } = {}) {
   // synthesis. Trivial/greeting/offline-safe → local reflex.
   const decision = await route(text);
   if (decision === 'REFLEX') return bank('ROUTER');
+  // A Haiku 'SKILL' with no deterministic match (checked above) falls through to
+  // synthesis — writes never come from a fuzzy guess. SKILL and SYNTH both synth.
   if (!allow(model)) return bank('CAP');    // router spend may have reached the cap
 
   const r = await ask({ model, system: SYSTEM, prompt: text });

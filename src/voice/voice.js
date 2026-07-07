@@ -13,6 +13,14 @@ import { classify } from '../reflex.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// B2 HANDS — the spoken-confirmation classifier for WRITE_CONFIRM. Only an
+// explicit affirmative proceeds; ANYTHING else (including silence/garble) aborts.
+function classifyConfirm(t) {
+  const s = String(t || '').toLowerCase();
+  if (/\b(confirm|confirmed|yes|yeah|yep|do it|proceed|affirmative|go ahead|approve|approved)\b/.test(s)) return 'confirm';
+  return 'cancel';
+}
+
 export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null, onCommand = null, onAnswer = null }) {
   let running = false, cfg = null, ears = null, mouth = null, brain = createBrain({ bridge });
   let mode = 'idle', online = false, offlineReason = '';
@@ -84,7 +92,20 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         const [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
         if (onAnswer) { try { onAnswer(answer, transcript); } catch (_) { /* presentation must never break the loop */ } }
         orb.setState('speaking');                      // thinking -> speaking
-        await mouth.speak(answer.text, { synthetic });  // SPEAK — real amplitude via analyser
+        await mouth.speak(answer.text, { synthetic });  // SPEAK the answer OR the confirm prompt
+        // B2 HANDS — a WRITE_CONFIRM answer needs a SPOKEN confirmation. Announce
+        // (spoken above) → LISTEN for "confirm"/"cancel" through this same loop →
+        // resolve. Anything but an explicit confirm aborts.
+        if (answer && answer.needsConfirm) {
+          orb.setState('listening');
+          const cap = await ears.capture();
+          const decision = classifyConfirm(cap && cap.transcript);
+          orb.setState('thinking');
+          const final = await brain.confirm(answer, decision);
+          if (onAnswer) { try { onAnswer(final, transcript); } catch (_) { /* never break the loop */ } }
+          orb.setState('speaking');
+          await mouth.speak(final.text, { synthetic });   // spoken acknowledgment either way
+        }
         orb.setAmplitude(0);                           // -> speaking -> idle (lerp back)
       } catch (e) {
         waking = false;

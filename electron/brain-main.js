@@ -5,7 +5,7 @@
 //   brain:test-write — fire the mock WRITE action through the live announce hook
 //   brain:mode       — read the persisted PRESENT/AWAY mode
 import { ipcMain } from 'electron';
-import { conduct } from '../brain/conductor.js';
+import { conduct, resolveConfirm } from '../brain/conductor.js';
 import { execute, getMode } from '../brain/constitution.js';
 
 // getWin: () => BrowserWindow | null — lets announce() reach the renderer voice.
@@ -25,6 +25,18 @@ export function registerBrainIpc(getWin) {
     } catch (e) {
       // Never let a brain failure surface as an unhandled IPC rejection.
       return { text: '(brain error)', route: 'REFLEX', reason: 'ERR', model: 'none', cost_usd: 0, day_total_usd: 0 };
+    }
+  });
+
+  // B2 HANDS — resolve a pending WRITE_CONFIRM once the operator's spoken decision
+  // arrives. The confirm PROMPT was already spoken by the renderer voice loop, so
+  // announce here is LOG-ONLY (no re-speak). The constitution enforces the gate.
+  ipcMain.handle('brain:confirm', async (_e, payload) => {
+    const logOnly = (text) => console.log(`[ANNOUNCE] ${text}`);
+    try {
+      return await resolveConfirm(payload || {}, { announce: logOnly });
+    } catch (e) {
+      return { route: 'SKILL', aborted: true, text: '(confirm error)', panel: { title: 'REPO · TAG', lines: ['ERROR'] }, cost_usd: 0 };
     }
   });
 

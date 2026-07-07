@@ -16,5 +16,16 @@ export function createBrain({ bridge } = {}) {
       }
       return CANNED;
     },
+    // B2 HANDS — resolve a pending WRITE_CONFIRM with the operator's spoken
+    // decision ('confirm' | 'cancel'). Returns the final skill result.
+    async confirm(answer, decision) {
+      if (bridge && bridge.confirm && answer) {
+        try {
+          const r = await bridge.confirm({ skill: answer.skill, action: answer.action, detail: answer.detail, decision });
+          if (r && typeof r.text === 'string') return r;
+        } catch (_) { /* fall through */ }
+      }
+      return { text: 'Cancelled.', route: 'SKILL', aborted: true, panel: { title: 'REPO · TAG', lines: ['CANCELLED'] } };
+    },
   };
 }

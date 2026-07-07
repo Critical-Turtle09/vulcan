@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('vulcan', {
   // B1 SYNAPSE — the conductor. Transcript in, rendered result out. The renderer
   // never sees the key or the ledger; both live entirely main-side.
   conduct: (text) => ipcRenderer.invoke('brain:conduct', text),
+  confirm: (payload) => ipcRenderer.invoke('brain:confirm', payload),   // B2 — resolve a WRITE_CONFIRM
   testWrite: () => ipcRenderer.invoke('brain:test-write'),   // fire the mock WRITE action
   brainMode: () => ipcRenderer.invoke('brain:mode'),
   onSpeak: (cb) => ipcRenderer.on('brain:speak', (_e, text) => cb(text)),  // announce → voice

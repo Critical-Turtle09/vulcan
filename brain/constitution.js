@@ -44,19 +44,30 @@ function defaultAnnounce(text) {
 
 const registry = new Map();
 
-// Register an action. klass is "READ" | "WRITE". run(detail) does the work.
-export function registerAction(name, klass, run) {
+// Register an action. klass is "READ" | "WRITE" | "WRITE_CONFIRM" (B2). run(detail)
+// does the work. opts may carry announceText(detail) — the spoken announcement
+// string — so a skill can phrase its own confirm prompt. (B0/B1 callers pass 3
+// args and get the default phrasing; the 4th arg is additive.)
+export function registerAction(name, klass, run, opts = {}) {
   const k = String(klass).toUpperCase();
-  if (k !== 'READ' && k !== 'WRITE') throw new Error(`bad class: ${klass}`);
-  registry.set(name, { name, klass: k, run: run || (async () => ({ ok: true })) });
+  if (k !== 'READ' && k !== 'WRITE' && k !== 'WRITE_CONFIRM') throw new Error(`bad class: ${klass}`);
+  registry.set(name, { name, klass: k, run: run || (async () => ({ ok: true })), announceText: opts.announceText || null });
   return name;
+}
+
+export function actionClass(name) {
+  const a = registry.get(name);
+  return a ? a.klass : null;
 }
 
 // Execute a registered action by name.
 //   READ  → runs silently, returns its result.
 //   WRITE + PRESENT → announce(text), then run.
-//   WRITE + AWAY    → do NOT run; append { time, action, detail } to the report.
-export async function execute(name, detail = {}, { announce = defaultAnnounce } = {}) {
+//   WRITE_CONFIRM + PRESENT (B2) → announce aloud, then await confirm(); run ONLY
+//     on an explicit 'confirm' — anything else (cancel/timeout/no hook) aborts.
+//   WRITE / WRITE_CONFIRM + AWAY → do NOT run; append { time, action, detail } to
+//     the report for the operator to review on return.
+export async function execute(name, detail = {}, { announce = defaultAnnounce, confirm = null } = {}) {
   const action = registry.get(name);
   if (!action) throw new Error(`unknown action: ${name}`);
 
@@ -65,18 +76,32 @@ export async function execute(name, detail = {}, { announce = defaultAnnounce } 
     return { ran: true, klass: 'READ', result };
   }
 
-  // WRITE
+  // WRITE and WRITE_CONFIRM both queue (never execute) in AWAY.
   const mode = getMode();
   if (mode === 'AWAY') {
     ensureDir();
     const line = `- ${new Date().toISOString()} · **${name}** · ${JSON.stringify(detail)}\n`;
     fs.appendFileSync(reportPath(), line);
-    return { ran: false, klass: 'WRITE', queued: true, mode, report: reportPath() };
+    return { ran: false, klass: action.klass, queued: true, mode, report: reportPath() };
   }
 
-  announce(`WRITE · ${name} · ${JSON.stringify(detail)}`);
-  const result = await action.run(detail);
-  return { ran: true, klass: 'WRITE', announced: true, mode, result };
+  const label = action.announceText ? action.announceText(detail) : `${action.klass} · ${name} · ${JSON.stringify(detail)}`;
+
+  if (action.klass === 'WRITE') {
+    announce(label);
+    const result = await action.run(detail);
+    return { ran: true, klass: 'WRITE', announced: true, mode, result };
+  }
+
+  // WRITE_CONFIRM — the machine-leaving tier. Announce aloud, then gate on the
+  // operator's spoken decision. The gate is enforced HERE, not by the caller.
+  announce(label);
+  const decision = confirm ? await confirm() : 'timeout';
+  if (decision === 'confirm') {
+    const result = await action.run(detail);
+    return { ran: true, klass: 'WRITE_CONFIRM', confirmed: true, mode, result };
+  }
+  return { ran: false, klass: 'WRITE_CONFIRM', confirmed: false, aborted: true, decision, mode };
 }
 
 // A mock WRITE action, registered at load, to prove the AWAY queue end-to-end.

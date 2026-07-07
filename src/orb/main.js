@@ -137,8 +137,26 @@ const voice = createVoice({
 // hairline eyebrow text — no bottom telemetry bar. REFLEX carries a [REFLEX] mark.
 let answerSeq = 0;
 function presentAnswer(ans, transcript) {
-  if (!ans || !ans.text) return;
-  const reflex = (ans.route || '').toUpperCase() === 'REFLEX';
+  if (!ans || (!ans.text && !ans.panel)) return;
+  const route = (ans.route || '').toUpperCase();
+
+  // B2 HANDS — skill answers render as blueprint panels with a [SKILL·REPO] eyebrow
+  // and structured lines; the confirm/done/cancelled state rides the chrome quietly.
+  if (route === 'SKILL') {
+    const p = ans.panel || {};
+    const state = ans.needsConfirm ? ' · CONFIRM' : ans.confirmed ? ' · DONE' : ans.aborted ? ' · CANCELLED' : ans.queued ? ' · QUEUED' : '';
+    const lines = (p.lines && p.lines.length) ? p.lines : null;
+    panels.present({
+      id: `__answer-${++answerSeq}`,
+      eyebrow: `[SKILL·${String(ans.skill || 'REPO').toUpperCase()}]${state}`,
+      title: p.title || (transcript || '').trim() || 'REPO',
+      list: lines || undefined,
+      body: lines ? undefined : (ans.text || ''),
+    });
+    return;
+  }
+
+  const reflex = route === 'REFLEX';
   const model = String(ans.model || '').toUpperCase();
   const cost = (typeof ans.cost_usd === 'number' && ans.cost_usd > 0) ? ` · $${ans.cost_usd.toFixed(4)}` : '';
   const chrome = reflex ? `[REFLEX] · ${model}` : `${(ans.route || 'CLAUDE')} · ${model}${cost}`;
@@ -703,6 +721,23 @@ window.__vulcanHome = {
   // Fire the mock WRITE action through the live announce→voice hook (Electron).
   testWrite: () => (bridge.testWrite ? bridge.testWrite() : null),
   brainMode: () => (bridge.brainMode ? bridge.brainMode() : 'PRESENT'),
+  // B2 HANDS harness — the repo commander over the real bridge. repoAsk drives a
+  // command (READ resolves the panel + speaks; WRITE_CONFIRM returns needsConfirm);
+  // repoConfirm resolves a pending WRITE_CONFIRM with the operator's decision.
+  repoAsk: async (text) => {
+    if (!bridge.conduct) return { text: '(no bridge)', route: 'SKILL' };
+    const r = await bridge.conduct(text);
+    presentAnswer(r, text);
+    if (r.text) voice.say(r.text);
+    return r;
+  },
+  repoConfirm: async (answer, decision) => {
+    if (!bridge.confirm) return { text: '(no bridge)', route: 'SKILL', aborted: true };
+    const r = await bridge.confirm({ skill: answer.skill, action: answer.action, detail: answer.detail, decision });
+    presentAnswer(r, answer && answer.confirmPrompt);
+    if (r.text) voice.say(r.text);
+    return r;
+  },
 };
 
 // PART 3 — apply the current effective dpr across the whole pipeline (renderer,
