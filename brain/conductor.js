@@ -73,7 +73,7 @@ async function runSkill(m, { confirm = null, announce = logAnnounce } = {}) {
   // WRITE / WRITE_CONFIRM in AWAY → queue to the report, never execute.
   if (getMode() === 'AWAY') {
     await execute(m.action, m.detail, { announce });
-    return { ...base, queued: true, text: 'Away mode — queued to the report. Nothing left the machine.', panel: { title: 'REPO · QUEUED', lines: ['AWAY MODE', `${m.action} — QUEUED, NOT EXECUTED`] } };
+    return { ...base, queued: true, text: 'Away mode — queued to the report. Nothing left the machine.', panel: { title: `${String(m.skillId).toUpperCase()} · QUEUED`, lines: ['AWAY MODE', `${m.action} — QUEUED, NOT EXECUTED`] } };
   }
 
   if (klass === 'WRITE') {
@@ -108,12 +108,13 @@ export async function resolveConfirm({ skill, action, detail, decision }, { anno
   return { ...base, confirmed: false, aborted: true, text: 'Cancelled. No tag was created; nothing left the machine.', panel: { title: 'REPO · TAG', lines: ['CANCELLED', 'NO TAG CREATED'] } };
 }
 
-export async function conduct(text, { model = MODEL_POLICY.SYNTH, confirm = null, tag = null } = {}) {
+export async function conduct(text, { model = MODEL_POLICY.SYNTH, confirm = null, tag = null, file = null } = {}) {
   // B2 HANDS — deterministic skill match FIRST: local, no Anthropic key, no
   // router tokens. This is the ONLY path that can execute a WRITE_CONFIRM.
   const m = matchSkill(text);
   if (m) {
-    if (tag && m.action === 'repo.tag') m.detail = { ...m.detail, tag };   // explicit tag override
+    if (tag && m.action === 'repo.tag') m.detail = { ...m.detail, tag };      // explicit tag override
+    if (file && m.action === 'note.capture') m.detail = { ...m.detail, file }; // B3 — capture target (containment seam)
     return runSkill(m, { confirm });
   }
 

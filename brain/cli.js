@@ -15,11 +15,14 @@ const usd = (n) => `$${Number(n).toFixed(4)}`;
 
 async function main() {
   const args = process.argv.slice(2);
-  const flag = args.find((a) => a.startsWith('--') && a !== '--confirm' && a !== '--cancel' && !a.startsWith('--tag'));
+  const flag = args.find((a) => a.startsWith('--') && a !== '--confirm' && a !== '--cancel' && !a.startsWith('--tag') && !a.startsWith('--file'));
   // B2 — WRITE_CONFIRM decision + explicit tag name for the skill path
   const confirm = args.includes('--confirm') ? 'confirm' : args.includes('--cancel') ? 'cancel' : null;
   const tagArg = args.find((a) => a.startsWith('--tag='));
   const tag = tagArg ? tagArg.slice('--tag='.length) : null;
+  // B3 — explicit capture target (drives the vault containment drill)
+  const fileArg = args.find((a) => a.startsWith('--file='));
+  const file = fileArg ? fileArg.slice('--file='.length) : null;
 
   if (flag === '--status') {
     const s = ledgerStatus();
@@ -54,7 +57,7 @@ async function main() {
     process.exit(1);
   }
 
-  const r = await conduct(query, { confirm, tag });
+  const r = await conduct(query, { confirm, tag, file });
   const mark = r.reason ? ` (${r.reason})` : r.needsConfirm ? ' (CONFIRM?)' : r.queued ? ' (QUEUED)' : r.confirmed ? ' (CONFIRMED)' : r.aborted ? ' (ABORTED)' : '';
   console.log(`route:  ${r.route}${mark}`);
   console.log(`model:  ${r.model || (r.skill ? `skill:${r.skill}` : '—')}`);

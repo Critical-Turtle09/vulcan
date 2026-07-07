@@ -12,6 +12,7 @@
 // prompt.
 import { registerAction } from '../constitution.js';
 import repo from './repo.js';
+import obsidian from './obsidian.js';
 
 const skills = new Map();
 
@@ -41,5 +42,7 @@ export function actionPrompt(skillId, action, detail) {
   return (a && a.announceText) ? a.announceText(detail) : `Confirm ${action}?`;
 }
 
-// register the built-in hands
+// register the built-in hands (order = deterministic-match priority; the lexicons
+// are disjoint — repo/git vs note/vault — so first-hit is unambiguous either way)
 registerSkill(repo);
+registerSkill(obsidian);
