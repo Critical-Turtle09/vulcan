@@ -55,6 +55,13 @@ export function createMouth({ bridge }) {
     return buf;
   }
 
+  // Play a decoded buffer and RESOLVE ON TRUE PLAYBACK COMPLETION. Every TTS tier
+  // (elevenlabs / kokoro / say) funnels through here — the gate the voice loop
+  // awaits is BufferSource.onended, tied to the actual WebAudio buffer end, never a
+  // provider's process exit. GATE-WATCHDOG: if onended never fires (a suspended or
+  // stalled AudioContext, a decode edge), the loop would hang deaf mid-speech
+  // forever; a timer set to clip-duration + grace force-releases the gate so the
+  // loop can always return to the wake listener. One-shot: whichever fires first wins.
   async function play(buffer) {
     ensureCtx();
     const src = ctx.createBufferSource();
@@ -63,7 +70,19 @@ export function createMouth({ bridge }) {
     fbBuffer = buffer; fbStart = ctx.currentTime;
     playing = true;
     return new Promise((resolve) => {
-      src.onended = () => { playing = false; fbBuffer = null; resolve(); };
+      let settled = false;
+      const graceMs = (V.envelope && V.envelope.gateWatchdogGraceMs) || 2000;
+      let wd = null;
+      const release = (forced) => {
+        if (settled) return; settled = true;
+        if (wd) { clearTimeout(wd); wd = null; }
+        playing = false; fbBuffer = null;
+        try { src.onended = null; src.stop(); } catch (_) { /* already stopped */ }
+        if (forced) console.warn(`[GATE-WATCHDOG] speak gate force-released — no playback-end within ${buffer.duration.toFixed(2)}s + ${graceMs}ms`);
+        resolve();
+      };
+      wd = setTimeout(() => release(true), buffer.duration * 1000 + graceMs);
+      src.onended = () => release(false);
       src.start();
     });
   }
