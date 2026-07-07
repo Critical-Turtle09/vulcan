@@ -98,6 +98,10 @@ try {
   record('mute toggle', 'flag', 0, { toggled: muted });
 
   // 5) summon (map) + 6) wire ignition
+  // v1.5 MISSION PURITY — bonsai (the launch default) has no map; the summonable
+  // scenes are v3/dev-only. Drive them here via the dev setProfile path against the
+  // archived-but-in-tree semiconductor profile so the scene fluidity coverage stays.
+  await act('setProfile', 'semiconductor'); await sleep(250);
   await act('summon', 'taiwan'); const sm = await run('summonP', 1650); record('summon taiwan', 'summonP', sm.maxStep, { range: +sm.range.toFixed(2) });
   await act('wireInject', 'taiwan', 0, 'AUDIT EVENT'); const he = await run('heat', 900); record('wire ignition (flash+decay)', 'heat', he.maxStep, { peak: +he.range.toFixed(2), note: 'ignite is an intended flash' });
 
@@ -117,8 +121,9 @@ try {
   // 9) return home
   await act('dismiss'); const rh = await run('summonP', 1650); record('return home', 'summonP', rh.maxStep, { end: +rh.end.toFixed(2) });
 
-  // 10) profile switch
-  const psw = await page.evaluate(async () => { const H = window.__vulcanHome; const a = H.profile(); H.switchProfile(); await new Promise((r) => setTimeout(r, 1200)); const b = H.profile(); H.setProfile('semiconductor'); return { from: a, to: b }; });
+  // 10) profile switch — v1.5: the P-switch is a single-profile no-op under mission
+  // purity, so exercise the crossflow via the dev setProfile path (bonsai <-> semi).
+  const psw = await page.evaluate(async () => { const H = window.__vulcanHome; const a = H.profile(); H.setProfile('bonsai'); await new Promise((r) => setTimeout(r, 1200)); const b = H.profile(); H.setProfile('semiconductor'); return { from: a, to: b }; });
   record('profile switch', 'crossflow', 0, psw);
 
   // 11) schematic condense + 12) explode
@@ -126,6 +131,7 @@ try {
   const ex = await page.evaluate(async () => { const H = window.__vulcanHome; H.explode(true); const v = []; for (let i = 0; i <= 16; i++) { v.push(0); await new Promise((r) => setTimeout(r, 60)); } return true; });
   record('schematic explode', 'explodeP', 0.1, { note: 'lerped separation (visual)' });
   await act('dismiss'); await sleep(1600);
+  await act('setProfile', 'bonsai');   // v1.5 — restore the launch default (mission purity)
 
 } catch (e) {
   console.error('AUDIT ERROR:', e.message); process.exitCode = 1;

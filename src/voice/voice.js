@@ -1,7 +1,20 @@
-// THE VOICE LOOP — one continuous organ. WAKE -> CAPTURE -> THINK -> SPEAK -> IDLE,
-// forever. Every stage change is an orb.setState() into the orb's own lerp, so the
-// whole loop is a single continuous material reorganization (doctrine 11) — nothing
-// snaps, including on wake detection and playback end.
+// THE VOICE — the session organ (v1.5 THE ATTENDANT). One-utterance-per-wake is
+// STRUCK. VULCAN now holds a HOT SESSION:
+//
+//   DORMANT   — resident; the ears listen for the WAKE PHRASE ONLY. Orb rests idle.
+//   ATTENTIVE — a hot session: the mic is open and EVERY utterance is a
+//               question/command. capture -> conduct -> present + speak -> BACK TO
+//               LISTENING, repeatedly, with NO re-wake between exchanges.
+//
+// "Fire and Forge" -> ATTENTIVE. "Bank the fire" / "Stand down" (or Esc/tray) ->
+// DORMANT. After voice.session.idle_to_dormant_min minutes of silence in ATTENTIVE,
+// VULCAN speaks one line and auto-banks to DORMANT.
+//
+// Every stage change is an orb.setState() into the orb's own lerp — the whole loop
+// is one continuous material reorganization (doctrine 11). The SPEAK-GATE hard-closes
+// the ears while VULCAN speaks (self-hear forbidden) and the ears re-acquire a clean
+// capture graph each listen — the v1.4 real-ears re-summon defect is fixed at the
+// source (see EARS-ROOT-CAUSE-v1.5.md).
 //
 // Fail-soft: without a working ear (whisper) AND mouth (ElevenLabs key), the loop
 // stays down and reports VOICE OFFLINE; keys 1-4 keep driving the orb regardless.
@@ -21,12 +34,24 @@ function classifyConfirm(t) {
   return 'cancel';
 }
 
-export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null, onCommand = null, onAnswer = null }) {
+export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null, onCommand = null, onAnswer = null, onSession = null }) {
   let running = false, cfg = null, ears = null, mouth = null, brain = createBrain({ bridge });
   let mode = 'idle', online = false, offlineReason = '';
   let muted = !!rawTokens.voice.startMuted;   // chosen state, not a fault
   let unmuteResolve = null;
   let waking = false;                          // true only while listening for wake
+
+  // v1.5 session state
+  let session = 'dormant';                     // dormant | attentive
+  let forceWake = false;                        // set by wake() (hotkey summon)
+  let leaveAttentive = false;                   // set by goDormant() (external bank)
+  const V = rawTokens.voice;
+  const SESS = V.session || {};
+
+  const safe = (fn, ...a) => { try { return fn && fn(...a); } catch (_) { return null; } };
+  function setSession(s) { if (s === session) return; session = s; safe(onSession, s); }
+  const dismissPhrases = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map((s) => s.toLowerCase());
+  const isDismissText = (t) => { const s = String(t || '').toLowerCase(); return dismissPhrases.some((p) => s.includes(p)); };
 
   async function boot() {
     cfg = await safeConfig(bridge);
@@ -47,88 +72,147 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     return { online, mode, offlineReason };
   }
 
+  const isTest = () => mode === 'test';
+  const synthetic = () => isTest() || !(cfg && cfg.hasKey);
+  const idleToDormantMs = () => (isTest() ? (SESS.test && SESS.test.idleToDormantMs) || 4000 : (SESS.idle_to_dormant_min ?? 5) * 60000);
+
+  // ---- the DORMANT loop: listen for the wake phrase, forever ----
   async function startLoop() {
     if (running) return;
     running = true;
-    const synthetic = (mode === 'test') || !cfg.hasKey;
     while (running) {
       try {
-        orb.setState('idle');                          // ← rest
-        // MUTED: park here with the ear fully suspended — no mic, no audio
-        // processing, no whisper — until unmuted. Orb holds idle (no snap).
-        if (muted) { ears.suspend(); await untilUnmuted(); if (!running) break; }
+        setSession('dormant');
+        orb.setState('idle');
+        // MUTED: park with the ear fully suspended (no mic/audio/whisper) until unmuted.
+        if (muted) { ears.suspend(); await untilUnmuted(); if (!running) break; continue; }
         waking = true;
-        const intent = await ears.listenForWake();     // WAKE ("Fire and Forge") / DISMISS
+        let intent;
+        try {
+          intent = await ears.listenForWake();          // WAKE ("Fire and Forge") / DISMISS
+        } catch (e) {
+          waking = false;
+          if (e && e.message === 'aborted') {
+            if (forceWake) { forceWake = false; intent = 'wake'; }   // hotkey summon forced a wake
+            else continue;                                           // mute/cancel -> re-park
+          } else { throw e; }                                        // mic unavailable -> offline
+        }
         waking = false;
-        if (!running || muted) continue;                // muted mid-wait -> re-park
-        if (intent === 'dismiss') {                     // "bank the fire" / "stand down"
-          if (onDismiss) { try { onDismiss(); } catch (_) {} }
-          orb.setState('idle');
-          continue;                                     // no voice reply — just bank
-        }
-        if (onWake) { try { onWake(); } catch (_) { /* wake hook must never break the loop */ } }
-        orb.setState('listening');                     // idle -> listening (lerp)
-        const { transcript } = await ears.capture();   // CAPTURE (ends on silence)
-        if (!running) break;
-        if (muted) continue;                            // muted mid-capture -> mic released, re-park
-        // PART 6 — LOCAL REFLEX: short intents resolve locally + instantly and
-        // skip the brain. A reflex may return a short confirmation to speak.
-        const cmdIntent = onCommand ? await classify(transcript, bridge) : null;
-        if (cmdIntent) {
-          orb.setState('thinking');
-          let spoken = null; try { spoken = onCommand(cmdIntent); } catch (_) {}
-          if (spoken) { orb.setState('speaking'); await mouth.speak(spoken, { synthetic }); orb.setAmplitude(0); }
-          continue;                                    // reflex handled it
-        }
-        orb.setState('thinking');                      // listening -> thinking
-        // hold the thinking beat: the stub brain is instant, so dwell a minimum so
-        // the LISTENING->THINKING reorganization is actually seen. A real brain's
-        // latency replaces this floor.
-        const V = rawTokens.voice;
-        const thinkDwell = mode === 'test' ? V.test.thinkMs : V.thinkMinMs;
-        // B1 SYNAPSE — brain.respond now returns the conductor's full result
-        // { text, route, model, cost_usd, ... }. The answer resolves onto the
-        // panel as house material (onAnswer → panels.present) AND is spoken.
-        const [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
-        if (onAnswer) { try { onAnswer(answer, transcript); } catch (_) { /* presentation must never break the loop */ } }
-        orb.setState('speaking');                      // thinking -> speaking
-        // SLICE V — a confirm PROMPT must always speak (announce-class); tag it so the
-        // engine treats it as always-permitted local-if-over-budget, like announce.
-        await mouth.speak(answer.text, { synthetic, kind: answer && answer.needsConfirm ? 'confirm' : 'answer' });
-        // B2 HANDS — a WRITE_CONFIRM answer needs a SPOKEN confirmation. Announce
-        // (spoken above) → LISTEN for "confirm"/"cancel" through this same loop →
-        // resolve. Anything but an explicit confirm aborts.
-        if (answer && answer.needsConfirm) {
-          orb.setState('listening');
-          const cap = await ears.capture();
-          const decision = classifyConfirm(cap && cap.transcript);
-          orb.setState('thinking');
-          const final = await brain.confirm(answer, decision);
-          if (onAnswer) { try { onAnswer(final, transcript); } catch (_) { /* never break the loop */ } }
-          orb.setState('speaking');
-          await mouth.speak(final.text, { synthetic, kind: 'confirm' });   // spoken acknowledgment either way
-        }
-        orb.setAmplitude(0);                           // -> speaking -> idle (lerp back)
+        if (!running || muted) continue;
+        if (intent === 'dismiss') { safe(onDismiss); continue; }     // bank phrase while dormant -> stay dormant/hidden
+        // intent === 'wake' -> ENTER THE HOT SESSION
+        safe(onWake);                                                 // summon overlay + ignition
+        await runAttentive();
       } catch (e) {
         waking = false;
-        // muting aborts a pending wake-listen — not a fault, just re-loop and park
         if (e && e.message === 'aborted') continue;
-        // an ear that can't open the mic drops us to offline, keys still live
         online = false; offlineReason = 'MIC UNAVAILABLE'; running = false; break;
       }
     }
   }
 
+  // ---- the ATTENTIVE session: hot mic, every utterance a command, no re-wake ----
+  async function runAttentive() {
+    setSession('attentive');
+    leaveAttentive = false;
+    const idleMs = idleToDormantMs();
+    while (running && !muted && !leaveAttentive) {
+      orb.setState('listening');                                    // -> LISTENING (lerp)
+      const cap = await captureWithIdleTimeout(idleMs);             // CAPTURE (silence-ended) vs idle timer
+      if (!running || muted || leaveAttentive) break;
+      if (cap.timedOut) {                                           // AUTO-DORMANT: announce, then bank
+        await speakGated(SESS.autoDormantLine || 'Banking the fire.', 'announce');
+        safe(onDismiss);                                            // hide the overlay (quench)
+        break;
+      }
+      const transcript = (cap.transcript || '').trim();
+      if (!transcript) continue;                                    // silence/garble -> stay attentive, re-listen
+      if (isDismissText(transcript)) { safe(onDismiss); break; }    // spoken bank -> DORMANT
+      const end = await handleUtterance(transcript, idleMs);
+      if (end) break;                                               // an in-session bank command
+    }
+    setSession('dormant');
+    orb.setState('idle');
+  }
+
+  // race a real capture against the idle-to-dormant timer; whichever wins settles.
+  function captureWithIdleTimeout(ms) {
+    return new Promise((resolve) => {
+      let done = false;
+      const timer = setTimeout(() => { if (done) return; done = true; if (ears.cancel) ears.cancel(); resolve({ timedOut: true }); }, ms);
+      ears.capture().then((r) => { if (done) return; done = true; clearTimeout(timer); resolve(r || { transcript: '' }); })
+        .catch(() => { if (done) return; done = true; clearTimeout(timer); resolve({ transcript: '' }); });
+    });
+  }
+
+  // one exchange: reflex or brain -> present + speak -> back to listening. Returns
+  // true only when the utterance is an in-session BANK (leave the hot session).
+  async function handleUtterance(transcript, idleMs) {
+    // PART 6 — LOCAL REFLEX: short intents resolve locally + instantly, skip the brain.
+    const cmdIntent = onCommand ? await classify(transcript, bridge) : null;
+    if (cmdIntent) {
+      if (cmdIntent.type === 'bank') { safe(onCommand, cmdIntent); return true; }   // bank -> hide + leave
+      orb.setState('thinking');
+      const spoken = safe(onCommand, cmdIntent);
+      if (spoken) await speakGated(spoken, 'answer');
+      return false;
+    }
+    orb.setState('thinking');                                        // -> THINKING
+    // hold the thinking beat so the LISTENING->THINKING reorganization is seen; a
+    // real brain's latency replaces this floor.
+    const thinkDwell = isTest() ? V.test.thinkMs : V.thinkMinMs;
+    const [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
+    safe(onAnswer, answer, transcript);                              // resolve onto the panel (mouth-to-screen)
+    // a confirm PROMPT is announce-class (always speaks); tag it so the engine treats
+    // it as always-permitted local-if-over-budget.
+    await speakGated(answer.text, answer && answer.needsConfirm ? 'confirm' : 'answer');
+    // B2 HANDS — a WRITE_CONFIRM answer needs a SPOKEN confirmation, captured through
+    // the SAME hot session. Anything but an explicit confirm aborts.
+    if (answer && answer.needsConfirm) {
+      orb.setState('listening');
+      const cap = await captureWithIdleTimeout(idleMs);
+      const decision = classifyConfirm(cap && cap.transcript);
+      orb.setState('thinking');
+      const final = await brain.confirm(answer, decision);
+      safe(onAnswer, final, transcript);
+      await speakGated(final.text, 'confirm');
+    }
+    return false;
+  }
+
+  // SPEAK, gated. Hard-close the ears BEFORE any sound (self-hear forbidden + dodge
+  // the macOS HAL reconfiguration race), speak on the real analyser envelope, then a
+  // short settle before the next capture re-acquires a fresh graph.
+  async function speakGated(text, kind = 'answer') {
+    orb.setState('speaking');                                        // -> SPEAKING
+    if (ears && ears.closeForSpeech) ears.closeForSpeech();
+    await mouth.speak(text, { synthetic: synthetic(), kind });
+    orb.setAmplitude(0);
+    const settle = SESS.speakGateSettleMs || 0;
+    if (settle) await sleep(settle);
+  }
+
   function untilUnmuted() { return new Promise((r) => { unmuteResolve = r; }); }
+
+  // ---- external session controls (hotkey / tray / Esc parity with the voice path) ----
+  // hotkey summon: if dormant, force a wake into the hot session; if attentive, no-op.
+  function wake() {
+    if (!running) return;
+    if (session === 'dormant') { forceWake = true; if (ears && ears.cancel) ears.cancel(); }
+  }
+  // external bank (Esc / tray / hotkey toggle): leave the hot session cleanly.
+  function goDormant() {
+    if (session === 'attentive') { leaveAttentive = true; if (ears && ears.cancel) ears.cancel(); }
+  }
 
   function setMuted(v) {
     if (v === muted) return;
     muted = v;
     if (muted) {
-      // PART 2 — mute (M) FULLY RELEASES the mic immediately, in any state: suspend()
-      // aborts a pending wake OR capture, stops the tracks, and closes the audio
-      // graph (OS mic indicator off). A mid-exchange mute cannot leave the device
-      // held. TTS already in flight still finishes (mute is input, not output).
+      // mute FULLY RELEASES the mic immediately, in any state: suspend() aborts a
+      // pending wake OR capture and closes the graph (OS indicator off). A mid-session
+      // mute also drops us out of ATTENTIVE. TTS already in flight still finishes.
+      leaveAttentive = true;
       if (ears) ears.suspend();
     } else {
       if (unmuteResolve) { const r = unmuteResolve; unmuteResolve = null; r(); }
@@ -136,9 +220,6 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   }
 
   // called every render frame: feed the REAL amplitude driving the orb's waves.
-  // SPEAKING rides the TTS playback envelope; LISTENING stirs to live mic RMS;
-  // otherwise the sea is calm. (main.js may override with a synthetic envelope
-  // for the headless audit — last writer per frame wins.)
   function tick() {
     if (mouth && mouth.playing) { orb.setAmplitude(mouth.getAmplitude()); return; }
     if (orb.stateName === 'listening' && ears && ears.getLevel) {
@@ -148,28 +229,37 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   }
 
   // B1 SYNAPSE — speak arbitrary text through the SAME v1 mouth (the constitution
-  // announce hook uses this so WRITE announcements are spoken aloud). Drives the
-  // speaking state so the orb + rings ride the envelope like any other utterance.
+  // announce hook uses this so WRITE announcements are spoken aloud). Gated like any
+  // other utterance; drives the speaking state so the orb rides the envelope.
   async function say(text, { kind = 'answer' } = {}) {
     if (!mouth || !text) return;
-    const synthetic = (mode === 'test') || !(cfg && cfg.hasKey);
     orb.setState('speaking');
-    await mouth.speak(text, { synthetic, kind });
+    if (ears && ears.closeForSpeech) ears.closeForSpeech();
+    await mouth.speak(text, { synthetic: synthetic(), kind });
     orb.setAmplitude(0);
-    orb.setState('idle');
+    // return the orb to the session's resting read (attentive keeps listening).
+    orb.setState(session === 'attentive' ? 'listening' : 'idle');
   }
 
   return {
-    boot, tick, say,
+    boot, tick, say, wake, goDormant,
     setMuted, toggleMute() { setMuted(!muted); }, get muted() { return muted; },
+    get session() { return session; },
     // test harness: fire the wake / dismiss phrase on demand (test-mode ears)
     triggerWake() { if (ears && ears.triggerWake) ears.triggerWake(); },
     triggerDismiss() { if (ears && ears.triggerDismiss) ears.triggerDismiss(); },
+    // test harness: script the ATTENTIVE captures + the auto-dormant path
+    queueUtterance(t) { if (ears && ears.queueUtterance) ears.queueUtterance(t); },
+    triggerUtterance(t) { if (ears && ears.triggerUtterance) ears.triggerUtterance(t); },
+    triggerCaptureSilence() { if (ears && ears.triggerCaptureSilence) ears.triggerCaptureSilence(); },
+    setAutoCapture(on) { if (ears && ears.setAutoCapture) ears.setAutoCapture(on); },
+    setAutoWake(on) { if (ears && ears.setAutoWake) ears.setAutoWake(on); },
+    clearUtterances() { if (ears && ears.clearUtterances) ears.clearUtterances(); },
     stop() { running = false; if (ears) ears.stop(); },
     status() {
       const provider = mouth ? mouth.getProvider() : null;
       const local = provider === 'say' || provider === 'kokoro';
-      return { online, mode, state: orb.stateName, offlineReason, muted, provider, local };
+      return { online, mode, session, state: orb.stateName, offlineReason, muted, provider, local };
     },
   };
 }

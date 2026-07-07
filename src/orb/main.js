@@ -129,6 +129,9 @@ const voice = createVoice({
   onCommand: (intent) => runCommand(intent),
   // B1 SYNAPSE — the brain's answer resolves onto the panel (mouth-to-screen).
   onAnswer: (ans, transcript) => presentAnswer(ans, transcript),
+  // v1.5 THE ATTENDANT — the hot session state (dormant | attentive) drives the
+  // quiet ATTENDING mark on the HUD (Doctrine 11: repaint, no pop-in bars).
+  onSession: () => paintHud(),
 });
 
 // B1 SYNAPSE — the answer surface (spec v1.4: panels are the primary answer
@@ -331,6 +334,7 @@ function paintQuotes() {
 // ---- V.A.U.L.T HUD ----
 const vt = {
   state: document.getElementById('vt-state'),
+  session: document.getElementById('vt-session'),
   voice: document.getElementById('vt-voice'),
   wire: document.getElementById('vt-wire'),
   quotes: document.getElementById('vt-quotes'),
@@ -377,6 +381,12 @@ let lastStatusStr = '';
 function paintHud() {
   vt.state.textContent = orb.stateName.toUpperCase();
   const s = voice.status();
+  // v1.5 — SESSION: the quiet ATTENDING mark. ATTENTIVE reads molten (hot session),
+  // DORMANT reads dim. Muted always reads MUTED (the ear is released).
+  if (vt.session) {
+    vt.session.textContent = s.muted ? 'MUTED' : (s.session === 'attentive' ? 'ATTENDING' : 'DORMANT');
+    vt.session.className = 'v ' + (s.muted ? 'dim' : (s.session === 'attentive' ? 'heat' : 'dim'));
+  }
   // ORGAN 1.5 — surface local-TTS failover as a "LOCAL" tag
   const localTag = s.local ? ` · LOCAL ${(s.provider || '').toUpperCase()}` : '';
   vt.voice.textContent = s.online ? (s.muted ? 'MUTED' : `${STATE_HINTS[orb.stateName] || 'LIVE'}${localTag}`)
@@ -430,7 +440,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (panels.isOpen) { panels.close(); return; }    // 1) close the panel
     if (summonMode !== 'home') { dismiss(); return; } // 2) leave the theater
-    bank(); return;                                    // 3) bank the fire (hide overlay)
+    bank(); voice.goDormant(); return;                 // 3) bank the fire (hide + leave the hot session)
   }
   const rbk = regionByKey();
   if (rbk[k]) summon(rbk[k]);
@@ -444,16 +454,20 @@ window.addEventListener('pointerdown', (e) => {
   else if (panels.isOpen) panels.close();
 });
 
-// Electron drives ignite/bank/mute from the global hotkey + tray (STAGE D)
-if (bridge.onIgnite) bridge.onIgnite(() => ignite());
-if (bridge.onBank) bridge.onBank(() => bank());
+// Electron drives ignite/bank/mute from the global hotkey + tray (STAGE D).
+// v1.5 — the hotkey/tray path stays in lockstep with the voice session: summoning
+// enters the hot session (ATTENTIVE), banking leaves it (DORMANT). The voice-detected
+// wake/bank already flip the session inside the loop; these keep the manual controls
+// consistent so an operator who summons with Alt+Space is attended, not just resident.
+if (bridge.onIgnite) bridge.onIgnite(() => { ignite(); voice.wake(); });
+if (bridge.onBank) bridge.onBank(() => { bank(); voice.goDormant(); });
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintHud(); });
 // B1 SYNAPSE — the constitution's announce hook speaks WRITE announcements
 // through the SAME v1 voice output (main sends brain:speak before the effect).
 if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' }));
 // RL-5 v2 · PART 1 — SAFETY. Main already hid the window (emergency hotkey / watchdog);
 // snap straight to the hidden state (no ceremony) so the next summon ignites clean.
-if (bridge.onForceHide) bridge.onForceHide(() => { presence = 0; ignMode = 'hidden'; });
+if (bridge.onForceHide) bridge.onForceHide(() => { presence = 0; ignMode = 'hidden'; voice.goDormant(); });
 // §1a — the active-display snapshot becomes the ceremony backdrop (real screen
 // beneath the sparks). null (no permission) -> stays void; fail-soft.
 if (bridge.onBackdrop) bridge.onBackdrop((url) => { backdrop.style.backgroundImage = url ? `url(${url})` : 'none'; });
@@ -704,6 +718,17 @@ window.__vulcanHome = {
   // voice harness (FINDING 1/4)
   triggerWake: () => voice.triggerWake(),
   triggerDismiss: () => voice.triggerDismiss(),
+  // v1.5 THE ATTENDANT — session-machine harness. Script the ATTENTIVE captures and
+  // the auto-dormant path; drive the manual (hotkey/Esc) session controls.
+  session: () => voice.session,
+  queueUtterance: (t) => voice.queueUtterance(t),
+  triggerUtterance: (t) => voice.triggerUtterance(t),
+  triggerCaptureSilence: () => voice.triggerCaptureSilence(),
+  setAutoCapture: (on) => voice.setAutoCapture(on),
+  setAutoWake: (on) => voice.setAutoWake(on),
+  clearUtterances: () => voice.clearUtterances(),
+  voiceWake: () => voice.wake(),
+  voiceGoDormant: () => voice.goDormant(),
   // simulate the wake/dismiss OUTCOMES directly (routes exactly as the phrases do)
   simWake: () => { if (bridge.requestSummon) bridge.requestSummon(); if (presence < 0.5) ignite(); },
   simDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },

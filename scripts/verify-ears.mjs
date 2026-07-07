@@ -82,41 +82,12 @@ ok(wd.normal.ms < 800, `normal onended resolves fast (${Math.round(wd.normal.ms)
 ok(wd.normalWarns === 0, 'no watchdog log when playback completes normally');
 console.log('');
 
-// ---- (B) RE-SUMMON AFTER SPEECH — the loop never wedges at SPEAKING ---------
-console.log('(B) re-summon after speech — loop returns to the wake listener every cycle');
-// test-mode ears auto-wake + auto-capture "fire and forge status report" on a timer,
-// so the loop cycles on its own; sample the orb state and count SPEAKING→IDLE returns.
-const states = [];
-for (let i = 0; i < 260; i++) {   // ~16s of sampling (a full wake→speak cycle is ~4.5s)
-  states.push(await page.evaluate(() => window.__vulcanHome.voiceStatus().state));
-  await page.waitForTimeout(60);
-}
-// count SPEAKING episodes (transitions into 'speaking') and confirm each is left again.
-let episodes = 0, leftAfter = 0, inSpeak = false;
-for (const s of states) {
-  if (s === 'speaking' && !inSpeak) { episodes++; inSpeak = true; }
-  if (s !== 'speaking' && inSpeak) { inSpeak = false; leftAfter++; }
-}
-ok(episodes >= 3, `loop reached SPEAKING ${episodes} times across ~16s (re-summon works repeatedly)`);
-ok(leftAfter >= episodes - 1, `every completed SPEAKING episode returned to the loop (${leftAfter}/${episodes} left)`);
-ok(states.includes('idle') && states.includes('listening'), 'loop passes through IDLE + LISTENING between exchanges (not wedged)');
-console.log(`   trace: ${compress(states)}`);
-console.log('');
-
-// ---- (C) SELF-HEAR GATE — wake mid-speech is a no-op ------------------------
-console.log('(C) self-hear — a wake signal while speaking cannot re-enter the loop');
-const selfHear = await page.evaluate(async () => {
-  const H = window.__vulcanHome;
-  const seen = [];
-  for (let i = 0; i < 60; i++) { const s = H.voiceStatus().state; if (s === 'speaking') break; await new Promise((r) => setTimeout(r, 100)); }
-  const during = H.voiceStatus().state;
-  H.triggerWake();   // VULCAN "hears" the wake phrase mid-speech
-  for (let i = 0; i < 8; i++) { seen.push(H.voiceStatus().state); await new Promise((r) => setTimeout(r, 80)); }
-  return { during, seen };
-});
-ok(selfHear.during === 'speaking' && !selfHear.seen.includes('listening'),
-  `stayed speaking, never re-entered listening (during=${selfHear.during}, after=[${selfHear.seen.join(',')}])`);
-console.log('');
+// NOTE (v1.5 THE ATTENDANT): the old (B) re-summon-after-speech and (C) self-hear
+// drills assumed the one-utterance-per-wake auto-cycle, which is STRUCK. Those
+// behaviours now live at the SESSION level (DORMANT⇄ATTENTIVE, no re-wake between
+// exchanges, hard speak-gate) and are asserted by scripts/verify-attendant.mjs.
+// This file keeps the model-independent GATE-WATCHDOG unit above — the mouth-side
+// speak gate the whole session machine depends on.
 
 ok(!pageErr, `no renderer page error (${pageErr || 'none'})`);
 console.log(`\n=== ${fail === 0 ? 'ALL PASS' : 'FAILURES'} · ${pass} pass · ${fail} fail ===`);

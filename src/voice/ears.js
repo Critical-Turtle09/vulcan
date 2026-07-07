@@ -1,15 +1,31 @@
-// The EARS — wake-word listen + utterance capture.
+// The EARS — wake-word listen + utterance capture (v1.5 THE ATTENDANT).
 //   live: getUserMedia -> VAD -> whisper.cpp (via the main bridge) detects the
 //         wake word, then records until a silence timeout and transcribes.
 //   test: a synthetic driver that fires wake + end-of-capture on token timings
 //         (and can be triggered on demand) so Playwright drives the loop with no
 //         mic and no network.
 // Interface is identical in both modes: listenForWake() then capture().
+//
+// v1.5 RE-ARM FIX (see EARS-ROOT-CAUSE-v1.5.md). The v1.4 defect: ONE capture
+// graph was built once (`init()` short-circuits on `ready`) and never rebuilt; the
+// first TTS playback reconfigured the shared macOS HAL device and silently stalled
+// that graph, so the wake listener went permanently deaf after one exchange. The
+// fix, all here:
+//   • closeForSpeech()  — the HARD SPEAK-GATE: fully tear the capture graph down
+//     BEFORE VULCAN speaks (no self-hear, and the device reconfiguration now happens
+//     while the ear is intentionally closed, not mid-capture).
+//   • acquire()         — every listen/capture re-acquires a live graph when none is
+//     open, so a stalled/closed graph is always replaced. No trust in one long-lived
+//     stream (voice.session.reacquireEars).
+//   • cancel()          — abort a pending listen/capture cleanly (external bank/wake,
+//     idle-timeout) without the mute teardown semantics of suspend().
 import rawTokens from '../../tokens.json';
 import { encodeWavBase64, downsampleTo16k } from './wav.js';
 
 export function createEars({ bridge, mode }) {
   const V = rawTokens.voice;
+  const SESS = V.session || {};
+  const reacquire = SESS.reacquireEars !== false;   // v1.5 default ON
   const wakeWord = V.wakeWord.toLowerCase();
   // dismiss phrases ("bank the fire" / "stand down") — the listener accepts these
   // while resolved and returns intent 'dismiss' instead of 'wake' (FINDING 4).
@@ -17,29 +33,63 @@ export function createEars({ bridge, mode }) {
   const matchDismiss = (t) => dismissPhrases.some((p) => t.includes(p));
 
   // ---------- TEST MODE ----------
+  // Scriptable so the session-machine harness can drive DORMANT->ATTENTIVE with real
+  // state transitions: queueUtterance() feeds ATTENTIVE captures; setAutoCapture(false)
+  // lets the voice loop's idle timer win (auto-dormant test). Defaults preserve the
+  // old auto-cycling behaviour (verify-ears.mjs) — capture auto-resolves on a timer.
   if (mode === 'test') {
     let manualWake = null, wakeReject = null, wakeTimer = null, capturing = false;
+    let capResolve = null, capTimer = null;
+    let autoCapture = true, autoWake = true;
+    const utterQueue = [];
+    // settle a pending wake exactly once: clear the timer, null the resolvers, then act.
+    const settleWake = (act) => { clearTimeout(wakeTimer); const res = manualWake, rej = wakeReject; manualWake = wakeReject = null; if (res || rej) act(res, rej); };
     return {
       mode: 'test',
       offline: false,
       async listenForWake() {
         return new Promise((resolve, reject) => {
           manualWake = resolve; wakeReject = reject;
-          wakeTimer = setTimeout(() => { if (manualWake) { manualWake = null; resolve('wake'); } }, V.test.wakeDelayMs);
+          // autoWake ON (default) auto-fires the wake on a timer (old auto-cycle
+          // harness). OFF -> wake only via triggerWake() (deterministic session tests).
+          if (autoWake) wakeTimer = setTimeout(() => settleWake((res) => res('wake')), V.test.wakeDelayMs);
         });
       },
-      triggerWake() { if (manualWake) { clearTimeout(wakeTimer); const r = manualWake; manualWake = null; r('wake'); } },
-      triggerDismiss() { if (manualWake) { clearTimeout(wakeTimer); const r = manualWake; manualWake = null; r('dismiss'); } },
-      // muted: abort a pending wake so the loop can park (no synthetic wake fires)
-      suspend() { clearTimeout(wakeTimer); if (wakeReject) { const r = wakeReject; manualWake = wakeReject = null; r(new Error('aborted')); } },
+      triggerWake() { settleWake((res) => res('wake')); },
+      triggerDismiss() { settleWake((res) => res('dismiss')); },
       async capture() {
         capturing = true;
-        return new Promise((resolve) =>
-          setTimeout(() => { capturing = false; resolve({ transcript: `${wakeWord} status report` }); }, V.test.captureMs));
+        return new Promise((resolve) => {
+          const settle = (val) => { capturing = false; clearTimeout(capTimer); capTimer = null; capResolve = null; resolve(val); };
+          capResolve = settle;
+          // A QUEUED utterance always resolves on the capture timer. With an empty
+          // queue: autoCapture ON -> resolve the default auto-cycle line (old
+          // verify-ears behaviour); autoCapture OFF -> wait (the voice loop's idle
+          // timer cancel()s us -> auto-dormant test), or an explicit trigger resolves.
+          if (utterQueue.length) capTimer = setTimeout(() => capResolve && settle({ transcript: utterQueue.shift() }), V.test.captureMs);
+          else if (autoCapture) capTimer = setTimeout(() => capResolve && settle({ transcript: `${wakeWord} status report` }), V.test.captureMs);
+        });
+      },
+      // harness controls -------------------------------------------------------
+      queueUtterance(text) { utterQueue.push(String(text)); if (capResolve && !capTimer) capTimer = setTimeout(() => capResolve && capResolve({ transcript: utterQueue.shift() }), V.test.captureMs); },
+      triggerUtterance(text) { if (capResolve) capResolve({ transcript: String(text) }); else utterQueue.push(String(text)); },
+      triggerCaptureSilence() { if (capResolve) capResolve({ transcript: '' }); },
+      setAutoCapture(on) { autoCapture = !!on; },
+      setAutoWake(on) { autoWake = !!on; },
+      clearUtterances() { utterQueue.length = 0; },
+      // gate + lifecycle (no real graph in test — no-ops that keep the interface parity)
+      closeForSpeech() {},
+      cancel() {
+        settleWake((_res, rej) => rej(new Error('aborted')));
+        if (capResolve) capResolve({ transcript: '', aborted: true });
+      },
+      suspend() {
+        settleWake((_res, rej) => rej(new Error('aborted')));
+        if (capResolve) capResolve({ transcript: '', aborted: true });
       },
       // synthetic mic envelope so LISTENING waves stir with no real mic
       getLevel() { return capturing ? (0.22 + 0.18 * Math.abs(Math.sin(performance.now() / 90))) : 0; },
-      stop() {},
+      stop() { clearTimeout(wakeTimer); clearTimeout(capTimer); },
     };
   }
 
@@ -62,8 +112,11 @@ export function createEars({ bridge, mode }) {
     autoGainControl:  C.autoGainControl ?? false,
   };
 
+  // Build the capture graph. Idempotent: returns immediately when a live graph is
+  // already open. A closed graph (closeForSpeech / cancel / suspend set ready=false)
+  // is rebuilt here — this is the re-acquisition that makes re-arm reliable.
   async function init() {
-    if (ready) return true;
+    if (ready && stream && proc) return true;
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
       ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -77,6 +130,21 @@ export function createEars({ bridge, mode }) {
       offline = true; // permission denied / no mic
       return false;
     }
+  }
+  // acquire() = the re-arm law. In v1.5 (reacquire) every listen/capture guarantees a
+  // live graph; a closed one is rebuilt. (Between a wake and its first capture the
+  // graph is still open and healthy, so this reuses it — no per-utterance rebuild
+  // latency there; only a speak, via closeForSpeech, forces the next rebuild.)
+  async function acquire() { return init(); }
+
+  // Fully tear the capture graph down (mic released, OS indicator off, ctx closed).
+  // ready=false so the next acquire() rebuilds. Used by the speak-gate, cancel, mute.
+  function closeGraph() {
+    if (proc) { proc.onaudioprocess = null; try { proc.disconnect(); } catch (_) {} proc = null; }
+    if (source) { try { source.disconnect(); } catch (_) {} source = null; }
+    if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
+    if (ctx) { try { ctx.close(); } catch (_) {} ctx = null; }
+    ready = false; level = 0;
   }
 
   // collect PCM frames while `active` predicate holds; each frame reports rms
@@ -99,8 +167,8 @@ export function createEars({ bridge, mode }) {
     return out;
   }
 
-  let abortWake = null;      // set while a wake-listen is pending; suspend() calls it
-  let abortCapture = null;   // set while an utterance capture is pending; suspend() calls it
+  let abortWake = null;      // set while a wake-listen is pending; cancel()/suspend() call it
+  let abortCapture = null;   // set while an utterance capture is pending; cancel()/suspend() call it
 
   return {
     mode: 'live',
@@ -110,7 +178,7 @@ export function createEars({ bridge, mode }) {
     async available() { return init(); },
     // resolve when a spoken segment transcribes to something containing the wake word
     async listenForWake() {
-      if (!(await init())) throw new Error('mic-unavailable');
+      if (!(await acquire())) throw new Error('mic-unavailable');
       return new Promise((resolve, reject) => {
         abortWake = () => { if (proc) proc.onaudioprocess = null; abortWake = null; reject(new Error('aborted')); };
         let seg = [], speaking = false, silence = 0;
@@ -124,8 +192,8 @@ export function createEars({ bridge, mode }) {
               const frames = seg; seg = []; speaking = false; silence = 0;
               if (frames.length > 4) {
                 const txt = (await transcribe(frames)).toLowerCase();
-                if (matchDismiss(txt)) { proc.onaudioprocess = null; abortWake = null; resolve('dismiss'); }
-                else if (txt.includes(wakeWord)) { proc.onaudioprocess = null; abortWake = null; resolve('wake'); }
+                if (matchDismiss(txt)) { if (proc) proc.onaudioprocess = null; abortWake = null; resolve('dismiss'); }
+                else if (txt.includes(wakeWord)) { if (proc) proc.onaudioprocess = null; abortWake = null; resolve('wake'); }
               }
             }
           }
@@ -134,9 +202,9 @@ export function createEars({ bridge, mode }) {
     },
     // record until sustained silence, then transcribe the utterance
     async capture() {
+      if (!(await acquire())) return { transcript: '', aborted: true };
       return new Promise((resolve) => {
-        // PART 2 — muting mid-capture must release the mic NOW: suspend() calls this
-        // to end the capture immediately (empty transcript -> the loop re-parks muted).
+        // cancel()/mute mid-capture releases the mic NOW (idle-timeout, external bank).
         abortCapture = () => { if (proc) proc.onaudioprocess = null; abortCapture = null; resolve({ transcript: '', aborted: true }); };
         let seg = [], silence = 0, started = false, elapsed = 0;
         onFrame(async (buf) => {
@@ -146,30 +214,41 @@ export function createEars({ bridge, mode }) {
           if (rms > V['vad.threshold']) { started = true; silence = 0; }
           else if (started) silence += buf.length / srcRate * 1000;
           if ((started && silence > V.silenceTimeoutMs) || elapsed > V.captureMaxMs) {
-            proc.onaudioprocess = null; abortCapture = null;
+            if (proc) proc.onaudioprocess = null; abortCapture = null;
             const txt = await transcribe(seg);
             resolve({ transcript: txt });
           }
         });
       });
     },
-    // MUTED: fully suspend the ear — abort any pending wake, drop the audio graph,
-    // release the mic (OS indicator off). The next listenForWake re-acquires it,
-    // so unmuting resumes seamlessly with no re-prompt (permission persists).
+    // THE SPEAK-GATE (v1.5). Called by the voice loop BEFORE VULCAN speaks: hard-close
+    // the capture graph so (a) VULCAN can never hear itself, and (b) the macOS HAL
+    // reconfiguration triggered by TTS output happens while the ear is CLOSED — the
+    // next capture re-acquires a fresh, live graph. With reacquire off, degrade to the
+    // legacy soft gate (just stop delivering frames) — not recommended.
+    closeForSpeech() {
+      if (reacquire) closeGraph();
+      else if (proc) proc.onaudioprocess = null;
+    },
+    // Abort a pending listen/capture without mute semantics (external bank / wake /
+    // idle-timeout). Also drops the graph so the next listen re-acquires clean.
+    cancel() {
+      if (abortWake) abortWake();
+      if (abortCapture) abortCapture();
+      if (reacquire) closeGraph();
+    },
+    // MUTED: fully suspend the ear — abort any pending wake/capture, drop the audio
+    // graph, release the mic (OS indicator off). The next listen re-acquires it, so
+    // unmuting resumes seamlessly with no re-prompt (permission persists).
     suspend() {
       if (abortWake) abortWake();
       if (abortCapture) abortCapture();
-      if (proc) { proc.onaudioprocess = null; proc.disconnect(); proc = null; }
-      if (source) { source.disconnect(); source = null; }
-      if (stream) { stream.getTracks().forEach((t) => t.stop()); stream = null; }
-      if (ctx) { ctx.close(); ctx = null; }
-      ready = false; level = 0;
+      closeGraph();
     },
     stop() {
-      if (proc) proc.onaudioprocess = null;
-      if (stream) stream.getTracks().forEach((t) => t.stop());
-      if (ctx) ctx.close();
-      ready = false; level = 0;
+      if (abortWake) { try { abortWake(); } catch (_) {} }
+      if (abortCapture) { try { abortCapture(); } catch (_) {} }
+      closeGraph();
     },
   };
 }
