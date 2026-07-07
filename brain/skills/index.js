@@ -13,6 +13,7 @@
 import { registerAction } from '../constitution.js';
 import repo from './repo.js';
 import obsidian from './obsidian.js';
+import wire from './wire.js';
 
 const skills = new Map();
 
@@ -43,6 +44,7 @@ export function actionPrompt(skillId, action, detail) {
 }
 
 // register the built-in hands (order = deterministic-match priority; the lexicons
-// are disjoint — repo/git vs note/vault — so first-hit is unambiguous either way)
+// are disjoint — repo/git vs note/vault vs wire/brief — so first-hit is unambiguous)
 registerSkill(repo);
 registerSkill(obsidian);
+registerSkill(wire);

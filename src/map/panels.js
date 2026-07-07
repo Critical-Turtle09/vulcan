@@ -55,13 +55,15 @@ export function createPanels() {
   // surface: the conductor retrieves content (Obsidian notes, GitHub/Vercel statuses,
   // lists, dossiers) and PRESENTS it here, untethered to any 3D scene. Same blueprint
   // chrome + per-glyph granular resolve (doctrine 11) as the site panels. Content
-  // schema: { id?, eyebrow?, title, rows?: [[k,v,cls?]], list?: [str], body? }.
+  // schema: { id?, eyebrow?, title, lead?, rows?: [[k,v,cls?]], list?: [str], body? }.
   function buildContentPanel(c) {
     const el = document.createElement('div');
     el.className = 'panel panel-free';
     const parts = [];
     if (c.eyebrow) parts.push(`<div class="panel-eyebrow">${glyphize(c.eyebrow)}</div>`);
     parts.push(`<div class="panel-title">${glyphize(c.title || '')}</div>`);
+    // lead — a prominent composed paragraph ABOVE the rows (B4 wire-briefing summary)
+    if (c.lead) parts.push(`<div class="panel-lead">${glyphize(c.lead)}</div>`);
     for (const r of (c.rows || [])) {
       const [k, v, cls = ''] = r; if (v == null || v === '') continue;
       parts.push(`<div class="panel-row"><span class="pk">${glyphize(k)}</span><span class="pv ${cls}">${glyphize(v)}</span></div>`);

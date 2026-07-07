@@ -65,9 +65,21 @@ async function runSkill(m, { confirm = null, announce = logAnnounce } = {}) {
   const base = { route: 'SKILL', skill: m.skillId, action: m.action, cost_usd: 0, day_total_usd: ledgerStatus().total_usd };
 
   if (klass === 'READ') {
-    const r = await execute(m.action, m.detail, { announce: () => {} });   // silent + free
+    const r = await execute(m.action, m.detail, { announce: () => {} });   // silent + free to route
     const res = r.result || {};
-    return { ...base, text: res.speak || '', panel: { title: res.title, lines: res.lines } };
+    // A READ may still meter internally (B4 wire.brief spends ONE SYNTH call), so
+    // surface its cost + a FRESH day total, and pass the panel body / [REFLEX] +
+    // degraded chrome flags the wire briefing carries.
+    const cost = typeof res.cost_usd === 'number' ? res.cost_usd : 0;
+    return {
+      ...base,
+      cost_usd: cost,
+      day_total_usd: ledgerStatus().total_usd,
+      reflex: !!res.reflex,
+      degraded: !!res.degraded,
+      text: res.speak || '',
+      panel: { title: res.title, lines: res.lines, body: res.body },
+    };
   }
 
   // WRITE / WRITE_CONFIRM in AWAY → queue to the report, never execute.

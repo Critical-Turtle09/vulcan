@@ -144,14 +144,21 @@ function presentAnswer(ans, transcript) {
   // and structured lines; the confirm/done/cancelled state rides the chrome quietly.
   if (route === 'SKILL') {
     const p = ans.panel || {};
+    // chrome flags: confirm/done/cancelled/queued state, plus B4 [REFLEX] (banked
+    // degrade) and · DEGRADED (a feed was down) for the wire briefing.
     const state = ans.needsConfirm ? ' · CONFIRM' : ans.confirmed ? ' · DONE' : ans.aborted ? ' · CANCELLED' : ans.queued ? ' · QUEUED' : '';
+    const flags = `${ans.reflex ? ' · REFLEX' : ''}${ans.degraded ? ' · DEGRADED' : ''}`;
     const lines = (p.lines && p.lines.length) ? p.lines : null;
+    // a skill may carry BOTH a composed body (the briefing) AND per-story rows: the
+    // body leads (prominent, above), the rows list beneath it. With no body and no
+    // rows, the spoken text is the panel note.
     panels.present({
       id: `__answer-${++answerSeq}`,
-      eyebrow: `[SKILL·${String(ans.skill || 'REPO').toUpperCase()}]${state}`,
+      eyebrow: `[SKILL·${String(ans.skill || 'REPO').toUpperCase()}]${state}${flags}`,
       title: p.title || (transcript || '').trim() || 'REPO',
+      lead: p.body || undefined,
       list: lines || undefined,
-      body: lines ? undefined : (ans.text || ''),
+      body: (!p.body && !lines) ? (ans.text || '') : undefined,
     });
     return;
   }

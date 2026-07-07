@@ -102,6 +102,11 @@
        eyebrow context label + short lists, on the same blueprint chrome. */
     .panel-eyebrow { font-size: var(--panel-label-px); color: var(--signal-molten);
       letter-spacing: var(--label-track); margin-bottom: 8px; }
+    /* B4 — the composed briefing paragraph: prominent (bone, value size), the panel's
+       lead content, set above the per-story rows. Prose case, not label caps. */
+    .panel-lead { font-size: var(--panel-value-px); color: var(--data-bone); line-height: 1.6;
+      text-transform: none; letter-spacing: 0.01em; margin-bottom: 12px; padding-bottom: 11px;
+      border-bottom: 1px solid var(--panel-stroke); }
     .panel-li { display: flex; gap: 10px; margin-bottom: var(--panel-row-gap); line-height: 1.5; }
     .panel-li .pb { color: var(--data-faint); flex: 0 0 auto; }
     .panel-li .pv { font-size: var(--panel-value-px); color: var(--data-dim); text-transform: none; letter-spacing: 0.02em; }
