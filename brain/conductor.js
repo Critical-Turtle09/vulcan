@@ -8,6 +8,7 @@ import path from 'node:path';
 import { ROOT } from './env.js';
 import { ask, MODEL_POLICY, hasKey } from './client.js';
 import { allow, charge, status as ledgerStatus } from './governor.js';
+import { route } from './router.js';   // B1 SYNAPSE — Haiku REFLEX/SYNTH classifier
 
 // tokens.json drives the reflex endpoint (reflex.ollama.*), same as v1.
 let rawTokens = {};
@@ -53,7 +54,6 @@ async function reflex(text) {
 }
 
 export async function conduct(text, { model = MODEL_POLICY.SYNTH } = {}) {
-  const day = ledgerStatus();
   const reflexModel = (rawTokens.reflex && rawTokens.reflex['ollama.model']) || 'ollama';
 
   const bank = async (reason) => {
@@ -64,12 +64,21 @@ export async function conduct(text, { model = MODEL_POLICY.SYNTH } = {}) {
       reason,
       model: reflexModel,
       cost_usd: 0,
-      day_total_usd: day.total_usd,
+      day_total_usd: ledgerStatus().total_usd,   // fresh — the router may have charged
     };
   };
 
   if (!hasKey()) return bank('NO_KEY');
+  // Whole-answer budget gate FIRST — if a synthesis answer can't fit under the
+  // cap we never even spend on the router (preserves the B0 cap drill exactly:
+  // planted at $1.99 → REFLEX(CAP), ledger untouched).
   if (!allow(model)) return bank('CAP');
+
+  // B1 SYNAPSE — the Haiku router decides REFLEX vs SYNTH before we spend on
+  // synthesis. Trivial/greeting/offline-safe → local reflex.
+  const decision = await route(text);
+  if (decision === 'REFLEX') return bank('ROUTER');
+  if (!allow(model)) return bank('CAP');    // router spend may have reached the cap
 
   const r = await ask({ model, system: SYSTEM, prompt: text });
   if (r.banked) return bank(r.reason);

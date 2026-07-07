@@ -13,6 +13,12 @@ contextBridge.exposeInMainWorld('vulcan', {
   quotePoll: (symbols) => ipcRenderer.invoke('quotes:poll', symbols),
   // PART 6 — LOCAL REFLEXES: classify a short utterance via local Ollama
   reflex: (text, cfg) => ipcRenderer.invoke('reflex:classify', text, cfg),
+  // B1 SYNAPSE — the conductor. Transcript in, rendered result out. The renderer
+  // never sees the key or the ledger; both live entirely main-side.
+  conduct: (text) => ipcRenderer.invoke('brain:conduct', text),
+  testWrite: () => ipcRenderer.invoke('brain:test-write'),   // fire the mock WRITE action
+  brainMode: () => ipcRenderer.invoke('brain:mode'),
+  onSpeak: (cb) => ipcRenderer.on('brain:speak', (_e, text) => cb(text)),  // announce → voice
   // STAGE D — THE IGNITION (resident overlay control)
   requestSummon: () => ipcRenderer.send('ui:request-summon'), // wake-from-hidden -> summon + ignite
   requestShow: () => ipcRenderer.send('ui:request-show'),   // legacy alias

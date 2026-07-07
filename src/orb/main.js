@@ -127,7 +127,25 @@ const voice = createVoice({
   onDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },
   // PART 6 — LOCAL REFLEX intents -> actions (returns optional spoken confirmation)
   onCommand: (intent) => runCommand(intent),
+  // B1 SYNAPSE — the brain's answer resolves onto the panel (mouth-to-screen).
+  onAnswer: (ans, transcript) => presentAnswer(ans, transcript),
 });
+
+// B1 SYNAPSE — the answer surface (spec v1.4: panels are the primary answer
+// surface). The answer body resolves in as house material (per-glyph granular,
+// doctrine 11); route/model/cost sit in the panel's engineering chrome as quiet
+// hairline eyebrow text — no bottom telemetry bar. REFLEX carries a [REFLEX] mark.
+let answerSeq = 0;
+function presentAnswer(ans, transcript) {
+  if (!ans || !ans.text) return;
+  const reflex = (ans.route || '').toUpperCase() === 'REFLEX';
+  const model = String(ans.model || '').toUpperCase();
+  const cost = (typeof ans.cost_usd === 'number' && ans.cost_usd > 0) ? ` · $${ans.cost_usd.toFixed(4)}` : '';
+  const chrome = reflex ? `[REFLEX] · ${model}` : `${(ans.route || 'CLAUDE')} · ${model}${cost}`;
+  // Unique id per answer → each new answer CROSSFLOWS over the prior (old
+  // dissolves as the new resolves; never a hard cut, never a same-id toggle).
+  panels.present({ id: `__answer-${++answerSeq}`, eyebrow: chrome, title: (transcript || '').trim() || 'VULCAN', body: ans.text });
+}
 
 function statusLine() {
   const s = voice.status(), ws = wire.status(), qs = quotes.status();
@@ -405,6 +423,9 @@ window.addEventListener('pointerdown', (e) => {
 if (bridge.onIgnite) bridge.onIgnite(() => ignite());
 if (bridge.onBank) bridge.onBank(() => bank());
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintHud(); });
+// B1 SYNAPSE — the constitution's announce hook speaks WRITE announcements
+// through the SAME v1 voice output (main sends brain:speak before the effect).
+if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text));
 // RL-5 v2 · PART 1 — SAFETY. Main already hid the window (emergency hotkey / watchdog);
 // snap straight to the hidden state (no ceremony) so the next summon ignites clean.
 if (bridge.onForceHide) bridge.onForceHide(() => { presence = 0; ignMode = 'hidden'; });
@@ -666,6 +687,22 @@ window.__vulcanHome = {
   voiceStatus: () => voice.status(),
   toggleMute: () => { voice.toggleMute(); paintHud(); },
   setMuted: (v) => { voice.setMuted(v); paintHud(); },
+  // B1 SYNAPSE harness ---------------------------------------------------------
+  // Full mouth-to-screen path with a real brain result (Electron only): conduct
+  // → resolve the answer panel → speak it. Mirrors the live voice-loop onAnswer.
+  ask: async (text) => {
+    if (!bridge.conduct) return { text: '(no bridge)', route: 'REFLEX', reason: 'NO_BRIDGE' };
+    const r = await bridge.conduct(text);
+    presentAnswer(r, text);
+    voice.say(r.text);
+    return r;
+  },
+  // Drive the answer surface directly with a supplied result object (dev-server
+  // evidence, no Electron) — the EXACT presentAnswer + say path the loop uses.
+  answer: (ans, transcript) => { presentAnswer(ans, transcript); voice.say(ans && ans.text); },
+  // Fire the mock WRITE action through the live announce→voice hook (Electron).
+  testWrite: () => (bridge.testWrite ? bridge.testWrite() : null),
+  brainMode: () => (bridge.brainMode ? bridge.brainMode() : 'PRESENT'),
 };
 
 // PART 3 — apply the current effective dpr across the whole pipeline (renderer,

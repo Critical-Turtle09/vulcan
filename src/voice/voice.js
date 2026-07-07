@@ -13,8 +13,8 @@ import { classify } from '../reflex.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null, onCommand = null }) {
-  let running = false, cfg = null, ears = null, mouth = null, brain = createBrain();
+export function createVoice({ orb, bridge, forceTest = false, onWake = null, onDismiss = null, onCommand = null, onAnswer = null }) {
+  let running = false, cfg = null, ears = null, mouth = null, brain = createBrain({ bridge });
   let mode = 'idle', online = false, offlineReason = '';
   let muted = !!rawTokens.voice.startMuted;   // chosen state, not a fault
   let unmuteResolve = null;
@@ -78,9 +78,13 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         // latency replaces this floor.
         const V = rawTokens.voice;
         const thinkDwell = mode === 'test' ? V.test.thinkMs : V.thinkMinMs;
-        const [text] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
+        // B1 SYNAPSE — brain.respond now returns the conductor's full result
+        // { text, route, model, cost_usd, ... }. The answer resolves onto the
+        // panel as house material (onAnswer → panels.present) AND is spoken.
+        const [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
+        if (onAnswer) { try { onAnswer(answer, transcript); } catch (_) { /* presentation must never break the loop */ } }
         orb.setState('speaking');                      // thinking -> speaking
-        await mouth.speak(text, { synthetic });        // SPEAK — real amplitude via analyser
+        await mouth.speak(answer.text, { synthetic });  // SPEAK — real amplitude via analyser
         orb.setAmplitude(0);                           // -> speaking -> idle (lerp back)
       } catch (e) {
         waking = false;
@@ -120,8 +124,20 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     orb.setAmplitude(0);
   }
 
+  // B1 SYNAPSE — speak arbitrary text through the SAME v1 mouth (the constitution
+  // announce hook uses this so WRITE announcements are spoken aloud). Drives the
+  // speaking state so the orb + rings ride the envelope like any other utterance.
+  async function say(text) {
+    if (!mouth || !text) return;
+    const synthetic = (mode === 'test') || !(cfg && cfg.hasKey);
+    orb.setState('speaking');
+    await mouth.speak(text, { synthetic });
+    orb.setAmplitude(0);
+    orb.setState('idle');
+  }
+
   return {
-    boot, tick,
+    boot, tick, say,
     setMuted, toggleMute() { setMuted(!muted); }, get muted() { return muted; },
     // test harness: fire the wake / dismiss phrase on demand (test-mode ears)
     triggerWake() { if (ears && ears.triggerWake) ears.triggerWake(); },
