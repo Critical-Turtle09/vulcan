@@ -57,6 +57,9 @@ export function createEars({ bridge, mode }) {
       },
       triggerWake() { settleWake((res) => res('wake')); },
       triggerDismiss() { settleWake((res) => res('dismiss')); },
+      // v1.5.1 THE TRIGGER — a held DORMANT clip that is neither wake nor dismiss: the
+      // loop speaks the redirect line and stays dormant.
+      triggerWakeOther() { settleWake((res) => res('other')); },
       async capture() {
         capturing = true;
         return new Promise((resolve) => {
@@ -77,6 +80,11 @@ export function createEars({ bridge, mode }) {
       setAutoCapture(on) { autoCapture = !!on; },
       setAutoWake(on) { autoWake = !!on; },
       clearUtterances() { utterQueue.length = 0; },
+      // PTT interface parity (no real graph in test — the trigger cue is driven at the
+      // voice-loop level; captures are scripted via triggerUtterance/queueUtterance).
+      pttDown() {}, pttUp() {},
+      micOpen() { return capturing; },
+      earsInfo() { return { source: 'test', fellBack: false, captureMode: V.capture_mode === 'open' ? 'open' : 'ptt' }; },
       // gate + lifecycle (no real graph in test — no-ops that keep the interface parity)
       closeForSpeech() {},
       cancel() {
@@ -94,10 +102,18 @@ export function createEars({ bridge, mode }) {
   }
 
   // ---------- LIVE MODE ----------
+  // v1.5.1 THE TRIGGER — capture mode. 'ptt' (default): the mic opens ONLY between
+  // pttDown() and pttUp() (a held trigger); listenForWake/capture park a consumer that
+  // the released clip resolves. 'open': the S1 VAD behaviour, preserved verbatim.
+  const captureMode = V.capture_mode === 'open' ? 'open' : 'ptt';
   let ctx = null, stream = null, proc = null, source = null;
   let srcRate = 48000;
   let ready = false, offline = false;
   let level = 0;   // running mic RMS — feeds the LISTENING waves (real amplitude)
+  let recording = false;                 // PTT: a clip is being held (mic must be open)
+  let pttFrames = null;                  // PTT: PCM frames of the held clip
+  let pendingKind = null, pendingResolve = null;   // PTT: the parked wake/capture consumer
+  let lastInfo = { source: null, fellBack: false }; // last transcription's ears-chain read
 
   // RL-5 v2 · PART 2 — MIC COEXISTENCE. Capture constraints ship from tokens. The
   // processing flags (AEC/NS/AGC) are FALSE on purpose: enabling them on macOS routes
@@ -153,12 +169,17 @@ export function createEars({ bridge, mode }) {
   }
   const rmsOf = (b) => { let s = 0; for (let i = 0; i < b.length; i++) s += b[i] * b[i]; return Math.sqrt(s / b.length); };
 
-  async function transcribe(frames) {
-    const flat = flatten(frames);
-    const ds = downsampleTo16k(flat, srcRate);
-    const wav = encodeWavBase64(ds, 16000);
-    try { const r = await bridge.transcribe(wav); return (r && r.ok) ? (r.text || '') : ''; }
-    catch (_) { return ''; }
+  async function transcribe(frames) { return transcribeFlat(flatten(frames), srcRate); }
+  // downsample -> 16k WAV -> bridge (Wispr Flow REST -> local whisper chain, main-side).
+  // Records the chain's { source, fellBack } read so the renderer can tag [EARS·LOCAL].
+  async function transcribeFlat(flat, rate) {
+    if (!flat || !flat.length) return '';
+    const wav = encodeWavBase64(downsampleTo16k(flat, rate), 16000);
+    try {
+      const r = await bridge.transcribe(wav);
+      if (r) lastInfo = { source: r.source || (r.ok ? 'local' : null), fellBack: !!r.fellBack };
+      return (r && r.ok) ? (r.text || '') : '';
+    } catch (_) { return ''; }
   }
   function flatten(frames) {
     let n = 0; for (const f of frames) n += f.length;
@@ -170,14 +191,79 @@ export function createEars({ bridge, mode }) {
   let abortWake = null;      // set while a wake-listen is pending; cancel()/suspend() call it
   let abortCapture = null;   // set while an utterance capture is pending; cancel()/suspend() call it
 
+  // ===== PTT (v1.5.1 THE TRIGGER) =====================================================
+  // listenForWake/capture park a consumer; the mic stays CLOSED. pttDown() opens the
+  // graph and records; pttUp() stops, releases the mic, transcribes the held clip, and
+  // resolves the parked consumer. The mic is provably open ONLY between down and up.
+  function pttListen(kind) {
+    return new Promise((resolve, reject) => {
+      pendingKind = kind; pendingResolve = resolve;
+      // cancel()/mute abort the parked consumer: wake rejects (loop re-parks or forces a
+      // wake), capture resolves aborted (idle-timeout / external bank).
+      const abort = () => {
+        pendingKind = null; pendingResolve = null; recording = false;
+        if (proc) proc.onaudioprocess = null; pttFrames = null;
+        abortWake = null; abortCapture = null;
+        if (kind === 'wake') reject(new Error('aborted')); else resolve({ transcript: '', aborted: true });
+      };
+      if (kind === 'wake') abortWake = abort; else abortCapture = abort;
+    });
+  }
+  // resolve the parked consumer from a held clip's transcript. wake -> intent
+  // ('wake' | 'dismiss' | 'other'); capture -> { transcript }.
+  function finishPtt(txt = '') {
+    const kind = pendingKind, resolve = pendingResolve;
+    pendingKind = null; pendingResolve = null; abortWake = null; abortCapture = null;
+    if (!resolve) return;
+    if (kind === 'wake') {
+      const t = (txt || '').toLowerCase();
+      if (matchDismiss(t)) resolve('dismiss');
+      else if (t.includes(wakeWord)) resolve('wake');
+      else resolve('other');                         // held speech, not wake/dismiss -> redirect
+    } else {
+      resolve({ transcript: txt });
+    }
+  }
+  async function pttDown() {
+    if (recording || !pendingKind) return;           // already held, or nothing parked
+    recording = true;
+    const okGraph = await acquire();
+    if (!recording) { closeGraph(); return; }         // released during arming (fast tap)
+    if (!okGraph) { offline = true; recording = false; finishPtt(''); return; }  // mic denied
+    pttFrames = [];
+    onFrame((buf) => { level = rmsOf(buf); if (recording && pttFrames) pttFrames.push(buf.slice()); });
+  }
+  async function pttUp() {
+    if (!recording) return;
+    recording = false;
+    if (proc) proc.onaudioprocess = null;
+    const frames = pttFrames || []; pttFrames = null;
+    const rate = srcRate;
+    closeGraph();                                     // release the mic NOW — closed when not held
+    const flat = frames.length ? flatten(frames) : null;
+    const txt = flat ? await transcribeFlat(flat, rate) : '';
+    finishPtt(txt);
+  }
+  // ====================================================================================
+
   return {
     mode: 'live',
     get offline() { return offline; },
-    // running mic amplitude (0..1-ish RMS) — the LISTENING waves stir to this
-    getLevel() { return ready ? level : 0; },
-    async available() { return init(); },
+    // running mic amplitude (0..1-ish RMS) — the LISTENING/CAPTURING waves stir to this.
+    // In PTT the mic is closed unless held, so level reads 0 between clips.
+    getLevel() { return captureMode === 'ptt' ? (recording ? level : 0) : (ready ? level : 0); },
+    // PTT: the mic is open ONLY while a clip is held (the core promise, provable in test).
+    micOpen() { return captureMode === 'ptt' ? (recording && ready) : ready; },
+    // PTT trigger: the renderer calls these on key hold / release.
+    pttDown, pttUp,
+    // the last transcription's ears-chain read: { source:'wispr'|'local', fellBack }
+    earsInfo() { return { ...lastInfo, captureMode }; },
+    // in PTT don't open the mic just to probe availability (open would flip the OS
+    // indicator on with no clip held) — the loop gates on cfg.hasEars instead.
+    async available() { return captureMode === 'ptt' ? !offline : init(); },
     // resolve when a spoken segment transcribes to something containing the wake word
     async listenForWake() {
+      if (captureMode === 'ptt') return pttListen('wake');
       if (!(await acquire())) throw new Error('mic-unavailable');
       return new Promise((resolve, reject) => {
         abortWake = () => { if (proc) proc.onaudioprocess = null; abortWake = null; reject(new Error('aborted')); };
@@ -202,6 +288,7 @@ export function createEars({ bridge, mode }) {
     },
     // record until sustained silence, then transcribe the utterance
     async capture() {
+      if (captureMode === 'ptt') return pttListen('capture');
       if (!(await acquire())) return { transcript: '', aborted: true };
       return new Promise((resolve) => {
         // cancel()/mute mid-capture releases the mic NOW (idle-timeout, external bank).
@@ -227,12 +314,16 @@ export function createEars({ bridge, mode }) {
     // next capture re-acquires a fresh, live graph. With reacquire off, degrade to the
     // legacy soft gate (just stop delivering frames) — not recommended.
     closeForSpeech() {
+      // PTT: the mic is already closed unless held — nothing to gate (self-hear is
+      // structurally impossible). OPEN: hard-close the graph before VULCAN speaks.
+      if (captureMode === 'ptt') return;
       if (reacquire) closeGraph();
       else if (proc) proc.onaudioprocess = null;
     },
     // Abort a pending listen/capture without mute semantics (external bank / wake /
     // idle-timeout). Also drops the graph so the next listen re-acquires clean.
     cancel() {
+      recording = false;
       if (abortWake) abortWake();
       if (abortCapture) abortCapture();
       if (reacquire) closeGraph();
@@ -241,11 +332,13 @@ export function createEars({ bridge, mode }) {
     // graph, release the mic (OS indicator off). The next listen re-acquires it, so
     // unmuting resumes seamlessly with no re-prompt (permission persists).
     suspend() {
+      recording = false;
       if (abortWake) abortWake();
       if (abortCapture) abortCapture();
       closeGraph();
     },
     stop() {
+      recording = false;
       if (abortWake) { try { abortWake(); } catch (_) {} }
       if (abortCapture) { try { abortCapture(); } catch (_) {} }
       closeGraph();

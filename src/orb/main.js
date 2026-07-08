@@ -142,6 +142,9 @@ let answerSeq = 0;
 function presentAnswer(ans, transcript) {
   if (!ans || (!ans.text && !ans.panel)) return;
   const route = (ans.route || '').toUpperCase();
+  // S2 THE TRIGGER — if this utterance's STT dropped from Wispr to local whisper, tag it
+  // in the panel chrome (never thrown, just surfaced). Reads the last transcription.
+  const earsTag = voice.status().earsFellBack ? ' · [EARS·LOCAL]' : '';
 
   // B2 HANDS — skill answers render as blueprint panels with a [SKILL·REPO] eyebrow
   // and structured lines; the confirm/done/cancelled state rides the chrome quietly.
@@ -157,7 +160,7 @@ function presentAnswer(ans, transcript) {
     // rows, the spoken text is the panel note.
     panels.present({
       id: `__answer-${++answerSeq}`,
-      eyebrow: `[SKILL·${String(ans.skill || 'REPO').toUpperCase()}]${state}${flags}`,
+      eyebrow: `[SKILL·${String(ans.skill || 'REPO').toUpperCase()}]${state}${flags}${earsTag}`,
       title: p.title || (transcript || '').trim() || 'REPO',
       lead: p.body || undefined,
       list: lines || undefined,
@@ -169,7 +172,7 @@ function presentAnswer(ans, transcript) {
   const reflex = route === 'REFLEX';
   const model = String(ans.model || '').toUpperCase();
   const cost = (typeof ans.cost_usd === 'number' && ans.cost_usd > 0) ? ` · $${ans.cost_usd.toFixed(4)}` : '';
-  const chrome = reflex ? `[REFLEX] · ${model}` : `${(ans.route || 'CLAUDE')} · ${model}${cost}`;
+  const chrome = (reflex ? `[REFLEX] · ${model}` : `${(ans.route || 'CLAUDE')} · ${model}${cost}`) + earsTag;
   // Unique id per answer → each new answer CROSSFLOWS over the prior (old
   // dissolves as the new resolves; never a hard cut, never a same-id toggle).
   panels.present({ id: `__answer-${++answerSeq}`, eyebrow: chrome, title: (transcript || '').trim() || 'VULCAN', body: ans.text });
@@ -383,8 +386,10 @@ function paintHud() {
   // v1.5 — SESSION: the quiet ATTENDING mark. ATTENTIVE reads molten (hot session),
   // DORMANT reads dim. Muted always reads MUTED (the ear is released).
   if (vt.session) {
-    vt.session.textContent = s.muted ? 'MUTED' : (s.session === 'attentive' ? 'ATTENDING' : 'DORMANT');
-    vt.session.className = 'v ' + (s.muted ? 'dim' : (s.session === 'attentive' ? 'heat' : 'dim'));
+    // v1.5.1 THE TRIGGER — a held clip reads CAPTURING (quiet in-place repaint, no bar);
+    // otherwise ATTENDING (hot) / DORMANT / MUTED.
+    vt.session.textContent = s.muted ? 'MUTED' : s.capturing ? 'CAPTURING' : (s.session === 'attentive' ? 'ATTENDING' : 'DORMANT');
+    vt.session.className = 'v ' + (s.muted ? 'dim' : (s.capturing || s.session === 'attentive' ? 'heat' : 'dim'));
   }
   // ORGAN 1.5 — surface local-TTS failover as a "LOCAL" tag
   const localTag = s.local ? ` · LOCAL ${(s.provider || '').toUpperCase()}` : '';
@@ -421,8 +426,27 @@ function switchProfile() {
   setTimeout(() => { populateProfileHud(); renderFeed(); revealHud(); }, PROF['crossflow.ms'] * 0.4);
 }
 
+// v1.5.1 THE TRIGGER — PUSH-TO-TALK. The trigger key (voice.ptt_key, default Space)
+// opens the mic ONLY while held, and only while this window is focused (global/unfocused
+// PTT is parked to v2.1 — it needs a native event tap). fn is NEVER bound (Wispr Flow).
+const PTT_MODE = rawTokens.voice.capture_mode !== 'open';
+const PTT_KEY = rawTokens.voice.ptt_key || 'Space';
+const isPttKey = (e) => PTT_KEY === 'Space' ? e.code === 'Space' : e.key.toLowerCase() === PTT_KEY.toLowerCase();
+let pttHeld = false;
+function pttRelease() { if (pttHeld) { pttHeld = false; voice.pttUp(); paintHud(); } }
+window.addEventListener('keyup', (e) => { if (PTT_MODE && isPttKey(e)) { e.preventDefault(); pttRelease(); } });
+// a focus loss (window blur) while held ends the clip cleanly — never a wedged-open mic.
+window.addEventListener('blur', pttRelease);
+
 window.addEventListener('keydown', (e) => {
   const k = e.key.toLowerCase();
+  // PTT trigger — hold to talk. preventDefault stops Space from scrolling / activating.
+  // e.repeat guards the OS key-repeat storm so one hold = one clip.
+  if (PTT_MODE && isPttKey(e)) {
+    e.preventDefault();
+    if (!e.repeat && !pttHeld) { pttHeld = true; voice.pttDown(); paintHud(); }
+    return;
+  }
   // digits: in the theater they select a site (open its dossier panel); at home
   // they drive the orb state (1-4). The theater docks the orb, so no collision.
   if (/^[1-9]$/.test(e.key)) {
@@ -728,6 +752,15 @@ window.__vulcanHome = {
   clearUtterances: () => voice.clearUtterances(),
   voiceWake: () => voice.wake(),
   voiceGoDormant: () => voice.goDormant(),
+  // v1.5.1 THE TRIGGER — push-to-talk harness. pttDown/pttUp drive the trigger (as the
+  // key hold/release do); triggerWakeOther fires a held DORMANT clip that isn't the wake
+  // phrase (-> spoken redirect). earsInfo/capturing read the ears-chain + CAPTURING cue.
+  pttDown: () => voice.pttDown(),
+  pttUp: () => voice.pttUp(),
+  triggerWakeOther: () => voice.triggerWakeOther(),
+  earsInfo: () => voice.earsInfo(),
+  capturing: () => voice.capturing,
+  captureMode: () => voice.captureMode,
   // simulate the wake/dismiss OUTCOMES directly (routes exactly as the phrases do)
   simWake: () => { if (bridge.requestSummon) bridge.requestSummon(); if (presence < 0.5) ignite(); },
   simDismiss: () => { if (presence > 0.5 || ignMode === 'kindling') bank(); },

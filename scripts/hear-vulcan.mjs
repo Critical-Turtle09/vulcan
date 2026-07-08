@@ -1,13 +1,16 @@
-// S1 THE ATTENDANT — THE LIVE OPERATOR DRILL (v1.5). Launches the REAL app with
-// REAL ears (whisper) + REAL mouth (ElevenLabs), prints exactly what to SAY, watches
-// the live session/state log, and asserts the full hot-session cycle from the
-// operator's ACTUAL VOICE:
+// S2 THE TRIGGER — THE LIVE OPERATOR DRILL (v1.5.1, PTT). Launches the REAL app with
+// REAL ears (Wispr Flow / whisper) + REAL mouth (ElevenLabs), prints exactly what to SAY,
+// and asserts the full hot-session cycle from the operator's ACTUAL VOICE under
+// push-to-talk:
 //
-//   summon ("Fire and Forge") → 3 exchanges with NO re-wake → bank ("Bank the fire")
-//   → re-summon ("Fire and Forge") → 2 more exchanges.
+//   HOLD the trigger + say "Fire and Forge" → 2 held questions with NO re-wake →
+//   HOLD + "Bank the fire" → HOLD + "Fire and Forge" (re-arm).
 //
-// This is the acceptance test-mode ears may NOT carry (the v1.4 re-summon defect only
-// reproduces on the real mic + real TTS playback). Nothing is simulated here.
+// The mic opens ONLY while the trigger is held. This drill BRACKETS each spoken prompt
+// with a programmatic hold (pttDown -> operator speaks -> pttUp) so it drives the real
+// capture boundaries + ears chain + TTS end-to-end. Hold window: VULCAN_PTT_HOLD_MS
+// (default 4500ms). Nothing is simulated. (test-mode ears may not carry this — the real
+// mic + real TTS is the only place the capture boundary is proven.)
 //
 // SINGLE-INSTANCE SAFETY: this drill AUTO-ATTACHES to an already-running VULCAN over
 // CDP (VULCAN_CDP port, default 9222) instead of spawning a second app. That is how it
@@ -72,16 +75,25 @@ async function waitFor(fn, arg, timeoutMs, label) {
 const waitSession = (s, ms, label) => waitFor((x) => window.__vulcanHome.voiceStatus().session === x, s, ms, label);
 const waitState = (s, ms, label) => waitFor((x) => window.__vulcanHome.voiceStatus().state === x, s, ms, label);
 
-// one operator exchange: prompt, ride thinking/speaking, require RETURN TO LISTENING
-// while STAYING ATTENTIVE (the no-re-wake proof — the operator does NOT say the wake
-// phrase again).
-async function exchange(prompt, n) {
+const HOLD_MS = +(process.env.VULCAN_PTT_HOLD_MS || 4500);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// bracket ONE spoken clip with a programmatic hold: open the mic (pttDown), give the
+// operator the hold window to speak, then release (pttUp) → the clip transcribes + routes.
+async function hold(prompt) {
   say(prompt);
-  note(`(exchange ${n} — do NOT say "Fire and Forge"; just ask)`);
-  // Reflex answers (e.g. "status") pass through THINKING in <1ms — it is never
-  // observable, so assert only the phases that ARE: VULCAN SPEAKS, then RETURNS TO
-  // LISTENING while STILL ATTENTIVE (the no-re-wake proof). If it drops out of
-  // ATTENTIVE without a bank, that is a real failure and we report it.
+  note(`(HOLD the trigger — recording ~${(HOLD_MS / 1000).toFixed(1)}s — speak NOW)`);
+  await page.evaluate(() => window.__vulcanHome.pttDown());
+  await sleep(HOLD_MS);
+  await page.evaluate(() => window.__vulcanHome.pttUp());
+  note('(released — VULCAN is transcribing…)');
+}
+
+// one held question: hold+speak, ride thinking/speaking, require RETURN TO LISTENING
+// while STAYING ATTENTIVE (the no-re-wake proof — the operator does NOT say the wake
+// phrase again, only holds and asks).
+async function exchange(prompt, n) {
+  await hold(prompt);
   const spoke = await waitState('speaking', 40000, 'VULCAN to speak');
   const back = await waitState('listening', 60000, 'VULCAN to return to listening');
   const s = await status();
@@ -89,37 +101,33 @@ async function exchange(prompt, n) {
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');
-console.log(' Follow the prompts. Speak clearly. VULCAN will answer aloud.');
+console.log(' PUSH-TO-TALK. When told to HOLD, hold the trigger (or this drill');
+console.log(' opens the mic for you) and speak clearly. VULCAN answers aloud.');
 console.log('──────────────────────────────────────────────────────────────');
 
-// 1) SUMMON
-say('Fire and Forge');
+// 1) SUMMON (held wake phrase)
+await hold('Fire and Forge');
 note('(the full ignition should play, and VULCAN should enter the hot session)');
-ok(await waitSession('attentive', 45000, 'ATTENTIVE after the wake phrase'), 'summon → ATTENTIVE (hot session)');
+ok(await waitSession('attentive', 45000, 'ATTENTIVE after the wake phrase'), 'held "Fire and Forge" → ATTENTIVE (hot session)');
 await waitState('listening', 20000, 'listening');
 
-// 2) THREE EXCHANGES, NO RE-WAKE
+// 2) TWO HELD EXCHANGES, NO RE-WAKE
 await exchange('What is our status?', 1);
 await exchange('What can you do?', 2);
-await exchange('Tell me the time.', 3);
 
-// 3) BANK → DORMANT
-say('Bank the fire');
-note('(the quench should play and VULCAN should go dormant — wake-word only)');
+// 3) BANK → DORMANT (held dismiss phrase)
+await hold('Bank the fire');
+note('(the quench should play and VULCAN should go dormant — trigger + wake-phrase only)');
 ok(await waitSession('dormant', 30000, 'DORMANT after "Bank the fire"'), 'bank → DORMANT');
 
-// 4) RE-SUMMON — THE RE-ARM (this is what failed in v1.4)
-console.log('\n\x1b[1m--- RE-ARM: the v1.4 bug was that this second summon never worked ---\x1b[0m');
-say('Fire and Forge');
+// 4) RE-SUMMON — THE RE-ARM (held)
+console.log('\n\x1b[1m--- RE-ARM: hold the trigger and summon again ---\x1b[0m');
+await hold('Fire and Forge');
 ok(await waitSession('attentive', 45000, 'ATTENTIVE on re-summon'), 're-summon after bank → ATTENTIVE (RE-ARM WORKS)');
 await waitState('listening', 20000, 'listening');
 
-// 5) TWO MORE EXCHANGES
-await exchange('What is our status?', 4);
-await exchange('Anything on the wire?', 5);
-
 // close out
-say('Bank the fire');
+await hold('Bank the fire');
 await waitSession('dormant', 30000, 'DORMANT');
 
 clearInterval(logTimer);

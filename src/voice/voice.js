@@ -28,7 +28,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // B2 HANDS — the spoken-confirmation classifier for WRITE_CONFIRM. Only an
 // explicit affirmative proceeds; ANYTHING else (including silence/garble) aborts.
-function classifyConfirm(t) {
+export function classifyConfirm(t) {
   const s = String(t || '').toLowerCase();
   if (/\b(confirm|confirmed|yes|yeah|yep|do it|proceed|affirmative|go ahead|approve|approved)\b/.test(s)) return 'confirm';
   return 'cancel';
@@ -47,6 +47,11 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   let leaveAttentive = false;                   // set by goDormant() (external bank)
   const V = rawTokens.voice;
   const SESS = V.session || {};
+  // v1.5.1 THE TRIGGER — capture mode. 'ptt': the mic opens only while the trigger is
+  // held (pttDown/pttUp); 'open': the S1 VAD behaviour. The loop is identical either way
+  // — only WHERE listenForWake/capture resolve changes (held clip vs VAD).
+  const captureMode = V.capture_mode === 'open' ? 'open' : 'ptt';
+  let capturing = false;   // PTT: a clip is being held right now (the CAPTURING cue)
 
   const safe = (fn, ...a) => { try { return fn && fn(...a); } catch (_) { return null; } };
   function setSession(s) { if (s === session) return; session = s; safe(onSession, s); }
@@ -77,13 +82,16 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     cfg = await safeConfig(bridge);
     const testMode = forceTest || cfg.testMode;
 
+    // S2 THE TRIGGER — an ear exists if EITHER Wispr OR local whisper is present
+    // (cfg.hasEars, main-side); older config only reported hasWhisper.
+    const hasEars = cfg.hasEars !== undefined ? cfg.hasEars : cfg.hasWhisper;
     if (testMode) {
       mode = 'test'; online = true; offlineReason = '';
-    } else if (cfg.hasWhisper && cfg.hasKey) {
+    } else if (hasEars && cfg.hasKey) {
       mode = 'live'; online = true; offlineReason = '';
     } else {
       mode = 'offline'; online = false;
-      offlineReason = !cfg.hasKey ? 'NO ELEVENLABS KEY' : 'NO WHISPER';
+      offlineReason = !cfg.hasKey ? 'NO ELEVENLABS KEY' : 'NO EARS';
     }
 
     ears = createEars({ bridge, mode: mode === 'test' ? 'test' : 'live' });
@@ -120,6 +128,9 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         waking = false;
         if (!running || muted) continue;
         if (intent === 'dismiss') { safe(onDismiss); continue; }     // bank phrase while dormant -> stay dormant/hidden
+        // v1.5.1 THE TRIGGER — a held DORMANT clip that isn't the wake phrase: never
+        // silent. Speak one redirect line, stay dormant, keep listening for the trigger.
+        if (intent === 'other') { await speakGated(SESS.redirectLine || NEVER_SILENT, 'announce'); continue; }
         // intent === 'wake' -> ENTER THE HOT SESSION
         safe(onWake);                                                 // summon overlay + ignition
         await runAttentive();
@@ -242,6 +253,27 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     if (session === 'attentive') { leaveAttentive = true; if (ears && ears.cancel) ears.cancel(); }
   }
 
+  // v1.5.1 THE TRIGGER — push-to-talk. The renderer calls pttDown() on trigger-key hold
+  // and pttUp() on release (focused window only). Down opens the mic + shows the
+  // CAPTURING cue (orb stirs to the live mic); up closes the mic and hands the held clip
+  // to the ears chain, which resolves the loop's parked listenForWake/capture.
+  function pttDown() {
+    if (captureMode !== 'ptt') return;
+    if (!running || !online || muted || mode === 'offline') return;
+    if (capturing) return;
+    capturing = true;
+    orb.setState('listening');          // waves stir to the mic; CAPTURING reads on the HUD
+    if (ears && ears.pttDown) ears.pttDown();
+  }
+  function pttUp() {
+    if (!capturing) return;
+    capturing = false;
+    if (ears && ears.pttUp) ears.pttUp();
+    // bridge the CAPTURING -> processing handoff so the release is legible (doctrine 11);
+    // the loop takes over the orb state the instant the clip resolves.
+    orb.setState('thinking');
+  }
+
   function setMuted(v) {
     if (v === muted) return;
     muted = v;
@@ -280,12 +312,16 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   }
 
   return {
-    boot, tick, say, wake, goDormant,
+    boot, tick, say, wake, goDormant, pttDown, pttUp,
     setMuted, toggleMute() { setMuted(!muted); }, get muted() { return muted; },
     get session() { return session; },
+    get capturing() { return capturing; },
+    get captureMode() { return captureMode; },
+    earsInfo() { return (ears && ears.earsInfo) ? ears.earsInfo() : { source: null, fellBack: false, captureMode }; },
     // test harness: fire the wake / dismiss phrase on demand (test-mode ears)
     triggerWake() { if (ears && ears.triggerWake) ears.triggerWake(); },
     triggerDismiss() { if (ears && ears.triggerDismiss) ears.triggerDismiss(); },
+    triggerWakeOther() { if (ears && ears.triggerWakeOther) ears.triggerWakeOther(); },
     // test harness: script the ATTENTIVE captures + the auto-dormant path
     queueUtterance(t) { if (ears && ears.queueUtterance) ears.queueUtterance(t); },
     triggerUtterance(t) { if (ears && ears.triggerUtterance) ears.triggerUtterance(t); },
@@ -297,7 +333,9 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     status() {
       const provider = mouth ? mouth.getProvider() : null;
       const local = provider === 'say' || provider === 'kokoro';
-      return { online, mode, session, state: orb.stateName, offlineReason, muted, provider, local };
+      const ei = (ears && ears.earsInfo) ? ears.earsInfo() : { source: null, fellBack: false };
+      return { online, mode, session, state: orb.stateName, offlineReason, muted, provider, local,
+        captureMode, capturing, earsSource: ei.source, earsFellBack: !!ei.fellBack };
     },
   };
 }

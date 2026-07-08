@@ -10,6 +10,8 @@ import { spawn } from 'node:child_process';
 // SLICE V — THE VOICE. The mouth engine (fail-soft chain + meter + cache) lives in
 // one place; this main-process handler is a thin bridge to it. No parallel path.
 import { synthesize, availability, prewarm } from '../brain/voice.js';
+// S2 THE TRIGGER — the ears engine (Wispr Flow REST primary -> local whisper fallback).
+import { transcribeChain, hasWispr } from '../brain/ears.js';
 
 // --- tiny .env loader (KEY=VALUE, # comments) — no external dep ---
 export function loadEnv(root) {
@@ -25,13 +27,20 @@ export function loadEnv(root) {
 }
 
 export function registerVoiceIpc() {
-  ipcMain.handle('voice:config', () => ({
-    hasKey: !!process.env.ELEVENLABS_API_KEY,
-    hasWhisper: !!(process.env.WHISPER_BIN && process.env.WHISPER_MODEL
-      && fs.existsSync(process.env.WHISPER_BIN) && fs.existsSync(process.env.WHISPER_MODEL)),
-    providers: availability(),   // SLICE V — engine's own tier detection (elevenlabs/kokoro/say)
-    testMode: process.env.VULCAN_VOICE_TEST === '1',
-  }));
+  ipcMain.handle('voice:config', () => {
+    const hasWhisper = !!(process.env.WHISPER_BIN && process.env.WHISPER_MODEL
+      && fs.existsSync(process.env.WHISPER_BIN) && fs.existsSync(process.env.WHISPER_MODEL));
+    return {
+      hasKey: !!process.env.ELEVENLABS_API_KEY,
+      hasWhisper,
+      // S2 — an ear exists if EITHER the Wispr key OR local whisper is present. The voice
+      // loop needs an ear to go live; the ears chain resolves which one per clip.
+      hasWispr: hasWispr(),
+      hasEars: hasWispr() || hasWhisper,
+      providers: availability(),   // SLICE V — engine's own tier detection (elevenlabs/kokoro/say)
+      testMode: process.env.VULCAN_VOICE_TEST === '1',
+    };
+  });
 
   // SLICE V — THE VOICE. Delegate to the mouth engine: fail-soft chain, char meter,
   // phrase cache, budget. Returns { ok, audioBase64, mime, provider, chars, cached,
@@ -88,27 +97,36 @@ export function registerVoiceIpc() {
     } catch (_) { return null; }
   });
 
+  // S2 THE TRIGGER — EARS CHAIN. Wispr Flow REST primary -> local whisper fallback.
+  // The chain owns the decision + logging; this handler only supplies the local
+  // whisper.cpp transcriber (main owns WHISPER_BIN/MODEL) and returns the result plus
+  // { source, fellBack } so the renderer can tag [EARS·LOCAL] on a drop.
   ipcMain.handle('voice:transcribe', async (_e, wavBase64) => {
-    const bin = process.env.WHISPER_BIN, model = process.env.WHISPER_MODEL;
-    if (!bin || !model) return { ok: false, reason: 'no-whisper' };
-    try {
-      const tmp = path.join(os.tmpdir(), `vulcan-${process.pid}-${Date.now()}.wav`);
-      fs.writeFileSync(tmp, Buffer.from(wavBase64, 'base64'));
-      const text = await new Promise((resolve, reject) => {
-        const p = spawn(bin, ['-m', model, '-f', tmp, '-nt', '-otxt', '-of', tmp]);
-        let err = '';
-        p.stderr.on('data', (d) => { err += d; });
-        p.on('close', (code) => {
-          try {
-            const out = fs.existsSync(`${tmp}.txt`) ? fs.readFileSync(`${tmp}.txt`, 'utf8') : '';
-            fs.rmSync(tmp, { force: true }); fs.rmSync(`${tmp}.txt`, { force: true });
-            code === 0 ? resolve(out.trim()) : reject(new Error(err || `whisper-${code}`));
-          } catch (e) { reject(e); }
-        });
-      });
-      return { ok: true, text };
-    } catch (e) {
-      return { ok: false, reason: String(e && e.message || e) };
-    }
+    return transcribeChain(wavBase64, { local: whisperLocal });
   });
+}
+
+// Local whisper.cpp transcription — the ears-chain fallback. { ok, text } only.
+async function whisperLocal(wavBase64) {
+  const bin = process.env.WHISPER_BIN, model = process.env.WHISPER_MODEL;
+  if (!bin || !model) return { ok: false, reason: 'no-whisper' };
+  try {
+    const tmp = path.join(os.tmpdir(), `vulcan-${process.pid}-${Date.now()}.wav`);
+    fs.writeFileSync(tmp, Buffer.from(wavBase64, 'base64'));
+    const text = await new Promise((resolve, reject) => {
+      const p = spawn(bin, ['-m', model, '-f', tmp, '-nt', '-otxt', '-of', tmp]);
+      let err = '';
+      p.stderr.on('data', (d) => { err += d; });
+      p.on('close', (code) => {
+        try {
+          const out = fs.existsSync(`${tmp}.txt`) ? fs.readFileSync(`${tmp}.txt`, 'utf8') : '';
+          fs.rmSync(tmp, { force: true }); fs.rmSync(`${tmp}.txt`, { force: true });
+          code === 0 ? resolve(out.trim()) : reject(new Error(err || `whisper-${code}`));
+        } catch (e) { reject(e); }
+      });
+    });
+    return { ok: true, text };
+  } catch (e) {
+    return { ok: false, reason: String(e && e.message || e) };
+  }
 }
