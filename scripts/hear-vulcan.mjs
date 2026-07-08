@@ -25,6 +25,7 @@
 import { _electron as electron, chromium } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 import { acquireLock, releaseLock, createHoldGuard, LOCK_PATH } from './lib/drill.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -35,6 +36,23 @@ const ok = (c, m) => { console.log(`   ${c ? '✅ PASS' : '❌ FAIL'} · ${m}`);
 const say = (s) => console.log(`\n\x1b[1m\x1b[38;5;208m🗣  SAY:  “${s}”\x1b[0m`);
 const note = (s) => console.log(`\x1b[2m   ${s}\x1b[0m`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// FX3R — AUDIBLE CUES (belt & suspenders on top of the visible countdown): a chime when
+// the mic OPENS, a soft tick when it CLOSES. afplay a macOS system sound, fire-and-forget.
+const CHIME = process.env.VULCAN_DRILL_CHIME || '/System/Library/Sounds/Glass.aiff';   // mic OPEN
+const TICK = process.env.VULCAN_DRILL_TICK || '/System/Library/Sounds/Tink.aiff';      // mic CLOSE
+function play(sound) { try { const p = spawn('afplay', [sound], { stdio: 'ignore', detached: true }); p.on('error', () => {}); p.unref(); } catch (_) {} }
+
+// FX3R — the operator's ordered lines (the setlist). Printed up front; the sequence below
+// speaks them in this exact order, one per chime.
+const SETLIST = [
+  'Fire and Forge',      // summon → ATTENTIVE
+  'What is our status?', // exchange 1
+  'What can you do?',    // exchange 2
+  'Bank the fire',       // bank → DORMANT
+  'Fire and Forge',      // re-arm → ATTENTIVE
+  'Bank the fire',       // close out → DORMANT
+];
 
 // ---- (1a) SINGLE-DRIVER LOCK — refuse to start if another driver is already attached ----
 const lock = acquireLock();
@@ -54,8 +72,9 @@ try {
   attached = true;
   console.log(`· attached to the running VULCAN instance over CDP :${CDP} (single-instance — no second app spawned)`);
 } catch (_) {
-  console.log('· no running instance on CDP — launching one (LIVE: real key + mic)');
-  app = await electron.launch({ cwd: ROOT, args: ['.'], env: { ...process.env } });
+  console.log('· no running instance on CDP — launching one (LIVE: real key + mic, windowed)');
+  // FX3R — self-launch in the modest drill window so the Terminal stays visible beside it.
+  app = await electron.launch({ cwd: ROOT, args: ['.'], env: { ...process.env, VULCAN_DRILL_WINDOWED: '1' } });
   app.process().stdout.on('data', (d) => { for (const l of d.toString().split('\n')) if (l.includes('[VOICE]') || l.includes('[GATE-WATCHDOG]')) console.log('\x1b[2m  ' + l.trim() + '\x1b[0m'); });
   page = await app.firstWindow();
 }
@@ -116,12 +135,14 @@ const waitState = (s, ms, label) => waitFor((x) => window.__vulcanHome.voiceStat
 async function hold(prompt) {
   say(prompt);
   await guard.down();                                   // mic opens
+  play(CHIME);                                          // 🔔 audible: mic OPEN
   const secs = Math.max(1, Math.round(HOLD_MS / 1000));
   for (let s = secs; s > 0; s--) {
     process.stdout.write(`\r\x1b[1m\x1b[38;5;208m   >>> MIC OPEN — SPEAK NOW <<<   ${s}s \x1b[0m   `);
     await sleep(1000);
   }
   process.stdout.write('\r\x1b[2m   (mic closed — VULCAN is transcribing…)                 \x1b[0m\n');
+  play(TICK);                                           // · audible: mic CLOSED
   await guard.up();                                     // mic closes -> clip routes
 }
 
@@ -134,9 +155,16 @@ async function exchange(prompt, n) {
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');
-console.log(' PUSH-TO-TALK. The drill opens the mic for you. When you see');
-console.log(' ">>> MIC OPEN — SPEAK NOW <<<", speak the line above it clearly.');
-console.log(' VULCAN answers aloud. (Ctrl-C any time — the mic closes cleanly.)');
+console.log(' PUSH-TO-TALK. The drill opens the mic for you. On the CHIME you');
+console.log(' will see ">>> MIC OPEN — SPEAK NOW <<<" — speak the next line');
+console.log(' clearly. A soft tick means the mic closed. VULCAN answers aloud.');
+console.log('──────────────────────────────────────────────────────────────');
+// FX3R — SETLIST up front, in order.
+console.log('\n\x1b[1mYOUR LINES — one per chime:\x1b[0m');
+SETLIST.forEach((l, i) => console.log(`   \x1b[38;5;208m${i + 1}.\x1b[0m ${l}`));
+// FX3R — WARNING.
+console.log('\n\x1b[1m\x1b[31m ⚠  Do NOT press Esc during the drill (it banks the session).');
+console.log('    Ctrl-C is the only abort — it closes the mic cleanly.\x1b[0m');
 console.log('──────────────────────────────────────────────────────────────');
 
 // 1) SUMMON (spoken wake phrase)

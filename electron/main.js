@@ -29,6 +29,21 @@ try { HOTKEY = JSON.parse(fs.readFileSync(path.join(ROOT, 'tokens.json'), 'utf8'
 
 let win = null, tray = null, isQuitting = false;
 const OVERLAY_LEVEL = 'screen-saver';
+// FX3R — EYES-ON DRILL. A drill-only windowed mode: a modest, framed, movable window
+// (NOT the fullscreen always-on-top overlay) so the Terminal stays visible beside VULCAN
+// for the whole run. Ceremony + normal operation are unaffected — this flag is drills only.
+const DRILL_WINDOWED = process.env.VULCAN_DRILL_WINDOWED === '1';
+const DRILL_SIZE = { width: 1100, height: 700 };
+function drillBounds() {
+  const b = activeBounds();
+  return {
+    width: DRILL_SIZE.width, height: DRILL_SIZE.height,
+    // sit toward the right of the active display, vertically centered, so a Terminal on
+    // the left stays fully visible.
+    x: Math.round(b.x + b.width - DRILL_SIZE.width - 60),
+    y: Math.round(b.y + (b.height - DRILL_SIZE.height) / 2),
+  };
+}
 
 // ---- RL-5 v2 · PART 1 — SYSTEM SAFETY. The overlay is a full-screen, always-on-top
 // screen-saver-level panel; if the renderer ever hangs while it is up, nothing is
@@ -76,27 +91,25 @@ function activeBounds() {
 
 function createWindow() {
   const b = activeBounds();
+  // FX3R — a drill window is modest + framed + movable so the Terminal stays visible
+  // beside it; the resident overlay is the borderless, fullscreen, always-on-top panel.
+  const wb = DRILL_WINDOWED
+    ? { ...drillBounds(), type: undefined, frame: true, resizable: true, movable: true, hasShadow: true, roundedCorners: true, skipTaskbar: false, title: 'VULCAN — DRILL' }
+    : { x: b.x, y: b.y, width: b.width, height: b.height, type: 'panel', frame: false, resizable: false, movable: false, hasShadow: false, roundedCorners: false, skipTaskbar: true };
   win = new BrowserWindow({
-    x: b.x, y: b.y, width: b.width, height: b.height,
+    ...wb,
     // NON-ACTIVATING PANEL (NIGHT II · PART 1): an NSPanel floats on the CURRENT
     // Space without activating the app — so summoning never switches Spaces or
     // steals frontmost. The prior regular window called .show()+focus, which
     // activated VULCAN and dragged the operator to its Space. Root cause fixed.
-    type: 'panel',
-    frame: false,
     transparent: false,
     backgroundColor: '#050607',   // token: void — no white flash on boot (doctrine 11)
     show: false,
     focusable: true,              // panel may become key without activating the app
     acceptFirstMouse: true,       // clicks work without activating first
-    resizable: false,
-    movable: false,
-    minimizable: false,
+    minimizable: DRILL_WINDOWED,
     maximizable: false,
     fullscreenable: false,        // NEVER native macOS fullscreen (no separate Space)
-    skipTaskbar: true,
-    hasShadow: false,
-    roundedCorners: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -105,9 +118,13 @@ function createWindow() {
     },
   });
 
-  // float above everything, on the active Space (and over other apps' fullscreen)
-  win.setAlwaysOnTop(true, OVERLAY_LEVEL);
-  win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
+  // float above everything, on the active Space (and over other apps' fullscreen).
+  // In drill mode the window is a normal framed window (no overlay levels) so the
+  // Terminal stays visible next to it.
+  if (!DRILL_WINDOWED) {
+    win.setAlwaysOnTop(true, OVERLAY_LEVEL);
+    win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
+  }
   // launched as a hidden login item -> boot resident to the tray + wake listener,
   // no overlay flash (the operator summons with the wake word / hotkey when ready)
   win.once('ready-to-show', () => {
@@ -217,6 +234,14 @@ function forceHide(reason) {
 
 function showOverlay() {
   if (!win) return;
+  if (DRILL_WINDOWED) {
+    // FX3R — a modest framed window beside the Terminal; NOT the fullscreen overlay.
+    win.setBounds(drillBounds());
+    win.showInactive();                        // keep the Terminal key so Ctrl-C stays live
+    registerBankEsc();                         // real behaviour; the drill warns against Esc
+    startWatchdog();
+    return;
+  }
   win.setBounds(activeBounds());               // resolve over whatever screen the operator is on
   win.setAlwaysOnTop(true, OVERLAY_LEVEL);
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
@@ -239,7 +264,9 @@ function hideOverlay() {
 // Only when coming from hidden (a re-summon while visible carries no ceremony).
 async function summon() {
   const wasHidden = !win.isVisible();
-  if (wasHidden) await sendBackdrop();
+  // FX3R — in the modest drill window the fullscreen backdrop snapshot would squash to
+  // the window rect; skip it so the ceremony resolves over the clean void floor instead.
+  if (wasHidden && !DRILL_WINDOWED) await sendBackdrop();
   showOverlay();
   if (wasHidden) win.webContents.send('ui:ignite');
   diagLog('summon');
