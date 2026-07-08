@@ -13,6 +13,8 @@
 import { registerAction } from '../constitution.js';
 import repo from './repo.js';
 import obsidian from './obsidian.js';
+import vercel from './vercel.js';
+import mission from './mission.js';
 import wire from './wire.js';
 
 const skills = new Map();
@@ -44,7 +46,12 @@ export function actionPrompt(skillId, action, detail) {
 }
 
 // register the built-in hands (order = deterministic-match priority; the lexicons
-// are disjoint — repo/git vs note/vault vs wire/brief — so first-hit is unambiguous)
+// are disjoint — repo/git vs note/vault vs deploy/vercel vs brief — so first-hit is
+// unambiguous). B5R: mission is registered BEFORE wire so the mission-brief prefixes
+// ("mission brief" / "morning brief" / "bonsai brief") win, while "brief me" falls
+// through to the wire skill unchanged.
 registerSkill(repo);
 registerSkill(obsidian);
+registerSkill(vercel);
+registerSkill(mission);
 registerSkill(wire);

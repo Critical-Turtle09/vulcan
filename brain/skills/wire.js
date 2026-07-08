@@ -98,13 +98,39 @@ function markSeen(state, items) {
 }
 
 // ---- the SYNTH briefing --------------------------------------------------------
-const BRIEF_SYSTEM =
-  'You are VULCAN, a command-center intelligence for GPU and semiconductor supply-chain '
-  + 'operations, delivering a spoken morning briefing. SYNTHESIZE the supplied wire stories '
-  + `into ONE terse briefing of ${WORDS_MIN}-${WORDS_MAX} words in a flat command-center voice. `
-  + 'Lead with what matters most. Connect related stories; do not just list headlines. Plain '
-  + 'spoken prose only — no markdown, no bullet points, no headings, no preamble ("here is"), '
-  + 'no sign-off. State only what the stories support; never invent facts, numbers, or sources.';
+// B5R MISSION PURITY — mission-neutral command voice (the semiconductor persona is
+// struck). The mission name rides in from tokens so the wire brief speaks for the
+// active launch, not a hardcoded domain.
+function missionName() {
+  try { const tk = loadTokens(); return (tk.mission && tk.mission.name) || ''; } catch (_) { return ''; }
+}
+function briefSystem() {
+  const m = missionName();
+  const forWhom = m ? `for the ${m} launch` : 'for the operator';
+  return `You are VULCAN, the command-center intelligence ${forWhom}, delivering a spoken `
+    + `wire briefing. SYNTHESIZE the supplied stories into ONE terse briefing of ${WORDS_MIN}-${WORDS_MAX} `
+    + 'words in a flat command-center voice. Lead with what matters most to the launch. Connect '
+    + 'related stories; do not just list headlines. Plain spoken prose only — no markdown, no '
+    + 'bullet points, no headings, no preamble ("here is"), no sign-off. State only what the '
+    + 'stories support; never invent facts, numbers, or sources.';
+}
+
+// Trim spoken prose to a hard upper word band WITHOUT a second model call — keep whole
+// sentences up to the cap, fall back to a hard word cut. Shared shape with mission.js.
+export function clampWords(text, max) {
+  const t = String(text || '').trim();
+  const words = t.split(/\s+/);
+  if (words.length <= max) return t;
+  const sentences = t.match(/[^.!?]+[.!?]+/g) || [t];
+  let out = '', n = 0;
+  for (const s of sentences) {
+    const w = s.trim().split(/\s+/).length;
+    if (n && n + w > max) break;
+    out += (out ? ' ' : '') + s.trim(); n += w;
+    if (n >= max) break;
+  }
+  return out || `${words.slice(0, max).join(' ')}…`;
+}
 
 function briefPrompt(items) {
   const lines = items.map((it, i) => `${i + 1}. [${it.feed}${it.ts ? ` · ${ago(it.ts).toLowerCase()}` : ''}] ${cleanTitle(it.title)}`);
@@ -166,11 +192,11 @@ async function brief() {
   // brain banked (no key / over the $ cap) → local headlines, tagged [REFLEX], $0.
   if (!hasKey() || !allow(model)) return headlines({ reflex: true });
 
-  const r = await ask({ model, system: BRIEF_SYSTEM, prompt: briefPrompt(stories), maxTokens: 360 });
+  const r = await ask({ model, system: briefSystem(), prompt: briefPrompt(stories), maxTokens: 360 });
   if (r.banked || !r.text) return headlines({ reflex: true });   // API failure → degrade, no charge
 
   const { usd } = charge(r.model, r.input_tokens, r.output_tokens);
-  const briefing = r.text.trim();
+  const briefing = clampWords(r.text.trim(), WORDS_MAX);   // rider: hold the 120-180 band
 
   // record what we briefed so the next brief prefers what's new
   markSeen(seen, stories);

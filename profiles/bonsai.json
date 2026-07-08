@@ -33,9 +33,12 @@
       "products": "BLOOM TIMING", "status": "POST-BLOOM PRUNE", "note": "Sport control; repot in acidic kanuma next spring." } }
   },
   "wire": {
+    "_note": "B5R FIRST MISSION — mission-pure feeds for the Bonsai Instant Citation launch: ed-tech + citation/scholarly world. All four validated at build (return <item>s). Substitution note: Education Week's generic /feed is an HTML landing page, so this uses their Technology RSS (edweek.org/technology.rss) — a real Education Week feed, on-mission. Google-News searches yielded too few items and were rejected. Keywords empty (bonsai map is disabled; heat is generic).",
     "feeds": [
-      { "label": "BONSAI",       "url": "https://news.google.com/rss/search?q=bonsai+cultivation&hl=en-US&gl=US&ceid=US:en" },
-      { "label": "HORTICULTURE", "url": "https://news.google.com/rss/search?q=horticulture+technique&hl=en-US&gl=US&ceid=US:en" }
+      { "label": "EDSURGE",   "url": "https://www.edsurge.com/articles_rss" },
+      { "label": "EDWEEK",     "url": "https://www.edweek.org/technology.rss" },
+      { "label": "ESCHOOL",    "url": "https://www.eschoolnews.com/feed/" },
+      { "label": "SCHOLARLY",  "url": "https://scholarlykitchen.sspnet.org/feed/" }
     ],
     "keywords": {}
   },

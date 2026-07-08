@@ -18,7 +18,7 @@ import { loadTokens, writeLocalTokens } from '../tokens.js';
 // The local Obsidian registry — the app records every vault it has opened here.
 const REGISTRY = path.join(os.homedir(), 'Library', 'Application Support', 'obsidian', 'obsidian.json');
 
-const WRITE_DIR = 'VULCAN';        // the ONLY writable subtree inside the vault
+export const WRITE_DIR = 'VULCAN';        // the ONLY writable subtree inside the vault
 const CAPTURE_DIR = 'Captures';    // day files live in VULCAN/Captures/
 
 // scan/answer caps — the vault can be large; never let a read run unbounded.
@@ -43,7 +43,9 @@ function readTokens() {
   return loadTokens();   // committed tokens.json + the gitignored local overlay (vault_path)
 }
 
-function resolveVault() {
+// exported for the mission composer (B5R) — locate the vault + confine writes to
+// VULCAN/ exactly like this skill does. One containment implementation, reused.
+export function resolveVault() {
   if (cachedVault) return cachedVault;
   const tk = readTokens();
   const fromTokens = tk.obsidian && tk.obsidian.vault_path;
@@ -71,7 +73,7 @@ function recordVault(p) {
 // Resolve a relative path INSIDE the vault. confine=true → it must stay within the
 // VULCAN/ subtree. Rejects absolute inputs, .. escapes, and symlink escapes
 // (realpath the nearest existing ancestor and re-check). Enforced in code.
-function safePath(vault, rel, { confine = true } = {}) {
+export function safePath(vault, rel, { confine = true } = {}) {
   const root = confine ? path.join(vault, WRITE_DIR) : vault;
   if (typeof rel !== 'string' || rel === '') throw new ContainmentError('empty path');
   if (path.isAbsolute(rel)) throw new ContainmentError(`absolute path rejected: ${rel}`);
