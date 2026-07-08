@@ -111,6 +111,9 @@
     .panel-li .pb { color: var(--data-faint); flex: 0 0 auto; }
     .panel-li .pv { font-size: var(--panel-value-px); color: var(--data-dim); text-transform: none; letter-spacing: 0.02em; }
     /* per-glyph granular resolve — text RESOLVES into being (doctrine 11), never pops */
+    /* FX WORD-WRAP: a word's glyphs live in a nowrap .w so lines break only at spaces
+       (each .g is inline-block, i.e. a break opportunity, which broke words mid-char). */
+    .w { display: inline-block; white-space: nowrap; }
     .g { display: inline-block; opacity: 0; transform: translateY(3px); filter: blur(2px);
       transition: opacity var(--glyph-ms) linear, transform var(--glyph-ms) ease, filter var(--glyph-ms) ease; }
     .panel.resolve .g { opacity: 1; transform: translateY(0); filter: blur(0); }

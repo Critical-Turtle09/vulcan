@@ -168,27 +168,36 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     });
   }
 
+  // NEVER SILENT (constitutional, FX). Silence in ATTENTIVE is a build-failing bug: any
+  // unroutable / dead-end / unfinished path speaks ONE line and returns to listening.
+  const NEVER_SILENT = SESS.fallbackLine || "I didn't catch a command. Say it again, or ask for the mission brief.";
+
   // one exchange: reflex or brain -> present + speak -> back to listening. Returns
   // true only when the utterance is an in-session BANK (leave the hot session).
   async function handleUtterance(transcript, idleMs) {
-    // PART 6 — LOCAL REFLEX: short intents resolve locally + instantly, skip the brain.
+    // PART 6 — LOCAL REFLEX: only the four local controls (mute/unmute/bank/status)
+    // reach here; every skill utterance defers to the conductor (v1.5 MISSION PURITY).
     const cmdIntent = onCommand ? await classify(transcript, bridge) : null;
     if (cmdIntent) {
       if (cmdIntent.type === 'bank') { safe(onCommand, cmdIntent); return true; }   // bank -> hide + leave
       orb.setState('thinking');
       const spoken = safe(onCommand, cmdIntent);
-      if (spoken) await speakGated(spoken, 'answer');
+      await speakGated(spoken || NEVER_SILENT, 'answer');           // NEVER SILENT
       return false;
     }
     orb.setState('thinking');                                        // -> THINKING
     // hold the thinking beat so the LISTENING->THINKING reorganization is seen; a
     // real brain's latency replaces this floor.
     const thinkDwell = isTest() ? V.test.thinkMs : V.thinkMinMs;
-    const [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
+    let answer;
+    try {
+      [answer] = await Promise.all([brain.respond(transcript), sleep(thinkDwell)]);
+    } catch (_) { answer = null; }                                   // brain must never dead-end silently
+    answer = answer || { text: NEVER_SILENT, route: 'REFLEX', reason: 'BRAIN_ERROR' };
     safe(onAnswer, answer, transcript);                              // resolve onto the panel (mouth-to-screen)
     // a confirm PROMPT is announce-class (always speaks); tag it so the engine treats
     // it as always-permitted local-if-over-budget.
-    await speakGated(answer.text, answer && answer.needsConfirm ? 'confirm' : 'answer');
+    await speakGated(answer.text || NEVER_SILENT, answer.needsConfirm ? 'confirm' : 'answer');
     // B2 HANDS — a WRITE_CONFIRM answer needs a SPOKEN confirmation, captured through
     // the SAME hot session. Anything but an explicit confirm aborts.
     if (answer && answer.needsConfirm) {
@@ -196,9 +205,11 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
       const cap = await captureWithIdleTimeout(idleMs);
       const decision = classifyConfirm(cap && cap.transcript);
       orb.setState('thinking');
-      const final = await brain.confirm(answer, decision);
+      let final;
+      try { final = await brain.confirm(answer, decision); } catch (_) { final = null; }
+      final = final || { text: 'Cancelled — nothing left the machine.', route: 'SKILL', aborted: true };
       safe(onAnswer, final, transcript);
-      await speakGated(final.text, 'confirm');
+      await speakGated(final.text || NEVER_SILENT, 'confirm');
     }
     return false;
   }

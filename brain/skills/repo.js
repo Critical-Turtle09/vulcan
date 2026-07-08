@@ -24,12 +24,33 @@ const stamp = () => {
   return `${d.getFullYear()}${z(d.getMonth() + 1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}${z(d.getSeconds())}`;
 };
 
+// FX SIGNATURE PATH — normalize spoken tag-name variants so live speech reliably
+// reaches the same tag. Whisper renders "v2-signed" as "v2 signed", "V two signed",
+// "version two signed", etc. This collapses number-words + version cues to a hyphen
+// slug WITHOUT destroying semver dots: "v2 signed" / "v two signed" / "V two signed"
+// / "v2-signed" all → "v2-signed"; "v1.4.0" stays "v1.4.0".
+const NUMWORDS = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9', ten: '10' };
+function normalizeTag(phrase) {
+  let t = String(phrase).toLowerCase().trim();
+  t = t.replace(/^\s*(?:it\s+|as\s+|to\s+|the\s+|named\s+|call(?:ed)?\s+)+/i, '');   // strip leaked leading cues
+  t = t.replace(/\b(please|now|thanks?|thank you|to origin|on (?:the )?remote)\b.*$/i, '').trim();   // drop filler tail
+  t = t.replace(/\b(zero|one|two|three|four|five|six|seven|eight|nine|ten)\b/g, (m) => NUMWORDS[m]); // number words → digits
+  t = t.replace(/\bver(?:sion)?\s*\.?\s*(\d)/g, 'v$1');   // "version 2" / "ver 2" → "v2"
+  t = t.replace(/\bv\s+(\d)/g, 'v$1');                     // "v 2" → "v2"
+  t = t.replace(/[^a-z0-9./-]+/g, '-').replace(/-+/g, '-').replace(/^[-.]+|[-.]+$/g, '');   // slug; keep . / -
+  return t;
+}
+
 // pull an explicit tag name out of the utterance; else a stamped default
 function parseTag(text) {
-  const m = text.match(/\b(?:tag|release|as|named|call(?:ed)?|version)\s+(?:it\s+|the\s+\w+\s+(?:as\s+)?)?([A-Za-z0-9][\w.\-/]*)/i);
-  if (m && !/^(the|forge|repo|it|this|current|latest|origin)$/i.test(m[1])) return m[1];
-  const v = text.match(/\bv?\d[\w.\-]*\b/);
-  if (v) return v[0];
+  const raw = String(text);
+  const m = raw.match(/\b(?:as|named|call(?:ed)?|tag(?:ged)?(?:\s+it)?|release(?:d)?(?:\s+as)?|version)\s+(?:the\s+\w+\s+(?:as\s+)?)?(.+)$/i);
+  if (m) {
+    const norm = normalizeTag(m[1]);
+    if (norm && !/^(the|forge|repo|it|this|current|latest|origin)$/.test(norm)) return norm;
+  }
+  const v = raw.toLowerCase().match(/\b(?:v|ver|version)\s*\.?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten)[\w.\- ]*/);
+  if (v) { const norm = normalizeTag(v[0]); if (norm) return norm; }
   return `forge-${stamp()}`;
 }
 

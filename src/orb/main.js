@@ -186,14 +186,13 @@ function runCommand(intent) {
     case 'mute': voice.setMuted(true); paintHud(); return 'Muted.';
     case 'unmute': voice.setMuted(false); paintHud(); return 'Listening.';
     case 'bank': bank(); return null;
-    case 'summon':
-      if (intent.arg === 'schematic') { summonSchematic(); return 'Summoning the device schematic.'; }
-      if (intent.arg && regions()[intent.arg]) { summon(intent.arg); return `Summoning ${regions()[intent.arg].name}.`; }
-      return 'Which region — Taiwan, Europe, North America, or Korea?';
-    case 'explode': if (sceneKind === 'schematic') { explodeTarget = 1; return 'Exploded view.'; } return null;
-    case 'assemble': explodeTarget = 0; return 'Reassembled.';
-    case 'profile': switchProfile(); return `Profile ${activeProfileId()}.`;
     case 'status': return statusLine();
+    // v1.5 MISSION PURITY · FX purge — the semiconductor-era SCENE reflexes
+    // (summon · region/country picker · device/schematic · explode · assemble · profile
+    // switch) are STRUCK from the voice path and archived to v3 with the scene library.
+    // Their functions (summon/summonSchematic/explode/switchProfile) survive for DEV
+    // keys only (t/v/n/k · x · e · P), never spoken intent — this is what let "mission
+    // brief" get answered with a country picker.
     default: return null;
   }
 }

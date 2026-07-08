@@ -56,10 +56,11 @@ await call('voiceGoDormant');            // leave any ATTENTIVE from the boot au
 await waitSession('dormant', 9000);
 await page.waitForTimeout(300);          // let the recorder log a DORMANT sample first
 
-// a fast, side-effect-free spoken exchange: "profile" is a local reflex that speaks a
-// short line ("Profile bonsai.") and — under mission purity's single-profile ORDER —
-// does not actually switch anything. Keeps each exchange ~1.2s.
-const EX = 'profile';
+// a fast, side-effect-free spoken exchange: "status" is a local reflex (kept after the
+// FX purge) that speaks the system sitrep and does not touch the session. Resolves
+// locally + instantly — no brain call, no spend. (The purge removed the old "profile"
+// reflex, so it can no longer serve as the probe.)
+const EX = 'status';
 
 // one spoken exchange: from LISTENING, feed an utterance, ride thinking→speaking, and
 // require the loop to RETURN TO LISTENING (proof the session stayed hot — no re-wake).

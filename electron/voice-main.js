@@ -55,17 +55,22 @@ export function registerVoiceIpc() {
     const url = (cfg && cfg.url) || 'http://localhost:11434';
     const model = (cfg && cfg.model) || 'llama3.2:1b';
     const timeoutMs = (cfg && cfg.timeoutMs) || 2500;
+    // v1.5 MISSION PURITY · FX purge — LOCAL session controls ONLY. The semiconductor
+    // scene intents (summon/region/schematic/explode/assemble/profile) are struck; the
+    // renderer also rejects anything outside {mute,unmute,bank,status} and defers it to
+    // the conductor's deterministic skill router. Keep this set in lockstep.
     const sys = 'Route a terminal operator\'s short command into ONE intent. '
-      + 'Reply ONLY compact JSON {"type":"...","arg":...}. '
-      + 'type is exactly one of: mute, unmute, bank, summon, status, profile, explode, assemble, none. '
-      + 'For summon, arg is one of taiwan, eu, namerica, korea, schematic, or null; otherwise arg is null. '
-      + 'Not a short command -> {"type":"none","arg":null}. Examples: '
-      + '"quiet down" -> {"type":"mute","arg":null}; '
-      + '"pull up korea" -> {"type":"summon","arg":"korea"}; '
-      + '"show me the gpu" -> {"type":"summon","arg":"schematic"}; '
-      + '"stand down" -> {"type":"bank","arg":null}; '
-      + '"how are we doing" -> {"type":"status","arg":null}; '
-      + '"tell me a joke" -> {"type":"none","arg":null}.';
+      + 'Reply ONLY compact JSON {"type":"..."}. '
+      + 'type is exactly one of: mute, unmute, bank, status, none. '
+      + 'Anything that is not one of those (a question, a brief, a tag, a note, any other '
+      + 'request) -> {"type":"none"}. Examples: '
+      + '"quiet down" -> {"type":"mute"}; '
+      + '"open the mic" -> {"type":"unmute"}; '
+      + '"stand down" -> {"type":"bank"}; '
+      + '"how are we doing" -> {"type":"status"}; '
+      + '"mission brief" -> {"type":"none"}; '
+      + '"tag the forge as v2 signed" -> {"type":"none"}; '
+      + '"tell me a joke" -> {"type":"none"}.';
     try {
       const ctrl = new AbortController();
       const to = setTimeout(() => ctrl.abort(), timeoutMs);

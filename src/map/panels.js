@@ -10,12 +10,20 @@ import rawTokens from '../../tokens.json';
 
 const P = rawTokens.panel;
 
-// wrap each character in a resolvable glyph span (spaces preserved, not animated)
+// wrap each character in a resolvable glyph span (spaces preserved, not animated).
+// FX WORD-WRAP: each .g is display:inline-block, so the browser may break the line
+// between ANY two glyphs — that produced mid-word breaks. Group each WORD's glyphs in
+// a nowrap .w span so a word never breaks internally; spaces between words are the only
+// line-break opportunities → wrapping happens at word boundaries.
+const esc = (ch) => (ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '&' ? '&amp;' : ch);
 function glyphize(str) {
   let html = '';
-  for (const ch of String(str)) {
-    if (ch === ' ') html += ' ';
-    else html += `<span class="g">${ch === '<' ? '&lt;' : ch === '&' ? '&amp;' : ch}</span>`;
+  for (const tok of String(str).split(/(\s+)/)) {   // keep the whitespace tokens
+    if (tok === '') continue;
+    if (/^\s+$/.test(tok)) { html += tok; continue; }   // spaces = break opportunities
+    let word = '';
+    for (const ch of tok) word += `<span class="g">${esc(ch)}</span>`;
+    html += `<span class="w">${word}</span>`;
   }
   return html;
 }
@@ -81,9 +89,16 @@ export function createPanels() {
 
   // untethered panels sit beside the hero (left of center), vertically centered —
   // never docked to an edge as a bar (§6-D). Recomputed on open + resize.
+  // FX RAIL-CLEARANCE: the panel must never render over/under the V.A.U.L.T rails.
+  // Constrain it to the SAFE BAND between the two side columns (rail footprint =
+  // margin.x + col.width each side) and cap its width so it can't spill onto a rail.
   function positionFree(el) {
     const w = window.innerWidth, h = window.innerHeight;
-    const px = Math.round(w * 0.09);
+    const railW = (rawTokens.hud['margin.x'] || 46) + (rawTokens.hud['col.width'] || 236);
+    const gap = 28;
+    const band = Math.max(240, w - 2 * (railW + gap));   // clear space between the rails
+    el.style.maxWidth = `${band}px`;                       // never wider than the band
+    const px = railW + gap;                                // left-aligned just inside the left rail
     const py = Math.round(Math.max(rawTokens.hud['margin.y'], (h - el.offsetHeight) / 2));
     el.style.left = `${px}px`; el.style.top = `${py}px`;
   }

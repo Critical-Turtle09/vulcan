@@ -1,48 +1,55 @@
-// PART 6 — LOCAL REFLEXES. Short operator intents (mute, bank, summon, status,
-// mode/profile switch, explode) resolve LOCALLY and instantly: first a fast regex
-// pass, then (optionally) a small local Ollama model via the main process for the
-// fuzzy cases. Anything not a short command falls through to the brain. Fully
-// fail-soft — no Ollama, no network, no problem: the regex layer still handles it.
+// LOCAL REFLEXES (v1.5 MISSION PURITY · FX purge). Short LOCAL session controls that
+// resolve instantly in the voice loop: mute, unmute, bank, status. Nothing else.
+//
+// PURITY PURGE (FX — ceremony autopsy): the semiconductor-era scene reflexes (summon,
+// region/country pickers, device/schematic, explode/assemble, profile switch) are
+// STRUCK from active routing — archived to v3 with the scene library (spec v1.5). They
+// were what broke the signing ceremony: the fuzzy local Ollama model classified
+// "mission brief" as `summon: taiwan` and spoke a country picker, preempting the
+// conductor's deterministic skill router.
+//
+// TWO HARD GUARANTEES now:
+//   1. SKILL DEFER — any skill-shaped utterance (brief/mission/deploy/tag/note/…) returns
+//      null immediately, so it ALWAYS reaches the conductor's deterministic skill router
+//      (mission/wire/repo/vault/vercel). The reflex may never preempt a skill.
+//   2. ALLOWED-ONLY — the Ollama fallback is accepted ONLY if it names one of the four
+//      local intents; any other/garbage type (e.g. a hallucinated "v2") is rejected and
+//      deferred. The reflex can never emit a scene command again.
 import rawTokens from '../tokens.json';
 
-const REGION_WORDS = {
-  taiwan: /\b(taiwan|tsmc|hsinchu|strait)\b/,
-  eu: /\b(europe|eu|veldhoven|asml|netherlands|dresden|rotterdam)\b/,
-  namerica: /\b(america|us|arizona|nvidia|micron|boise|santa clara)\b/,
-  korea: /\b(korea|samsung|hynix|busan)\b/,
-};
+// the ONLY intents the reflex owns — pure local session controls, no conductor skill.
+const ALLOWED = new Set(['mute', 'unmute', 'bank', 'status']);
 
-// regex reflex — returns { type, arg? } or null. Runs with zero dependencies.
+// Skill-shaped utterances must reach the conductor's deterministic router — never the
+// fuzzy reflex. This is the wall that keeps "mission brief" / "tag …" out of the reflex.
+const SKILL_DEFER = /\b(brief|briefing|mission|deploy|deployment|vercel|prod|production|tag|release|note|jot|capture|remember|commit|diff|pipeline|pitch|vault|repo|repository|git|headlines?|wire|news)\b/;
+
+// regex reflex — returns { type } for a local control, or null. Zero dependencies.
 export function regexClassify(text) {
   const t = (text || '').toLowerCase().trim();
   if (!t) return null;
+  if (SKILL_DEFER.test(` ${t} `)) return null;                       // defer to the conductor
   if (/\b(unmute|un-mute|open mic|start listening)\b/.test(t)) return { type: 'unmute' };
   if (/\b(mute|silence|quiet|shush)\b/.test(t)) return { type: 'mute' };
   if (/\b(bank|stand down|dismiss|quench|hide|go away)\b/.test(t)) return { type: 'bank' };
-  if (/\b(explode|teardown|tear down|blow apart|separate)\b/.test(t)) return { type: 'explode' };
-  if (/\b(assemble|reassemble|put.*back|collapse)\b/.test(t)) return { type: 'assemble' };
   if (/\b(status|report|sitrep|how are|what.?s (up|happening)|state)\b/.test(t)) return { type: 'status' };
-  if (/\b(profile|mode|switch (profile|mode))\b/.test(t)) return { type: 'profile' };
-  if (/\b(device|schematic|gpu board|teardown mode|show the chip)\b/.test(t)) return { type: 'summon', arg: 'schematic' };
-  if (/\b(summon|show|open|pull up|bring up|go to|display)\b/.test(t)) {
-    for (const [id, re] of Object.entries(REGION_WORDS)) if (re.test(t)) return { type: 'summon', arg: id };
-    return { type: 'summon', arg: null };   // summon with no region -> caller may prompt
-  }
-  for (const [id, re] of Object.entries(REGION_WORDS)) if (re.test(t)) return { type: 'summon', arg: id };
-  return null;
+  return null;                                                        // not a local control → conductor
 }
 
-// full classify: regex first (instant), then Ollama (via bridge) for fuzzy cases.
-// The known intent set is fixed, so Ollama only helps phrasing we didn't regex.
+// full classify: SKILL DEFER first, then regex, then Ollama (validated to ALLOWED).
+// Anything not a local control → null → the conductor's deterministic skill router.
 export async function classify(text, bridge) {
+  const t = (text || '').toLowerCase().trim();
+  if (!t || SKILL_DEFER.test(` ${t} `)) return null;                 // skill utterance → conductor
   const rx = regexClassify(text);
   if (rx) return { ...rx, via: 'regex' };
   if (rawTokens.reflex.enabled && bridge && bridge.reflex) {
     try {
       const R = rawTokens.reflex;
       const r = await bridge.reflex(text, { url: R['ollama.url'], model: R['ollama.model'], timeoutMs: R['ollama.timeoutMs'] });
-      if (r && r.type && r.type !== 'none') return { ...r, via: 'ollama' };
+      // ALLOWED-ONLY: accept a local control; reject scene/garbage types → defer.
+      if (r && r.type && ALLOWED.has(r.type)) return { type: r.type, arg: null, via: 'ollama' };
     } catch (_) { /* fail-soft */ }
   }
-  return null;   // not a short command -> brain handles it
+  return null;   // not a short local command → the conductor handles it
 }
