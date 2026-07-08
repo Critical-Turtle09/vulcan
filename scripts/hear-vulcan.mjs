@@ -9,27 +9,44 @@
 // This is the acceptance test-mode ears may NOT carry (the v1.4 re-summon defect only
 // reproduces on the real mic + real TTS playback). Nothing is simulated here.
 //
-//   prereqs: vite dev server on :5273 (npm run dev) + .env with WHISPER_BIN/
-//            WHISPER_MODEL and ELEVENLABS_API_KEY.
-//   run: npm run dev   (one terminal)
-//        node scripts/hear-vulcan.mjs   (another)
-import { _electron as electron } from 'playwright';
+// SINGLE-INSTANCE SAFETY: this drill AUTO-ATTACHES to an already-running VULCAN over
+// CDP (VULCAN_CDP port, default 9222) instead of spawning a second app. That is how it
+// is meant to run — the operator (or the setup step) launches ONE clean instance with
+// `--remote-debugging-port=9222`; the drill drives THAT one. If nothing is reachable it
+// falls back to launching its own. (A stale second instance was what corrupted the
+// first run — never drive with two apps fighting for the mic.)
+//
+//   prereqs: ONE VULCAN on :5273 with CDP 9222, real .env (WHISPER_* + ELEVENLABS_API_KEY).
+//   run: node scripts/hear-vulcan.mjs
+import { _electron as electron, chromium } from 'playwright';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+const CDP = process.env.VULCAN_CDP || '9222';
 let pass = 0, fail = 0;
 const ok = (c, m) => { console.log(`   ${c ? '✅ PASS' : '❌ FAIL'} · ${m}`); c ? pass++ : fail++; return c; };
 const say = (s) => console.log(`\n\x1b[1m\x1b[38;5;208m🗣  SAY:  “${s}”\x1b[0m`);
 const note = (s) => console.log(`\x1b[2m   ${s}\x1b[0m`);
 
-const app = await electron.launch({ cwd: ROOT, args: ['.'], env: { ...process.env } });  // LIVE — real key + mic
-app.process().stdout.on('data', (d) => { for (const l of d.toString().split('\n')) if (l.includes('[VOICE]') || l.includes('[GATE-WATCHDOG]')) console.log('\x1b[2m  ' + l.trim() + '\x1b[0m'); });
-
-const page = await app.firstWindow();
+// attach to a running instance over CDP (preferred) — else launch our own.
+let app = null, page = null, attached = false;
+try {
+  const browser = await chromium.connectOverCDP(`http://127.0.0.1:${CDP}`, { timeout: 3000 });
+  const ctx = browser.contexts()[0];
+  page = ctx.pages().find(Boolean) || await ctx.waitForEvent('page', { timeout: 3000 });
+  await page.waitForFunction(() => !!window.__vulcanHome, { timeout: 6000 });
+  attached = true;
+  console.log(`· attached to the running VULCAN instance over CDP :${CDP} (single-instance — no second app spawned)`);
+} catch (_) {
+  console.log('· no running instance on CDP — launching one (LIVE: real key + mic)');
+  app = await electron.launch({ cwd: ROOT, args: ['.'], env: { ...process.env } });
+  app.process().stdout.on('data', (d) => { for (const l of d.toString().split('\n')) if (l.includes('[VOICE]') || l.includes('[GATE-WATCHDOG]')) console.log('\x1b[2m  ' + l.trim() + '\x1b[0m'); });
+  page = await app.firstWindow();
+}
 page.on('pageerror', (e) => console.error('PAGE ERROR:', e.message));
 await page.waitForFunction(() => !!window.__vulcanHome, { timeout: 20000 });
-await page.waitForTimeout(2000);
+await page.waitForTimeout(1500);
 
 const status = () => page.evaluate(() => window.__vulcanHome.voiceStatus());
 const cfg = await status();
@@ -61,8 +78,11 @@ const waitState = (s, ms, label) => waitFor((x) => window.__vulcanHome.voiceStat
 async function exchange(prompt, n) {
   say(prompt);
   note(`(exchange ${n} — do NOT say "Fire and Forge"; just ask)`);
-  const heard = await waitState('thinking', 30000, 'VULCAN to start thinking') || await waitState('speaking', 30000, 'VULCAN to speak');
-  const spoke = await waitState('speaking', 30000, 'VULCAN to speak');
+  // Reflex answers (e.g. "status") pass through THINKING in <1ms — it is never
+  // observable, so assert only the phases that ARE: VULCAN SPEAKS, then RETURNS TO
+  // LISTENING while STILL ATTENTIVE (the no-re-wake proof). If it drops out of
+  // ATTENTIVE without a bank, that is a real failure and we report it.
+  const spoke = await waitState('speaking', 40000, 'VULCAN to speak');
   const back = await waitState('listening', 60000, 'VULCAN to return to listening');
   const s = await status();
   return ok(spoke && back && s.session === 'attentive', `exchange ${n}: answered and returned to LISTENING, still ATTENDING (no re-wake)`);
@@ -105,5 +125,11 @@ await waitSession('dormant', 30000, 'DORMANT');
 clearInterval(logTimer);
 console.log('\n──────────────────────────────────────────────────────────────');
 console.log(`\n=== ${fail === 0 ? '✅ LIVE DRILL PASSED' : '❌ LIVE DRILL FAILED'} · ${pass} pass · ${fail} fail ===`);
-console.log('   (Ctrl-C to exit; VULCAN stays resident + listening.)');
-await new Promise(() => {});   // keep the app alive so the operator can keep using it
+if (attached) {
+  // the app is a separate, still-running instance — detach and return the prompt.
+  console.log('   (detached; VULCAN keeps running.)');
+  process.exit(fail === 0 ? 0 : 1);
+} else {
+  console.log('   (Ctrl-C to exit; VULCAN stays resident + listening.)');
+  await new Promise(() => {});   // keep our launched app alive
+}

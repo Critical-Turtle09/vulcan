@@ -156,13 +156,12 @@ console.log('(C) auto-dormant — silence in ATTENTIVE speaks one line, then dro
 await call('triggerWake');
 await waitSession('attentive', 6000);
 await waitState('listening', 9000);
-const cMark = await readRec();
-// no utterance; the idle timer (test: 4s) must fire → a spoken line → DORMANT
-await waitSession('dormant', 12000);
-const cSeg = await dumpRec(cMark, await readRec());
-const spokeBeforeDormant = cSeg.some((s) => s.endsWith(':speaking'));
+// no utterance; the idle timer (test: 4s) must fire → a spoken line → DORMANT. Wait for
+// the announce SPEAK deterministically (raf-polled), not by sampling the 40ms recorder.
+const spokeBeforeDormant = await waitState('speaking', 12000).then(() => true).catch(() => false);
+const droppedC = await waitSession('dormant', 12000).then(() => true).catch(() => false);
 ok(spokeBeforeDormant, 'auto-dormant announced with one spoken line before dropping');
-ok((await st()).session === 'dormant', 'auto-dormant → DORMANT on its own (no operator action)');
+ok(droppedC && (await st()).session === 'dormant', 'auto-dormant → DORMANT on its own (no operator action)');
 console.log('');
 
 // ---- (D) TEN CYCLES --------------------------------------------------------

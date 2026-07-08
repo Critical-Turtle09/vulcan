@@ -53,6 +53,26 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   const dismissPhrases = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map((s) => s.toLowerCase());
   const isDismissText = (t) => { const s = String(t || '').toLowerCase(); return dismissPhrases.some((p) => s.includes(p)); };
 
+  // SELF-HEAR DEFENCE (S1 re-drill). With echoCancellation OFF (mic coexistence), the
+  // reopened mic can catch the room echo of VULCAN's own line and route it as a command
+  // — a feedback loop that spams cached answers and can trip a spurious mute. We remember
+  // the last few lines VULCAN spoke; a capture transcript that matches one is discarded.
+  const spokenRing = [];
+  const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  function rememberSpoken(text) { const n = norm(text); if (!n) return; spokenRing.push(n); while (spokenRing.length > 4) spokenRing.shift(); }
+  function isSelfEcho(transcript) {
+    const t = norm(transcript); if (t.length < 4) return false;
+    const tw = new Set(t.split(' '));
+    for (const s of spokenRing) {
+      if (!s) continue;
+      if (s.includes(t) || t.includes(s)) return true;                 // clean echo (sub/superstring)
+      const sw = s.split(' ');
+      const common = sw.filter((w) => tw.has(w)).length;               // token overlap of the spoken line
+      if (sw.length && common >= 3 && common / sw.length >= 0.6) return true;
+    }
+    return false;
+  }
+
   async function boot() {
     cfg = await safeConfig(bridge);
     const testMode = forceTest || cfg.testMode;
@@ -127,6 +147,9 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
       }
       const transcript = (cap.transcript || '').trim();
       if (!transcript) continue;                                    // silence/garble -> stay attentive, re-listen
+      // SELF-HEAR DEFENCE: a capture that echoes what VULCAN just said is its own voice
+      // off the room, not a command — ignore it (live only; test drives synthetic text).
+      if (!isTest() && (SESS.selfEchoGuard !== false) && isSelfEcho(transcript)) continue;
       if (isDismissText(transcript)) { safe(onDismiss); break; }    // spoken bank -> DORMANT
       const end = await handleUtterance(transcript, idleMs);
       if (end) break;                                               // an in-session bank command
@@ -184,11 +207,14 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   // the macOS HAL reconfiguration race), speak on the real analyser envelope, then a
   // short settle before the next capture re-acquires a fresh graph.
   async function speakGated(text, kind = 'answer') {
+    rememberSpoken(text);                                            // for the self-echo guard
     orb.setState('speaking');                                        // -> SPEAKING
     if (ears && ears.closeForSpeech) ears.closeForSpeech();
     await mouth.speak(text, { synthetic: synthetic(), kind });
     orb.setAmplitude(0);
-    const settle = SESS.speakGateSettleMs || 0;
+    // let the room echo of VULCAN's own line decay below the VAD before the ear reopens
+    // (echoCancellation is off for mic coexistence). Test uses ~0 to stay fast.
+    const settle = (isTest() ? (SESS.test && SESS.test.speakGateSettleMs) : SESS.speakGateSettleMs) || 0;
     if (settle) await sleep(settle);
   }
 
@@ -233,6 +259,7 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   // other utterance; drives the speaking state so the orb rides the envelope.
   async function say(text, { kind = 'answer' } = {}) {
     if (!mouth || !text) return;
+    rememberSpoken(text);                                            // for the self-echo guard
     orb.setState('speaking');
     if (ears && ears.closeForSpeech) ears.closeForSpeech();
     await mouth.speak(text, { synthetic: synthetic(), kind });
