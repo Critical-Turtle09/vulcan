@@ -5,6 +5,18 @@
 > through these tokens (doctrine 10 — tokens, never hardcode). Restyling from an
 > operator reference is a token edit, not a code change.
 
+## `perf`
+
+| Token | Value |
+|---|---|
+| `perf._note` | `RL-5 v2 PART 3 — PACKAGED-APP PERF. Full-screen bloom+grade post at dpr=2 on a Retina/4K display pinned every state to ~23ms (~42fps). maxPixelRatio caps the render resolution; the adaptive governor scales it between min/max to hold the frame budget, degrading gracefully instead of dropping frames.` |
+| `perf.maxPixelRatio` | `1.5` |
+| `perf.minRenderScale` | `0.66` |
+| `perf.governor` | `true` |
+| `perf.budgetMs` | `19` |
+| `perf.recoverMs` | `14.5` |
+| `perf.hudHz` | `6` |
+
 ## `palette`
 
 The rationed palette. Greyscale world · bone data · molten heat. Never pure #000/#FFF.
@@ -117,15 +129,20 @@ The orb: particle-field body, audio-reactive waves, hairline wave-rings, per-sta
 | `orb.camera.fov` | `36` |
 | `orb.stateLerp` | `2.6` |
 | `orb.rings.count` | `6` |
-| `orb.rings.radii` | `[0.7, 0.79, 0.88, 0.97, 1.06, 1.15]` |
-| `orb.rings.segments` | `180` |
-| `orb.rings.noiseAmp` | `0.085` |
-| `orb.rings.noiseFreq` | `2.4` |
-| `orb.rings.audioGain` | `0.42` |
-| `orb.rings.speed` | `0.4` |
+| `orb.rings.offsets` | `[0.9, 0.96, 1.01, 1.05, 1.09, 1.14]` |
 | `orb.rings.tilts` | `[0.28, -0.46, 0.86, -1.02, 0.5, -0.22]` |
-| `orb.rings.lineWeight` | `1` |
-| `orb.rings.opacity` | `0.42` |
+| `orb.rings.segments` | `140` |
+| `orb.rings.lineWeight` | `2.4` |
+| `orb.rings.opacity` | `0.46` |
+| `orb.rings.dotsPerRing` | `24` |
+| `orb.rings.dotSize` | `2.1` |
+| `orb.rings.spinFollow` | `0.4` |
+| `orb.rings.molten.offset` | `1.03` |
+| `orb.rings.molten.tilt` | `0.12` |
+| `orb.rings.molten.lineWeight` | `3.2` |
+| `orb.rings.molten.opacity` | `0.6` |
+| `orb.rings.molten.breatheAmp` | `0.16` |
+| `orb.rings.molten.breatheHz` | `0.14` |
 | `orb.states.idle.agitation` | `0.1` |
 | `orb.states.idle.waveAmp` | `0.15` |
 | `orb.states.idle.reactive` | `0` |
@@ -176,9 +193,25 @@ Voice organ: wake/dismiss phrases, provider chain, VAD, envelope, test timings.
 
 | Token | Value |
 |---|---|
+| `voice._note` | `SLICE V — THE VOICE. The mouth is ElevenLabs voice 'VULCAN 1' with a fail-soft chain (elevenlabs -> kokoro bm_george -> macOS say). id is the saved VULCAN 1 voice_id and is INERT without ELEVENLABS_API_KEY; empty falls back to env ELEVENLABS_VOICE_ID. daily_char_cap meters cloud TTS against the ~/.vulcan ledger; over budget drops to the local chain, but announce + confirm ALWAYS speak on the local voice regardless of budget. Fixed announcements pre-warm into ~/.vulcan/voice-cache and replay at zero character cost.` |
 | `voice.wakeWord` | `fire and forge` |
+| `voice.capture_mode` | `ptt` |
+| `voice.ptt_key` | `Space` |
+| `voice.ears._note` | `S2 THE TRIGGER — the ears chain. Primary STT is the Wispr Flow REST API (VULCAN_WISPR_KEY, main-side only, never logged/committed); no key / offline / API error drops SEAMLESSLY to the local whisper.cpp path. A drop is logged and tagged [EARS·LOCAL] in panel chrome, never thrown. wispr.* are the REST call params; the provider chain is fixed wispr -> local.` |
+| `voice.ears.wispr.endpoint` | `https://platform-api.wisprflow.ai/api/v1/dash/api` |
+| `voice.ears.wispr.language` | `[en]` |
+| `voice.ears.wispr.timeoutMs` | `8000` |
 | `voice.provider` | `auto` |
 | `voice.providerChain` | `[elevenlabs, kokoro, say]` |
+| `voice.id` | `B1tWAfxW4rR9RmxcXI9m` |
+| `voice.daily_char_cap` | `8000` |
+| `voice.elevenlabs.model_id` | `eleven_turbo_v2` |
+| `voice.elevenlabs.stability` | `0.4` |
+| `voice.elevenlabs.similarity_boost` | `0.7` |
+| `voice.elevenlabs.style` | `0` |
+| `voice.elevenlabs.use_speaker_boost` | `true` |
+| `voice.cache.enabled` | `true` |
+| `voice.prewarm` | `[Capturing to the vault.]` |
 | `voice.dismissPhrase` | `bank the fire` |
 | `voice.dismissPhrases` | `[bank the fire, stand down, bake the fire, bank the forge, bank fire, stand-down]` |
 | `voice.muteKey` | `m` |
@@ -186,12 +219,28 @@ Voice organ: wake/dismiss phrases, provider chain, VAD, envelope, test timings.
 | `voice.silenceTimeoutMs` | `1200` |
 | `voice.captureMaxMs` | `8000` |
 | `voice.vad.threshold` | `0.02` |
+| `voice.capture._note` | `RL-5 v2 PART 2 — MIC COEXISTENCE. echoCancellation/noiseSuppression/autoGainControl are FALSE on purpose: on macOS those constraints engage Apple's Voice-Processing I/O unit, which reconfigures the shared input device and breaks other apps' capture (operator's Wispr Flow dictation). Raw shared HAL capture coexists; VAD+whisper don't need the processing.` |
+| `voice.capture.channelCount` | `1` |
+| `voice.capture.echoCancellation` | `false` |
+| `voice.capture.noiseSuppression` | `false` |
+| `voice.capture.autoGainControl` | `false` |
 | `voice.envelope.attack` | `0.5` |
 | `voice.envelope.decay` | `0.12` |
 | `voice.envelope.smoothing` | `0.8` |
+| `voice.envelope.gateWatchdogGraceMs` | `2000` |
 | `voice.ring.minResponse` | `0.35` |
 | `voice.ring.maxResponse` | `1.35` |
 | `voice.thinkMinMs` | `800` |
+| `voice.session._note` | `v1.5 THE ATTENDANT — the hot session. DORMANT: wake phrase only. ATTENTIVE: every utterance is a command, no re-wake between exchanges. idle_to_dormant_min minutes of silence in ATTENTIVE auto-banks to DORMANT, announced first with autoDormantLine. reacquireEars re-acquires a fresh capture graph each listen (the v1.4 real-ears re-summon fix). v1.5.1 THE TRIGGER: with capture_mode 'ptt' the mic opens only while the trigger is held, so the self-hear feedback loop is structurally gone (the SELF-HEAR DEFENCE below is active for 'open' mode only). redirectLine is spoken when a held clip from DORMANT is neither the wake phrase nor a dismiss — never silence. SELF-HEAR DEFENCE (open mode): echoCancellation is OFF for mic coexistence, so after VULCAN speaks the reopened mic can catch the room echo of its own line -> a spurious command; speakGateSettleMs lets the echo decay below the VAD before the ear reopens; selfEchoGuard discards a capture that matches a line VULCAN just spoke.` |
+| `voice.session.idle_to_dormant_min` | `5` |
+| `voice.session.autoDormantLine` | `Banking the fire. Say Fire and Forge when you need me.` |
+| `voice.session.fallbackLine` | `I didn't catch a command. Say it again, or ask for the mission brief.` |
+| `voice.session.redirectLine` | `Hold the trigger and say Fire and Forge to wake me.` |
+| `voice.session.reacquireEars` | `true` |
+| `voice.session.speakGateSettleMs` | `650` |
+| `voice.session.selfEchoGuard` | `true` |
+| `voice.session.test.idleToDormantMs` | `4000` |
+| `voice.session.test.speakGateSettleMs` | `150` |
 | `voice.test.wakeDelayMs` | `900` |
 | `voice.test.captureMs` | `1500` |
 | `voice.test.thinkMs` | `850` |
@@ -203,9 +252,19 @@ Mode system — default profile, switch key, crossflow.
 
 | Token | Value |
 |---|---|
-| `profile.default` | `semiconductor` |
+| `profile.default` | `bonsai` |
 | `profile.crossflow.ms` | `950` |
 | `profile.switchKey` | `p` |
+
+## `mission`
+
+| Token | Value |
+|---|---|
+| `mission._note` | `B5R FIRST MISSION — VULCAN's job: the Bonsai Instant Citation launch. name drives the persona + wire voice. repos are git status targets (~ expands per machine). vercel_project is empty until connected (DEPLOY reads 'not connected' until then). pipeline is the outreach board, a vault-relative path INSIDE VULCAN/ containment. Machine-specific overrides (a real vercel_project, absolute repo paths) belong in tokens.local.json, never here.` |
+| `mission.name` | `Bonsai Instant Citation` |
+| `mission.repos` | `[~/vulcan, ~/bonsai]` |
+| `mission.vercel_project` | `` |
+| `mission.pipeline` | `VULCAN/Pipeline.md` |
 
 ## `map`
 
@@ -218,6 +277,9 @@ Summoned theater — sites, routes, terrain, summon crossflow, real-topo.
 | `map.site.pulse` | `[0.55, 1]` |
 | `map.site.pulsePeriod` | `[4, 7]` |
 | `map.site.labelPx` | `11` |
+| `map.border.alpha` | `0.75` |
+| `map.border.lift` | `0.14` |
+| `map.border.labelPx` | `10` |
 | `map.route.segments` | `90` |
 | `map.route.arcHeight` | `1.7` |
 | `map.route.baseAlpha` | `0.22` |
@@ -330,16 +392,23 @@ Local reflexes — Ollama endpoint/model + enable flag.
 | `reflex.ollama.timeoutMs` | `2500` |
 | `reflex.enabled` | `true` |
 
+## `obsidian`
+
+| Token | Value |
+|---|---|
+| `obsidian._note` | `B3 HANDS II — VULCAN's second hand. The vault_path VALUE lives in tokens.local.json (gitignored) so no machine path lands in the committed tree; the node loader (brain/tokens.js) deep-merges it over this empty key. Delete it there to re-discover (a single registry vault is auto-recorded back into tokens.local.json), or set it to override. ALL writes are hard-confined to the VULCAN/ subtree (containment enforced in brain/skills/obsidian.js, not by this token).` |
+| `obsidian.vault_path` | `` |
+
 ## `ignition`
 
 The ignition ceremony (kindle → strike → title → resolve) + the quench, spark field, hotkey.
 
 | Token | Value |
 |---|---|
-| `ignition.spark.count` | `1900` |
+| `ignition.spark.count` | `2400` |
 | `ignition.spark.edgeBias` | `0.8` |
-| `ignition.ceremony.ms` | `3000` |
-| `ignition.bank.ms` | `1800` |
+| `ignition.ceremony.ms` | `3200` |
+| `ignition.bank.ms` | `2600` |
 | `ignition.strike.at` | `0.26` |
 | `ignition.strike.width` | `0.14` |
 | `ignition.title.text` | `VULCAN` |
@@ -348,6 +417,9 @@ The ignition ceremony (kindle → strike → title → resolve) + the quench, sp
 | `ignition.hotkey` | `Alt+Space` |
 | `ignition.spark.size` | `5.2` |
 | `ignition.spark.hotPush` | `3.2` |
-| `ignition.shock.max` | `1.55` |
+| `ignition.shock.max` | `5.2` |
+| `ignition.shock.innerLag` | `0.34` |
+| `ignition.quench.steamRise` | `1.35` |
+| `ignition.quench.emberFall` | `0.55` |
 | `ignition.backdrop.enabled` | `true` |
 

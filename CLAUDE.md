@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 VULCAN — Silicon Forge Intelligence. A Jarvis-style GPU/semiconductor supply-chain terminal. It runs
 full-screen on a Mac mini, summoned at login or by wake word. Sibling project to Hermes.
 
-**Current state: Phase 2 (BUILD) → v2 THE CONDUCTOR · v1.5 THE ATTENDANT.** The design spec is
-LOCKED (v1.3 "FORGE AMENDMENT" + v1.4 "COMMAND CENTER PIVOT" + v1.5 "THE ATTENDANT" — see below).
+**Current state: Phase 2 (BUILD) → v2 THE CONDUCTOR · v1.5.1 THE TRIGGER.** The design spec is
+LOCKED (v1.3 "FORGE AMENDMENT" + v1.4 "COMMAND CENTER PIVOT" + v1.5 "THE ATTENDANT" + v1.5.1 "THE TRIGGER" — see below).
 Built so far: terrain material test (Slice 0), the orb (Slice 1), the voice organ (ORGAN 1), the
 map rework (Slice 2R), the Forge amendment (molten palette, wave-orb, V.A.U.L.T HUD, mode/profile
 system), RL-5 v2 stabilization (system-safety escapes, mic coexistence, packaged 60fps), and the
@@ -103,6 +103,37 @@ Explicitly rejected (from v0, "2002 video game"):
   `profiles/*.json` stay in-tree but are **archived under the v3 note** (out of the profile
   ORDER, not offered by the `P` switch). Wire feeds retarget fully to the mission in the next
   slice; this slice moves the **scope**, not the feeds. `voice.session.*` tokens.
+
+### THE TRIGGER (v1.5.1) — capture becomes push-to-talk
+
+> **SPEC v1.5.1 "THE TRIGGER" — LOCKED.** One amendment over v1.5, at the CAPTURE
+> layer ONLY. Open-mic capture proved unreliable for the operator (clips lost ~half the
+> time). VULCAN moves to **push-to-talk**. The ATTENDANT session model (DORMANT⇄ATTENTIVE),
+> the constitution, the ceremony, the voice chain, and the answer-panel surface are all
+> UNTOUCHED — this changes *how a clip is bounded*, never the session or the house material.
+
+- **CAPTURE MODE — PTT (new default) | OPEN (S1, preserved behind config).**
+  `voice.capture_mode`: `"ptt"` is the default; `"open"` restores the S1 VAD behaviour.
+  In **PTT** the microphone opens ONLY while the trigger key is HELD; release ends the
+  utterance → STT → route. **DORMANT and ATTENTIVE both honor the trigger.** There is no
+  open mic at any resting moment — the mic is provably CLOSED whenever the trigger is not held.
+- **TRIGGER KEY — hold to talk.** `voice.ptt_key`, default **Space** (hold), active while
+  the VULCAN window is **focused**. **`fn` is reserved** (the operator's Wispr Flow) and must
+  never be bound. **Global (unfocused) PTT is parked to v2.1** — it needs a native event tap.
+  A held key released by a focus-loss (blur) ends the clip cleanly (never a wedged-open mic).
+- **WAKE IS STILL SPOKEN.** The wake phrase "Fire and Forge" remains the ONLY way to enter
+  ATTENTIVE — spoken *while holding* the trigger. Any OTHER held speech from DORMANT gets a
+  **one-line spoken redirect** (`voice.session.redirectLine`) — never silence (constitutional).
+  "Bank the fire" / "Stand down" held from ATTENTIVE still banks to DORMANT.
+- **CAPTURING CUE.** Hold shows a quiet **CAPTURING** mark on the HUD + the orb stirs to the
+  mic (Doctrine 11 in-place repaint — never a bottom bar). Release returns to the session read.
+- **SELF-ECHO IS STRUCTURALLY GONE IN PTT.** The mic is shut during VULCAN's speech unless the
+  operator is holding — the S1 speak-gate + self-echo guard remain active for **open mode only**.
+  Crisp clip boundaries; **no VAD gating in PTT**.
+- **EARS CHAIN — Wispr Flow REST primary, local whisper fallback.** Primary STT is the
+  **Wispr Flow REST API** (`VULCAN_WISPR_KEY`, never logged/committed). No key / offline / API
+  error drops **seamlessly** to the existing local whisper.cpp path — the drop is logged and
+  tagged in panel chrome (`[EARS·LOCAL]`), never thrown. `voice.ears.*` tokens.
 
 ### COMMAND CENTER PIVOT (v1.4) — foundation decision, amends the mission
 
