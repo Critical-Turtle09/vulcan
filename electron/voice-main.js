@@ -114,7 +114,9 @@ async function whisperLocal(wavBase64) {
     const tmp = path.join(os.tmpdir(), `vulcan-${process.pid}-${Date.now()}.wav`);
     fs.writeFileSync(tmp, Buffer.from(wavBase64, 'base64'));
     const text = await new Promise((resolve, reject) => {
-      const p = spawn(bin, ['-m', model, '-f', tmp, '-nt', '-otxt', '-of', tmp]);
+      // -np: no prints — whisper.cpp otherwise streams the recognized text to stdout,
+      // which leaked raw transcripts into the drill tab. Result still goes to the -otxt file.
+      const p = spawn(bin, ['-m', model, '-f', tmp, '-nt', '-np', '-otxt', '-of', tmp], { stdio: ['ignore', 'ignore', 'pipe'] });
       let err = '';
       p.stderr.on('data', (d) => { err += d; });
       p.on('close', (code) => {

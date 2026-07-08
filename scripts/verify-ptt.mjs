@@ -75,16 +75,25 @@ const A = await page.evaluate(async () => {
   out.capTranscript = cap.transcript;
   out.wavSent = typeof lastWav === 'string' && lastWav.length > 0;
 
-  // 4) wake-clip classification through the held trigger: wake / dismiss / other.
+  // 4) wake-clip classification through the held trigger, on POLISHED transcripts (FX2):
+  // capitalized + punctuated the way whisper actually returns them (the comma after
+  // "Fire" is the exact case that failed the live drill — it must still ignite).
   const holdSay = async (text) => { nextText = text; const p = ears.listenForWake(); await ears.pttDown(); feed(8); await ears.pttUp(); return p; };
-  out.wakeIntent = await holdSay('computer fire and forge now');
-  out.dismissIntent = await holdSay('bank the fire');
-  out.otherIntent = await holdSay('what time is it');
+  out.wakeComma = await holdSay('Fire, and Forge.');       // the live-drill failure case
+  out.wakePeriod = await holdSay('Fire and Forge.');
+  out.dismissIntent = await holdSay('Bank the fire.');
+  out.otherIntent = await holdSay('What time is it?');
 
   // 5) a tapped trigger with no real speech still resolves (never wedges) — empty clip.
   nextText = '';
   const capP2 = ears.capture(); await ears.pttDown(); await ears.pttUp();
   out.emptyResolves = (await capP2).transcript === '';
+
+  // 6) ALIGNMENT (FX2) — two back-to-back holds resolve to two SEPARATE transcripts, in
+  // order, never merged (the live-drill merge bug: fire-and-forget carried audio across).
+  const cA = ears.capture(); nextText = 'alpha one'; await ears.pttDown(); feed(4); await ears.pttUp(); const rA = await cA;
+  const cB = ears.capture(); nextText = 'bravo two'; await ears.pttDown(); feed(4); await ears.pttUp(); const rB = await cB;
+  out.aligned = rA.transcript === 'alpha one' && rB.transcript === 'bravo two';
 
   ears.stop();
   navigator.mediaDevices.getUserMedia = RealGUM; window.AudioContext = RealAC;
@@ -95,10 +104,12 @@ ok(A.closedWhileParked, 'mic CLOSED while capture is parked and nothing is held 
 ok(A.openWhileHeld, 'mic OPENS only on pttDown (getUserMedia, one live track)');
 ok(A.closedAfterRelease, 'mic CLOSED again on pttUp (track stopped, graph torn down)');
 ok(A.capTranscript === 'what is our heat index' && A.wavSent, `held clip resolved the capture with its transcript ("${A.capTranscript}")`);
-ok(A.wakeIntent === 'wake', `wake-phrase clip -> intent 'wake' (${A.wakeIntent})`);
-ok(A.dismissIntent === 'dismiss', `dismiss-phrase clip -> intent 'dismiss' (${A.dismissIntent})`);
+ok(A.wakeComma === 'wake', `polished "Fire, and Forge." (comma) -> intent 'wake' — the live-drill fix (${A.wakeComma})`);
+ok(A.wakePeriod === 'wake', `polished "Fire and Forge." (period) -> intent 'wake' (${A.wakePeriod})`);
+ok(A.dismissIntent === 'dismiss', `polished "Bank the fire." -> intent 'dismiss' (${A.dismissIntent})`);
 ok(A.otherIntent === 'other', `non-wake clip -> intent 'other' (redirect) (${A.otherIntent})`);
 ok(A.emptyResolves, 'a tapped trigger with no speech resolves empty (never wedges)');
+ok(A.aligned, 'two back-to-back holds -> two SEPARATE transcripts in order (1:1, no merge/carry-over)');
 console.log('');
 
 // ---- (B) DORMANT REDIRECT ---------------------------------------------------

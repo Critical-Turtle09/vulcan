@@ -26,11 +26,17 @@ export function createEars({ bridge, mode }) {
   const V = rawTokens.voice;
   const SESS = V.session || {};
   const reacquire = SESS.reacquireEars !== false;   // v1.5 default ON
-  const wakeWord = V.wakeWord.toLowerCase();
+  // FX2 — NORMALIZE before matching. A POLISHED STT transcript is capitalized and
+  // punctuated ("Fire, and Forge."); a naive lowercase+substring test misses it because
+  // whisper's inserted comma splits "fire, and". Strip everything but [a-z0-9 ], collapse
+  // whitespace, and match on the normalized form (the same treatment FX gave tag variants).
+  const normalize = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const wakeNorm = normalize(V.wakeWord);
+  const wakeWord = wakeNorm;   // kept name; now the normalized form
   // dismiss phrases ("bank the fire" / "stand down") — the listener accepts these
   // while resolved and returns intent 'dismiss' instead of 'wake' (FINDING 4).
-  const dismissPhrases = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map((s) => s.toLowerCase());
-  const matchDismiss = (t) => dismissPhrases.some((p) => t.includes(p));
+  const dismissNorm = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map(normalize).filter(Boolean);
+  const matchDismiss = (t) => dismissNorm.some((p) => t.includes(p));
 
   // ---------- TEST MODE ----------
   // Scriptable so the session-machine harness can drive DORMANT->ATTENTIVE with real
@@ -111,9 +117,11 @@ export function createEars({ bridge, mode }) {
   let ready = false, offline = false;
   let level = 0;   // running mic RMS — feeds the LISTENING waves (real amplitude)
   let recording = false;                 // PTT: a clip is being held (mic must be open)
+  let transcribing = false;              // PTT: a released clip is transcribing/routing (1:1 gate)
   let pttFrames = null;                  // PTT: PCM frames of the held clip
   let pendingKind = null, pendingResolve = null;   // PTT: the parked wake/capture consumer
   let lastInfo = { source: null, fellBack: false }; // last transcription's ears-chain read
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   // RL-5 v2 · PART 2 — MIC COEXISTENCE. Capture constraints ship from tokens. The
   // processing flags (AEC/NS/AGC) are FALSE on purpose: enabling them on macOS routes
@@ -210,39 +218,52 @@ export function createEars({ bridge, mode }) {
     });
   }
   // resolve the parked consumer from a held clip's transcript. wake -> intent
-  // ('wake' | 'dismiss' | 'other'); capture -> { transcript }.
+  // ('wake' | 'dismiss' | 'other'); capture -> { transcript }. NORMALIZED (FX2).
   function finishPtt(txt = '') {
     const kind = pendingKind, resolve = pendingResolve;
     pendingKind = null; pendingResolve = null; abortWake = null; abortCapture = null;
     if (!resolve) return;
     if (kind === 'wake') {
-      const t = (txt || '').toLowerCase();
-      if (matchDismiss(t)) resolve('dismiss');
-      else if (t.includes(wakeWord)) resolve('wake');
+      const t = normalize(txt);
+      if (t && matchDismiss(t)) resolve('dismiss');
+      else if (t && t.includes(wakeNorm)) resolve('wake');
       else resolve('other');                         // held speech, not wake/dismiss -> redirect
     } else {
       resolve({ transcript: txt });
     }
   }
+  // FX2 — ALIGNMENT. Deliver a held clip's transcript to EXACTLY ONE parked consumer.
+  // The loop needs a beat to re-park (wake resolves -> onWake -> runAttentive -> capture);
+  // a short bounded wait closes that handoff gap WITHOUT queueing audio across holds. If
+  // no consumer parks in time the transcript is dropped, never carried over.
+  async function deliver(txt) {
+    let waited = 0;
+    while (!pendingKind && waited < 1000) { await sleep(50); waited += 50; }
+    finishPtt(txt);
+  }
+  // pttDown opens the mic and records a FRESH clip. One clip at a time: a down while
+  // recording or mid-transcribe is ignored (no merged/carried-over buffers).
   async function pttDown() {
-    if (recording || !pendingKind) return;           // already held, or nothing parked
+    if (recording || transcribing) return;
     recording = true;
+    pttFrames = [];                                   // fresh buffer per hold — never merged
     const okGraph = await acquire();
     if (!recording) { closeGraph(); return; }         // released during arming (fast tap)
-    if (!okGraph) { offline = true; recording = false; finishPtt(''); return; }  // mic denied
-    pttFrames = [];
+    if (!okGraph) { offline = true; recording = false; await deliver(''); return; }  // mic denied
     onFrame((buf) => { level = rmsOf(buf); if (recording && pttFrames) pttFrames.push(buf.slice()); });
   }
   async function pttUp() {
     if (!recording) return;
     recording = false;
+    transcribing = true;                              // block a new clip until this one routes
     if (proc) proc.onaudioprocess = null;
     const frames = pttFrames || []; pttFrames = null;
     const rate = srcRate;
     closeGraph();                                     // release the mic NOW — closed when not held
     const flat = frames.length ? flatten(frames) : null;
     const txt = flat ? await transcribeFlat(flat, rate) : '';
-    finishPtt(txt);
+    await deliver(txt);                               // strictly 1:1 clip -> transcript -> consumer
+    transcribing = false;
   }
   // ====================================================================================
 
@@ -277,9 +298,9 @@ export function createEars({ bridge, mode }) {
             if (silence > 400) { // short segment end — test for wake / dismiss phrase
               const frames = seg; seg = []; speaking = false; silence = 0;
               if (frames.length > 4) {
-                const txt = (await transcribe(frames)).toLowerCase();
+                const txt = normalize(await transcribe(frames));
                 if (matchDismiss(txt)) { if (proc) proc.onaudioprocess = null; abortWake = null; resolve('dismiss'); }
-                else if (txt.includes(wakeWord)) { if (proc) proc.onaudioprocess = null; abortWake = null; resolve('wake'); }
+                else if (txt.includes(wakeNorm)) { if (proc) proc.onaudioprocess = null; abortWake = null; resolve('wake'); }
               }
             }
           }

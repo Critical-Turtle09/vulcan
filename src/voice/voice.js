@@ -29,7 +29,8 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // B2 HANDS — the spoken-confirmation classifier for WRITE_CONFIRM. Only an
 // explicit affirmative proceeds; ANYTHING else (including silence/garble) aborts.
 export function classifyConfirm(t) {
-  const s = String(t || '').toLowerCase();
+  // FX2 — normalize (strip a polished transcript's punctuation) before the affirmative test.
+  const s = String(t || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
   if (/\b(confirm|confirmed|yes|yeah|yep|do it|proceed|affirmative|go ahead|approve|approved)\b/.test(s)) return 'confirm';
   return 'cancel';
 }
@@ -55,8 +56,10 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
 
   const safe = (fn, ...a) => { try { return fn && fn(...a); } catch (_) { return null; } };
   function setSession(s) { if (s === session) return; session = s; safe(onSession, s); }
-  const dismissPhrases = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map((s) => s.toLowerCase());
-  const isDismissText = (t) => { const s = String(t || '').toLowerCase(); return dismissPhrases.some((p) => s.includes(p)); };
+  // FX2 — normalize so a polished spoken "Bank the fire." (or "Bank, the fire.") still banks.
+  const normPhrase = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const dismissPhrases = (V.dismissPhrases || [V.dismissPhrase]).filter(Boolean).map(normPhrase);
+  const isDismissText = (t) => { const s = normPhrase(t); return !!s && dismissPhrases.some((p) => s.includes(p)); };
 
   // SELF-HEAR DEFENCE (S1 re-drill). With echoCancellation OFF (mic coexistence), the
   // reopened mic can catch the room echo of VULCAN's own line and route it as a command
@@ -257,21 +260,24 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   // and pttUp() on release (focused window only). Down opens the mic + shows the
   // CAPTURING cue (orb stirs to the live mic); up closes the mic and hands the held clip
   // to the ears chain, which resolves the loop's parked listenForWake/capture.
-  function pttDown() {
+  async function pttDown() {
     if (captureMode !== 'ptt') return;
     if (!running || !online || muted || mode === 'offline') return;
     if (capturing) return;
     capturing = true;
     orb.setState('listening');          // waves stir to the mic; CAPTURING reads on the HUD
-    if (ears && ears.pttDown) ears.pttDown();
+    if (ears && ears.pttDown) await ears.pttDown();
   }
-  function pttUp() {
+  // FX2 — AWAIT the ears end-to-end. The release must not resolve until the held clip is
+  // transcribed AND routed to its ONE consumer; the fire-and-forget of S2 let the harness
+  // (and a fast operator) start the next clip before this one landed, merging utterances.
+  async function pttUp() {
     if (!capturing) return;
     capturing = false;
-    if (ears && ears.pttUp) ears.pttUp();
     // bridge the CAPTURING -> processing handoff so the release is legible (doctrine 11);
     // the loop takes over the orb state the instant the clip resolves.
     orb.setState('thinking');
+    if (ears && ears.pttUp) await ears.pttUp();
   }
 
   function setMuted(v) {
