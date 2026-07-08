@@ -191,7 +191,15 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   async function handleUtterance(transcript, idleMs) {
     // PART 6 — LOCAL REFLEX: only the four local controls (mute/unmute/bank/status)
     // reach here; every skill utterance defers to the conductor (v1.5 MISSION PURITY).
-    const cmdIntent = onCommand ? await classify(transcript, bridge) : null;
+    let cmdIntent = onCommand ? await classify(transcript, bridge) : null;
+    // FX4 — DEFENCE IN DEPTH for the never-silent hole: a session/audio-MUTATING control
+    // (bank/mute/unmute) is honored ONLY when DETERMINISTIC (a regex keyword match). A
+    // non-deterministic (fuzzy) mutating guess must NEVER silently drop or mute the hot
+    // session — it is dropped here and deferred to the conductor, which always speaks.
+    // (classify already restricts the fuzzy layer to `status`; this is the belt-and-braces.)
+    if (cmdIntent && cmdIntent.via !== 'regex' && (cmdIntent.type === 'bank' || cmdIntent.type === 'mute' || cmdIntent.type === 'unmute')) {
+      cmdIntent = null;                                              // fall through to the conductor (speaks)
+    }
     if (cmdIntent) {
       if (cmdIntent.type === 'bank') { safe(onCommand, cmdIntent); return true; }   // bank -> hide + leave
       orb.setState('thinking');

@@ -19,6 +19,12 @@ import rawTokens from '../tokens.json';
 
 // the ONLY intents the reflex owns — pure local session controls, no conductor skill.
 const ALLOWED = new Set(['mute', 'unmute', 'bank', 'status']);
+// FX4 — the FUZZY Ollama fallback may ONLY emit the safe READ intent (status). The
+// session/audio-MUTATING controls (bank/mute/unmute) must be DETERMINISTIC — the regex
+// layer (explicit keywords) or the spoken dismiss phrase — never a 1b model's guess:
+// llama3.2:1b classified "what can you do" as `bank` and silently dropped the hot
+// session (FX4 mid-think dormant drop). status is safe to misfire — it speaks and stays.
+const OLLAMA_ALLOWED = new Set(['status']);
 
 // Skill-shaped utterances must reach the conductor's deterministic router — never the
 // fuzzy reflex. This is the wall that keeps "mission brief" / "tag …" out of the reflex.
@@ -47,8 +53,10 @@ export async function classify(text, bridge) {
     try {
       const R = rawTokens.reflex;
       const r = await bridge.reflex(text, { url: R['ollama.url'], model: R['ollama.model'], timeoutMs: R['ollama.timeoutMs'] });
-      // ALLOWED-ONLY: accept a local control; reject scene/garbage types → defer.
-      if (r && r.type && ALLOWED.has(r.type)) return { type: r.type, arg: null, via: 'ollama' };
+      // OLLAMA_ALLOWED-ONLY (FX4): accept ONLY the safe read intent from the fuzzy model;
+      // a mutating control (bank/mute/unmute) or scene/garbage type is rejected → defer to
+      // the conductor (which always speaks). The fuzzy layer can never drop/mute the session.
+      if (r && r.type && OLLAMA_ALLOWED.has(r.type)) return { type: r.type, arg: null, via: 'ollama' };
     } catch (_) { /* fail-soft */ }
   }
   return null;   // not a short local command → the conductor handles it
