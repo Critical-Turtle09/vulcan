@@ -18,6 +18,7 @@ import { loadEnv, registerVoiceIpc } from './voice-main.js';
 import { registerWireIpc } from './wire-main.js';
 import { registerQuotesIpc } from './quotes-main.js';
 import { registerBrainIpc } from './brain-main.js';   // B1 SYNAPSE — voice→brain→panel
+import { registerVitalsIpc } from './vitals-main.js';   // G2 FLANKS — Z1 system vitals reads
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
@@ -301,6 +302,7 @@ app.whenReady().then(() => {
   registerWireIpc();
   registerQuotesIpc();
   registerBrainIpc(() => win);   // B1 — brain:conduct / test-write / mode + announce→voice
+  registerVitalsIpc(ROOT);       // G2 — Z1 vitals: spend (B0) · vercel (B5R) · commits (B2)
 
   // grant the renderer's getUserMedia(audio) request; the OS TCC prompt fires on
   // first capture. Declining -> renderer shows VOICE OFFLINE, hotkey still summons.

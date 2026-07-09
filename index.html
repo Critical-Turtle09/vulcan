@@ -108,8 +108,94 @@
       display: flex; align-items: center; justify-content: center; }
     #orb-slot { width: min(46vh, 46vw); height: min(46vh, 46vw); }
 
-    /* ── Z5 primary directive (bottom-center) — reserved, fills in G2 ── */
+    /* ── Z5 primary directive (bottom-center) — reserved (out of G2 scope) ── */
     #primary { width: 100%; min-height: calc(var(--sp-gutter) * 3); }
+
+    /* ══ G2 THE FLANKS ══════════════════════════════════════════════════════════
+       Z1 vitals/directives/documents (left) · Z2 command deck + audio i/o (right).
+       Greyscale world + bone data + the single EMBER accent, hairline rules. Every
+       size/colour is a --st-*/--fs-*/--sp-* token (grep-clean). Sections own bounds
+       and content resolves in staggered on mount (doctrine 11 — never a pop). */
+
+    /* doctrine-11 resolve-in: each tagged element forms from dust, staggered by JS */
+    .rz { opacity: 0; transform: translateY(6px); filter: blur(2px);
+      transition: opacity var(--st-resolve-ms) ease, transform var(--st-resolve-ms) ease, filter var(--st-resolve-ms) ease; }
+    .rz.up { opacity: 1; transform: none; filter: none; }
+
+    /* section header: ember title + dim sub + trailing hairline rule to the edge */
+    .fsec { margin-top: calc(var(--sp-gutter) * 0.6); }
+    .fsec-head { display: flex; align-items: baseline; gap: 10px;
+      font-size: var(--fs-label); letter-spacing: 0.20em; text-transform: uppercase; white-space: nowrap; }
+    .fsec-head::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--st-hairline); align-self: center; }
+    #flank-right .fsec-head { flex-direction: row-reverse; }
+    .fsec-title { color: var(--st-ember); }
+    .fsec-sub { color: var(--st-text-faint); font-size: var(--fs-micro); letter-spacing: 0.16em; }
+    .fsec-body { margin-top: calc(var(--sp-gutter) * 0.7); }
+
+    /* ── Z1 SYSTEM VITALS — 2×2 cards: label · big number · sparkline · delta ── */
+    .vitals { display: grid; grid-template-columns: 1fr 1fr;
+      gap: calc(var(--sp-gutter) * 0.75) calc(var(--sp-gutter) * 0.6); }
+    .vcard { min-width: 0; }
+    .vlabel { font-size: var(--fs-micro); letter-spacing: 0.02em; text-transform: uppercase;
+      color: var(--st-text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .vnum { margin-top: 3px; font-size: var(--fs-head); font-weight: 500; line-height: 1;
+      color: var(--st-text); font-variant-numeric: tabular-nums; letter-spacing: 0.01em; white-space: nowrap; }
+    .vnum .unit { font-size: var(--fs-label); color: var(--st-text-dim); margin-left: 2px; }
+    .vspark { display: block; width: 100%; height: calc(var(--fs-head) * 0.8); margin-top: 5px; overflow: visible; }
+    .vspark polyline { fill: none; stroke: var(--st-text-dim); stroke-width: 1; vector-effect: non-scaling-stroke;
+      stroke-linejoin: round; stroke-linecap: round; }
+    .vspark line.base { stroke: var(--st-hairline); stroke-width: 1; vector-effect: non-scaling-stroke; }
+    .vspark circle.cap { fill: var(--st-text-dim); }
+    .vdelta { margin-top: 4px; font-size: var(--fs-micro); letter-spacing: 0.08em;
+      color: var(--st-text-dim); font-variant-numeric: tabular-nums; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+    .vdelta .mk { color: var(--st-ember); }         /* the heat/attention mark only */
+    .vdelta.off { color: var(--st-text-faint); }
+
+    /* ── Z1 DIRECTIVES · TOP 3 — checkbox rows ── */
+    .dirs { display: flex; flex-direction: column; gap: calc(var(--sp-row) * 0.9); }
+    .dir { display: flex; align-items: center; gap: 9px; }
+    .dir-box { flex: 0 0 auto; width: 11px; height: 11px; border: 1px solid var(--st-hairline-strong); position: relative; }
+    .dir-box.done { border-color: var(--st-ember-dim); }
+    .dir-box.done::after { content: ""; position: absolute; left: 2px; top: 2px; right: 2px; bottom: 2px; background: var(--st-ember); opacity: 0.85; }
+    .dir-text { font-size: var(--fs-label); letter-spacing: 0.06em; color: var(--st-text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .dir.done .dir-text { color: var(--st-text-faint); }
+
+    /* ── Z1 DOCUMENTS · VAULT TRAIL — name + age ── */
+    .docs { display: flex; flex-direction: column; gap: calc(var(--sp-row) * 0.9); }
+    .doc { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+    .doc-name { font-size: var(--fs-label); letter-spacing: 0.04em; color: var(--st-text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+    .doc-age { flex: 0 0 auto; font-size: var(--fs-micro); letter-spacing: 0.10em;
+      color: var(--st-text-faint); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+
+    /* ── Z2 COMMAND DECK — 5×2, ember dot before each label, ruled rows ── */
+    .deck { display: grid; grid-template-columns: 1fr 1fr; column-gap: calc(var(--sp-gutter) * 0.38); }
+    .deck-cell { min-width: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; position: relative;
+      padding: calc(var(--sp-row) * 1.3) 0; border-top: 1px solid var(--st-hairline); text-align: left; }
+    .deck-cell:nth-last-child(-n+2) { border-bottom: 1px solid var(--st-hairline); }   /* last row ruled below */
+    .deck-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
+      background: var(--st-ember); box-shadow: 0 0 6px 0 var(--st-ember-dim); }         /* always lit */
+    .deck-label { flex: 1 1 auto; min-width: 0; font-size: var(--fs-deck); letter-spacing: 0.02em;
+      text-transform: uppercase; color: var(--st-text-dim); white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; transition: color 90ms ease; }         /* feedback <100ms */
+    /* arrow is OUT of flow (absolute) so it never steals label width; resolves on hover */
+    .deck-arrow { position: absolute; right: 0; top: 50%; transform: translateY(-50%) translateX(-3px);
+      font-size: var(--fs-label); color: var(--st-ember); opacity: 0;
+      transition: opacity 90ms ease, transform 90ms ease; pointer-events: none; }
+    .deck-cell:hover .deck-label { color: var(--st-text); }
+    .deck-cell:hover .deck-arrow { opacity: 1; transform: translateY(-50%); }             /* affordance resolves <100ms */
+    .deck-note { margin-top: calc(var(--sp-gutter) * 0.55); font-size: var(--fs-micro);
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--st-text-faint); }
+
+    /* ── Z2 AUDIO I/O — static dash-block waveform + microcopy ── */
+    .aio-wave { display: flex; align-items: center; justify-content: flex-end; gap: 3px;
+      height: calc(var(--fs-head) * 1.1); margin: calc(var(--sp-gutter) * 0.4) 0 calc(var(--sp-gutter) * 0.5); }
+    .aio-wave i { display: block; width: 3px; background: var(--st-text-faint); }
+    .aio-micro { font-size: var(--fs-micro); letter-spacing: 0.14em; text-transform: uppercase; color: var(--st-text-dim); }
+    .aio-micro .k { color: var(--st-text-faint); }
+    .aio-micro + .aio-micro { margin-top: 5px; color: var(--st-text-faint); }
   </style>
 </head>
 <body>
@@ -131,8 +217,36 @@
         <div class="mission">BONSAI LAUNCH · v2.1 · THE STAGE</div>
       </header>
       <div class="flank-body">
-        <div class="zone-tag">SYSTEM VITALS</div>
-        <div class="well"><!-- Z1 waitlist / GH velocity / Vercel / spend — G2 --></div>
+        <!-- SYSTEM VITALS — four cards. Cards are injected by stage/main.js so the
+             live wires (Claude spend·B0, Vercel·B5R, GH commits·B2) paint real data. -->
+        <section class="fsec rz" data-zone="Z1" style="margin-top:0">
+          <div class="fsec-head"><span class="fsec-title">SYSTEM VITALS</span><span class="fsec-sub">BONSAI</span></div>
+          <div class="fsec-body"><div class="vitals" id="vitals"></div></div>
+        </section>
+        <!-- DIRECTIVES · TOP 3 — static placeholder rows. TODO(Front H): read live
+             directive state from the vault once THE LEDGER lands. -->
+        <section class="fsec rz">
+          <div class="fsec-head"><span class="fsec-title">DIRECTIVES</span><span class="fsec-sub">TOP 3</span></div>
+          <div class="fsec-body">
+            <div class="dirs" id="dirs">
+              <div class="dir done"><span class="dir-box done"></span><span class="dir-text">COPPA/FERPA FILED</span></div>
+              <div class="dir"><span class="dir-box"></span><span class="dir-text">PILOT OUTREACH ×10</span></div>
+              <div class="dir"><span class="dir-box"></span><span class="dir-text">LAUNCH DISTRIBUTION</span></div>
+            </div>
+          </div>
+        </section>
+        <!-- DOCUMENTS · VAULT TRAIL — static placeholder rows. TODO(Front H): read the
+             recent VULCAN/BONSAI/ vault trail (name + age) once THE LEDGER lands. -->
+        <section class="fsec rz">
+          <div class="fsec-head"><span class="fsec-title">DOCUMENTS</span><span class="fsec-sub">VAULT TRAIL</span></div>
+          <div class="fsec-body">
+            <div class="docs" id="docs">
+              <div class="doc"><span class="doc-name">MISSION-BRIEF.md</span><span class="doc-age">2H AGO</span></div>
+              <div class="doc"><span class="doc-name">OUTREACH-PLAN.md</span><span class="doc-age">5H AGO</span></div>
+              <div class="doc"><span class="doc-name">COMPLIANCE-COPPA.md</span><span class="doc-age">1D AGO</span></div>
+            </div>
+          </div>
+        </section>
       </div>
       <footer class="corner-foot" data-zone="Z8">
         <div class="sec-head">TRANSCRIPT · INTENT LINE</div>
@@ -148,8 +262,25 @@
         <div class="date" id="clock-date">—</div>
       </header>
       <div class="flank-body">
-        <div class="zone-tag">COMMAND DECK</div>
-        <div class="well"><!-- Z2 command deck + audio I/O — G2 --></div>
+        <!-- COMMAND DECK — 5×2, ten commands (§3). Cells injected by stage/main.js;
+             hover resolves an arrow (<100ms), click logs the intent (G4 dispatch stub). -->
+        <section class="fsec rz" data-zone="Z2" style="margin-top:0">
+          <div class="fsec-head"><span class="fsec-title">COMMAND DECK</span><span class="fsec-sub" id="deck-sub">IDLE · 0/3 ACTIVE · 0 QUEUED</span></div>
+          <div class="fsec-body">
+            <div class="deck" id="deck"></div>
+            <div class="deck-note">INTENTS WRITE TO SYSTEM/QUEUE — RUNNER EXECUTES</div>
+          </div>
+        </section>
+        <!-- AUDIO I/O (§4) — static dash-block waveform now; the amplitude animation is
+             TODO(G4). The state + link labels wire to the real TTS/voice speaking state. -->
+        <section class="fsec rz">
+          <div class="fsec-head"><span class="fsec-title">AUDIO I/O</span><span class="fsec-sub" id="aio-state">TTS.STANDBY</span></div>
+          <div class="fsec-body">
+            <div class="aio-wave" id="aio-wave"></div>
+            <div class="aio-micro">VOICE LINK · <span class="k" id="aio-link">STANDBY</span></div>
+            <div class="aio-micro">HOLD SPACE TO TALK · ESC TO STOP</div>
+          </div>
+        </section>
       </div>
       <footer class="corner-foot">
         <div class="sec-head">LAUNCH OBJECTIVES</div>

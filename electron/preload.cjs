@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld('vulcan', {
   confirm: (payload) => ipcRenderer.invoke('brain:confirm', payload),   // B2 — resolve a WRITE_CONFIRM
   testWrite: () => ipcRenderer.invoke('brain:test-write'),   // fire the mock WRITE action
   brainMode: () => ipcRenderer.invoke('brain:mode'),
+  // G2 FLANKS — Z1 SYSTEM VITALS reads (main-side hands; renderer never sees the
+  // ledger, the Vercel token, or the shell). All READ-only, all fail-soft.
+  vitalsSpend: () => ipcRenderer.invoke('vitals:spend'),     // B0 governor: % of $2 cap + spark
+  vitalsVercel: () => ipcRenderer.invoke('vitals:vercel'),   // B5R deploy eye: state · health
+  vitalsCommits: () => ipcRenderer.invoke('vitals:commits'), // B2 machinery: 7-day commit spark
   onSpeak: (cb) => ipcRenderer.on('brain:speak', (_e, text) => cb(text)),  // announce → voice
   // STAGE D — THE IGNITION (resident overlay control)
   requestSummon: () => ipcRenderer.send('ui:request-summon'), // wake-from-hidden -> summon + ignite

@@ -67,6 +67,12 @@ function paintStatus() {
   const ws = wire.status();
   setSub('wire', ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : 'STANDBY', ws.online);
   setSub('hands', 'STANDBY', false);   // TODO(G4): wire to the crew/dispatch runner state
+  // Z2 AUDIO I/O labels track the REAL TTS state (the speaking envelope is G4). The
+  // §4 microcopy is exact: TTS.STANDBY|LIVE and VOICE LINK · STANDBY|SPEAKING.
+  const speaking = core === 'speaking';
+  const aioState = el('aio-state'), aioLink = el('aio-link');
+  if (aioState) aioState.textContent = speaking ? 'TTS.LIVE' : 'TTS.STANDBY';
+  if (aioLink) aioLink.textContent = speaking ? 'SPEAKING' : 'STANDBY';
 }
 
 // ---- voice loop + wire (kept intact; the audio path must stay unbroken) ----
@@ -137,12 +143,132 @@ window.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() === rawTokens.voice.muteKey) { voice.toggleMute(); paintStatus(); }
 });
 
+// ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
+// Z1 SYSTEM VITALS (real wires: Claude spend·B0, Vercel·B5R, GH commits·B2 + one
+// TODO'd placeholder), and Z2 COMMAND DECK + AUDIO I/O. All content resolves in
+// staggered on mount (doctrine 11). Dispatch (chips/queue/states) is G4 — the deck
+// click is a logged stub here.
+
+// sparkline: values[] -> a tiny inline SVG polyline. Greyscale only — a sparkline
+// encodes a TREND, never a heat event, so it never spends the ember accent. Fewer
+// than two points -> a single hairline base (honest "no series", not a fake trend).
+function sparkSVG(values) {
+  const w = 100, h = 30, pad = 3;
+  const wrap = (inner) => `<svg class="vspark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">${inner}</svg>`;
+  const vals = (values || []).filter((v) => Number.isFinite(v));
+  if (vals.length < 2) return wrap(`<line class="base" x1="0" y1="${h - pad}" x2="${w}" y2="${h - pad}"/>`);
+  const min = Math.min(...vals), max = Math.max(...vals), span = (max - min) || 1, n = vals.length;
+  const pts = vals.map((v, i) => `${((i / (n - 1)) * w).toFixed(1)},${(h - pad - ((v - min) / span) * (h - pad * 2)).toFixed(1)}`);
+  const [lx, ly] = pts[pts.length - 1].split(',');
+  return wrap(`<polyline points="${pts.join(' ')}"/><circle class="cap" cx="${lx}" cy="${ly}" r="1.6"/>`);
+}
+
+// vitals model. `waitlist` is a placeholder (no live source yet); the other three are
+// overwritten in place by the real reads as they resolve.
+const VITALS = {
+  waitlist: { label: 'WAITLIST', num: '312', unit: '', delta: '18 / WK', mk: '▲', spark: [280, 291, 288, 299, 305, 309, 312] }, // TODO(data-source)
+  commits:  { label: 'GH COMMITS /WK', num: '—', unit: '', delta: 'LAST 7 DAYS', mk: '', spark: [] },
+  vercel:   { label: 'VERCEL', num: '—', unit: '', delta: '', mk: '', spark: [] },
+  spend:    { label: 'CLAUDE SPEND', num: '—', unit: '', delta: 'OF $2 CAP', mk: '', spark: [] },
+};
+const VITALS_ORDER = ['waitlist', 'commits', 'vercel', 'spend'];
+
+function cardInner(c) {
+  const unit = c.unit ? `<span class="unit">${c.unit}</span>` : '';
+  const delta = c.delta
+    ? `<div class="vdelta${c.mk ? '' : ' off'}">${c.mk ? `<span class="mk">${c.mk}</span> ` : ''}${c.delta}</div>`
+    : `<div class="vdelta off">—</div>`;
+  return `<div class="vlabel">${c.label}</div><div class="vnum">${c.num}${unit}</div>${sparkSVG(c.spark)}${delta}`;
+}
+function updateCard(k) { const node = el(`vc-${k}`); if (node) node.innerHTML = cardInner(VITALS[k]); }
+function buildVitals() {
+  const host = el('vitals'); if (!host) return;
+  host.innerHTML = VITALS_ORDER.map((k) => `<div class="vcard rz" id="vc-${k}"></div>`).join('');
+  VITALS_ORDER.forEach(updateCard);
+}
+
+// live reads — fail-soft; a missing bridge method (dev-in-browser) just leaves the
+// placeholder dash. The card is updated IN PLACE so a refresh never re-pops it.
+async function refreshSpend() {
+  if (!bridge.vitalsSpend) return;
+  try {
+    const s = await bridge.vitalsSpend(); if (!s) return;
+    VITALS.spend.num = String(s.pct); VITALS.spend.unit = '%';
+    VITALS.spend.delta = `$${(s.spentUsd || 0).toFixed(2)} / $${(s.capUsd || 2).toFixed(0)} CAP`;
+    VITALS.spend.mk = s.pct >= 80 ? '▲' : '';
+    VITALS.spend.spark = (s.spark && s.spark.length > 1) ? s.spark : [];
+    updateCard('spend');
+  } catch (_) { /* keep placeholder */ }
+}
+async function refreshCommits() {
+  if (!bridge.vitalsCommits) return;
+  try {
+    const c = await bridge.vitalsCommits(); if (!c) return;
+    VITALS.commits.num = String(c.total); VITALS.commits.spark = c.spark || [];
+    updateCard('commits');
+  } catch (_) { /* keep placeholder */ }
+}
+async function refreshVercel() {
+  if (!bridge.vitalsVercel) return;
+  try {
+    const v = await bridge.vitalsVercel(); if (!v) return;
+    VITALS.vercel.num = v.primary || 'N/C';
+    VITALS.vercel.delta = v.sub || (v.connected ? '' : 'NOT CONNECTED');
+    VITALS.vercel.spark = [];   // a deploy STATE has no trend series (honest empty)
+    updateCard('vercel');
+  } catch (_) { /* keep placeholder */ }
+}
+
+// COMMAND DECK — ten commands, row-major over the 2-col grid (§3, exact order).
+const DECK = [
+  'MISSION BRIEF', 'DEPLOY CHECK',
+  'METRICS PULL', 'OUTREACH',
+  'WIRE SCAN', 'COMPLIANCE',
+  'PITCH DESK', 'VAULT CLEAN',
+  'PLAN TODAY', 'WK REVIEW',
+];
+function buildDeck() {
+  const host = el('deck'); if (!host) return;
+  host.innerHTML = DECK.map((name) =>
+    `<div class="deck-cell rz" data-cmd="${name}"><span class="deck-dot"></span><span class="deck-label">${name}</span><span class="deck-arrow">→</span></div>`).join('');
+  // click = stub only — chips/queue/states are G4. No Space/Enter key binding: Space
+  // is the PTT trigger and must never be shadowed by a focused deck cell.
+  host.querySelectorAll('.deck-cell').forEach((cell) =>
+    cell.addEventListener('click', () => console.log(`[deck] intent: ${cell.dataset.cmd}`)));  // TODO(G4: dispatch lifecycle)
+}
+
+// AUDIO I/O — a STATIC mixed dash-block waveform (short bars = dashes, tall = blocks).
+// The live amplitude animation is TODO(G4). Fixed pattern (no RNG) so it reads stable.
+function buildWave() {
+  const host = el('aio-wave'); if (!host) return;
+  const pat = [3, 7, 3, 14, 3, 5, 11, 3, 3, 18, 3, 7, 3, 3, 12, 3, 6, 3, 16, 3, 3, 9, 3, 13, 3, 5, 3, 10];
+  host.innerHTML = pat.map((hh) => `<i style="height:${hh}px"></i>`).join('');
+}
+
+// doctrine 11: the flank content forms from dust, granular + staggered — never a pop.
+function resolveFlanks() {
+  const items = [...document.querySelectorAll('#flank-left .rz, #flank-right .rz')];
+  items.forEach((elm, i) => { elm.style.transitionDelay = `${Math.min(i * 45, 320)}ms`; });
+  requestAnimationFrame(() => requestAnimationFrame(() => items.forEach((elm) => elm.classList.add('up'))));
+}
+
+function bootFlanks() {
+  buildVitals();
+  buildDeck();
+  buildWave();
+  resolveFlanks();
+  refreshSpend(); refreshCommits(); refreshVercel();
+  setInterval(() => { refreshSpend(); refreshCommits(); }, 20000);   // ledger + git velocity
+  setInterval(refreshVercel, 60000);                                  // deploy eye (heavier read)
+}
+
 // ---- doctrine 11: the stage RESOLVES in on launch (never a pop) ----
 function resolveIn() { document.getElementById('shell').classList.add('up'); document.getElementById('bg').classList.add('up'); }
 
 // ---- boot ----
 paintClock();
 paintStatus();
+bootFlanks();                               // G2 — Z1 vitals + Z2 deck/audio (resolves in)
 voice.boot().then(paintStatus);
 wire.boot();
 requestAnimationFrame(() => resolveIn());   // trigger the resolve transition after first paint
@@ -167,4 +293,6 @@ window.__vulcanStage = {
   voice: () => voice.status(),
   ignite: () => { resolveIn(); voice.wake(); },
   bank: () => { voice.goDormant(); if (bridge.requestHide) bridge.requestHide(); },
+  vitals: () => JSON.parse(JSON.stringify(VITALS)),   // G2 self-check: current card model
+  refreshVitals: () => Promise.all([refreshSpend(), refreshCommits(), refreshVercel()]),
 };
