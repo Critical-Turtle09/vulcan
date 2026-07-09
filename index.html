@@ -4,228 +4,175 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>VULCAN</title>
+  <link rel="icon" href="data:," />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Martian+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    :root { --void: #050607; }
+    /* ── SPEC v1.6 THE STAGE · G1 THE SHELL ──────────────────────────────────────
+       Near-black stage, greyscale world, EMBER the single accent, hairline whites.
+       Every colour/size below is a token var (--st-* / --fs-* / --sp-*) — no
+       hardcoded hues (grep-clean to greyscale + var(--st-ember)). Adaptive scale:
+       type + spacing ride clamp() viewport ramps; the flanks are bounded columns and
+       the center is strictly between them, so no zone can ever collide (§0). */
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--void); }
-    /* cursor stays VISIBLE (FINDING 2) — an instrument reticle, not hidden */
-    body { cursor: crosshair; }
-    /* §1a — the real screen (Electron: transparent window; here: a capture image on
-       #backdrop) sits at the bottom; #void-over fades the void floor in as the
-       ceremony resolves (opacity = presence); the canvas LIGHTEN-composites on top,
-       so its dark void areas reveal the floor while bright sparks/orb glow over it. */
-    /* RL-6 — the fresh full-display capture paints as ONE seamless screen: no-repeat
-       (default 'repeat' was the ghosting/tiling vector) and 100% 100% so it fills the
-       overlay edge-to-edge, 1:1 with the live screen (the capture IS the whole active
-       display). background-color (not the 'background' shorthand, which would reset
-       these) keeps the void fallback when there's no snapshot. */
-    #backdrop  { position: fixed; inset: 0; z-index: 0; background-color: var(--void);
+    html, body { width: 100%; height: 100%; overflow: hidden; background: var(--st-bg, #0A0A0C); }
+    body {
+      cursor: crosshair;                 /* instrument reticle, kept visible */
+      color: var(--st-text);
+      font-family: var(--type-mono);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ceremony backdrop (active-display snapshot, G6) + perpetual GPU stage motion */
+    #backdrop { position: fixed; inset: 0; z-index: 0; background-color: var(--st-bg);
       background-repeat: no-repeat; background-size: 100% 100%; background-position: center; }
-    #void-over { position: fixed; inset: 0; z-index: 1; background: var(--void); opacity: 1; }
-    #stage { position: fixed; inset: 0; display: block; z-index: 2; mix-blend-mode: lighten; }
-    /* HUD DOM layers MUST sit above the canvas (z2). Giving #stage a z-index for the
-       transparency backdrop silently occluded the V.A.U.L.T columns — this is the
-       regression fixed in Night II PART 2 (guarded in the audit harness). */
-    #label-layer { position: fixed; inset: 0; pointer-events: none; z-index: 3; }
-    #panel-layer { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
-    /* ceremony title beat — mono-caps, centered, resolves in/out (JS-driven, no cut) */
-    #ceremony-title {
-      position: fixed; left: 50%; top: 46%; transform: translate(-50%,-50%);
-      font-family: var(--type-mono); text-transform: uppercase; font-weight: 500;
-      font-size: 46px; letter-spacing: 0.42em; padding-left: 0.42em;
-      color: var(--data-bone); opacity: 0; pointer-events: none; z-index: 6;
-      text-shadow: 0 0 22px rgba(234,106,30,0.35); white-space: nowrap;
-    }
+    #bg { position: fixed; inset: 0; z-index: 1; display: block;
+      opacity: 0; transition: opacity var(--st-resolve-ms) ease; }
+    #bg.up { opacity: 1; }
 
-    /* tethered site marks in the theater */
-    .site-label {
-      position: absolute; top: 0; left: 0; will-change: transform, opacity;
-      font-family: var(--type-mono); font-size: 11px; letter-spacing: var(--label-track);
-      text-transform: uppercase; color: var(--data-bone); white-space: nowrap;
-      opacity: 0; transition: opacity 180ms linear; text-shadow: 0 0 8px rgba(5,6,7,0.9);
-    }
-    .site-label::before {
-      content: ""; position: absolute; left: -8px; top: 50%; width: 5px; height: 5px;
-      border: 1px solid var(--panel-stroke); transform: translate(-2px,-50%) rotate(45deg);
-    }
+    /* the shell resolves in on launch (doctrine 11 — never a pop) */
+    #shell { position: fixed; inset: 0; z-index: 2;
+      opacity: 0; filter: blur(3px); transition: opacity var(--st-resolve-ms) ease, filter var(--st-resolve-ms) ease; }
+    #shell.up { opacity: 1; filter: blur(0); }
 
-    /* ---- PART 5 · country labels (quiet geographic context on the theater) ---- */
-    .country-label {
-      position: absolute; top: 0; left: 0; pointer-events: none; will-change: transform, opacity;
-      font-family: var(--type-mono); font-size: 12px; letter-spacing: 0.22em;
-      text-transform: uppercase; color: var(--data-dim); white-space: nowrap;
-      opacity: 0; transition: opacity 200ms linear; text-shadow: 0 0 10px rgba(5,6,7,0.95);
-    }
+    /* corner registration ticks (blueprint chrome) */
+    .reg { position: fixed; z-index: 3; width: var(--st-reg); height: var(--st-reg);
+      border: 0 solid var(--st-hairline-strong); pointer-events: none; }
+    .reg-tl { top: var(--sp-gutter); left: var(--sp-gutter); border-top-width: 1px; border-left-width: 1px; }
+    .reg-tr { top: var(--sp-gutter); right: var(--sp-gutter); border-top-width: 1px; border-right-width: 1px; }
+    .reg-bl { bottom: var(--sp-gutter); left: var(--sp-gutter); border-bottom-width: 1px; border-left-width: 1px; }
+    .reg-br { bottom: var(--sp-gutter); right: var(--sp-gutter); border-bottom-width: 1px; border-right-width: 1px; }
 
-    /* ---- STAGE C · tethered quote marks (greyscale, no green/red) ---- */
-    .quote-chip {
-      position: absolute; top: 0; left: 0; pointer-events: none; will-change: transform, opacity;
-      font-family: var(--type-mono); font-size: var(--quote-px); letter-spacing: var(--label-track);
-      text-transform: uppercase; white-space: nowrap; color: var(--data-dim);
-      opacity: 0; transition: opacity 200ms linear; text-shadow: 0 0 6px rgba(5,6,7,0.9);
-    }
-    .quote-chip .qs { color: var(--data-faint); margin-right: 7px; }
-    .quote-chip .qp { color: var(--data-bone); }
-    .quote-chip .qd { color: var(--data-dim); margin-left: 6px; }
-    .quote-chip::before {
-      content: ""; position: absolute; left: -9px; top: 50%; width: 4px; height: 4px;
-      border-left: 1px solid var(--panel-stroke); border-bottom: 1px solid var(--panel-stroke);
-      transform: translateY(-50%);
-    }
+    /* ── zones ── flanks are bounded columns; center lives strictly between them ── */
+    .flank { position: fixed; top: 0; bottom: 0; width: var(--sp-flank);
+      padding: calc(var(--sp-gutter) * 1.4) var(--sp-gutter);
+      display: flex; flex-direction: column; z-index: 2; }
+    #flank-left  { left: 0; }
+    #flank-right { right: 0; text-align: right; }
+    .flank-body { flex: 1 1 auto; min-height: 0; padding-top: calc(var(--sp-gutter) * 1.1);
+      display: flex; flex-direction: column; gap: calc(var(--sp-gutter) * 1.2); }
 
-    /* ---- STAGE A · tethered blueprint panels (§6-D, Palantir + Maverick) ---- */
-    #panel-leader { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
-    .panel {
-      position: absolute; top: 0; left: 0; width: var(--panel-w); pointer-events: none;
-      font-family: var(--type-mono); text-transform: uppercase; letter-spacing: var(--label-track);
-      background: linear-gradient(180deg,
-        color-mix(in srgb, var(--stage) 97%, transparent),
-        color-mix(in srgb, var(--void) 95%, transparent));
-      will-change: left, top;
-    }
-    .panel-frame { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-    .panel-inner { position: relative; padding: var(--panel-pad); }
-    .panel-title { font-size: var(--panel-title-px); color: var(--data-bone); font-weight: 500;
-      padding-bottom: 9px; margin-bottom: 11px; border-bottom: 1px solid var(--panel-stroke); }
-    .panel-row { display: flex; justify-content: space-between; gap: 14px;
-      margin-bottom: var(--panel-row-gap); line-height: 1.5; }
-    .panel-row .pk { font-size: var(--panel-label-px); color: var(--data-faint); flex: 0 0 auto; }
-    .panel-row .pv { font-size: var(--panel-value-px); color: var(--data-dim); text-align: right; }
-    .panel-row .pv.bone { color: var(--data-bone); }
-    .panel-row .pv.heat { color: var(--signal-molten); }
-    .panel-note { font-size: var(--panel-label-px); color: var(--data-faint); line-height: 1.55;
-      margin-top: 10px; padding-top: 9px; border-top: 1px solid var(--panel-stroke); text-transform: none; letter-spacing: 0.02em; }
-    /* v1.4 — programmatic answer panels (the conductor's mouth-to-screen surface):
-       eyebrow context label + short lists, on the same blueprint chrome. */
-    .panel-eyebrow { font-size: var(--panel-label-px); color: var(--signal-molten);
-      letter-spacing: var(--label-track); margin-bottom: 8px; }
-    /* B4 — the composed briefing paragraph: prominent (bone, value size), the panel's
-       lead content, set above the per-story rows. Prose case, not label caps. */
-    .panel-lead { font-size: var(--panel-value-px); color: var(--data-bone); line-height: 1.6;
-      text-transform: none; letter-spacing: 0.01em; margin-bottom: 12px; padding-bottom: 11px;
-      border-bottom: 1px solid var(--panel-stroke); }
-    .panel-li { display: flex; gap: 10px; margin-bottom: var(--panel-row-gap); line-height: 1.5; }
-    .panel-li .pb { color: var(--data-faint); flex: 0 0 auto; }
-    .panel-li .pv { font-size: var(--panel-value-px); color: var(--data-dim); text-transform: none; letter-spacing: 0.02em; }
-    /* per-glyph granular resolve — text RESOLVES into being (doctrine 11), never pops */
-    /* FX WORD-WRAP: a word's glyphs live in a nowrap .w so lines break only at spaces
-       (each .g is inline-block, i.e. a break opportunity, which broke words mid-char). */
-    .w { display: inline-block; white-space: nowrap; }
-    .g { display: inline-block; opacity: 0; transform: translateY(3px); filter: blur(2px);
-      transition: opacity var(--glyph-ms) linear, transform var(--glyph-ms) ease, filter var(--glyph-ms) ease; }
-    .panel.resolve .g { opacity: 1; transform: translateY(0); filter: blur(0); }
+    #center { position: fixed; top: 0; bottom: 0; left: var(--sp-flank); right: var(--sp-flank);
+      z-index: 2; display: flex; flex-direction: column; align-items: center;
+      padding: calc(var(--sp-gutter) * 1.4) var(--sp-gutter); }
 
-    /* ---- V.A.U.L.T HUD — blueprint side columns (§6-D, no bottom bar) ---- */
-    .vault-col {
-      position: fixed; top: var(--hud-margin-y); pointer-events: none; z-index: 4;
-      font-family: var(--type-mono); text-transform: uppercase;
-      letter-spacing: var(--label-track); width: var(--hud-col-w);
-    }
-    #vault-left  { left: var(--hud-margin-x); }
-    #vault-right { right: var(--hud-margin-x); text-align: right; }
-    .vault-eyebrow {
-      font-size: var(--hud-eyebrow-px); color: var(--data-faint);
-      padding-bottom: 7px; margin-bottom: 11px; border-bottom: 1px solid var(--panel-stroke);
-      display: flex; justify-content: space-between; gap: 10px;
-    }
-    #vault-right .vault-eyebrow { flex-direction: row-reverse; }
-    .vault-block { margin-bottom: var(--hud-block-gap); }
-    .vault-block-title { font-size: var(--hud-eyebrow-px); color: var(--data-dim); margin-bottom: 8px; }
-    .vault-row {
-      display: flex; justify-content: space-between; gap: 12px;
-      font-size: var(--hud-value-px); line-height: 1.65; margin-bottom: 2px;
-      opacity: 0; transition: opacity var(--hud-reveal-ms) ease;
-    }
-    #vault-right .vault-row { flex-direction: row-reverse; }
-    .vault-row .k { color: var(--data-faint); font-size: var(--hud-label-px); }
-    .vault-row .v { color: var(--data-bone); }
-    .vault-row .v.dim  { color: var(--data-dim); }
-    .vault-row .v.heat { color: var(--signal-molten); }
-    .vault-line {
-      font-size: var(--hud-feed-px); color: var(--data-dim); line-height: 1.7;
-      margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      opacity: 0; transition: opacity var(--hud-reveal-ms) ease;
-    }
-    .vault-line .tick { color: var(--data-faint); margin-right: 6px; }
-    .vault-line.heat .tick { color: var(--signal-molten); }
-    .vault-directive { font-size: var(--hud-label-px); color: var(--data-dim); line-height: 1.75; margin-bottom: 2px; }
-    /* registration mark on each column corner (blueprint chrome) */
-    .vault-col::after {
-      content: ""; position: absolute; top: -9px; width: var(--hud-reg); height: var(--hud-reg);
-      border-top: 1px solid var(--panel-stroke); opacity: 0.7;
-    }
-    #vault-left::after  { left: 0;  border-left: 1px solid var(--panel-stroke); }
-    #vault-right::after { right: 0; border-right: 1px solid var(--panel-stroke); }
+    /* ── type roles ── */
+    .wordmark { font-family: var(--type-mono); font-weight: 500; font-size: var(--fs-wordmark);
+      letter-spacing: 0.22em; padding-left: 0.22em; color: var(--st-text); white-space: nowrap; }
+    .mission { font-size: var(--fs-micro); letter-spacing: 0.20em; color: var(--st-text-faint);
+      margin-top: 8px; text-transform: uppercase; }
 
-    #keys { position: fixed; right: var(--hud-margin-x); bottom: 30px; pointer-events: none; z-index: 4;
-      font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
-      text-transform: uppercase; color: var(--data-faint); text-align: right; line-height: 1.65; opacity: 0.72; }
-    #keys b { color: var(--data-dim); font-weight: 500; }
-    /* persistent exit affordance (FINDING 2) — always-visible while resolved */
-    #bank-hint { position: fixed; left: var(--hud-margin-x); bottom: 30px; pointer-events: none; z-index: 4;
-      font-family: var(--type-mono); font-size: 10.5px; letter-spacing: var(--label-track);
-      text-transform: uppercase; color: var(--data-dim); }
-    #bank-hint b { color: var(--data-bone); font-weight: 500; }
-    #bank-hint .k { display: inline-block; border: 1px solid var(--panel-stroke); padding: 1px 5px; margin-right: 7px; color: var(--data-bone); }
-    /* scene legend — bone mono-caps caption, centered above the key hints (theater only) */
-    #legend { position: fixed; left: 50%; transform: translateX(-50%); bottom: 32px; pointer-events: none; z-index: 4;
-      font-family: var(--type-mono); font-size: 10px; letter-spacing: var(--label-track);
-      text-transform: uppercase; color: var(--data-dim); white-space: nowrap;
-      opacity: 0; transition: opacity 300ms ease; text-align: center; }
-    #legend .hl { color: var(--signal-molten); }
-    #legend .sep { color: var(--data-faint); margin: 0 8px; }
+    .clock { display: flex; justify-content: flex-end; align-items: baseline; gap: 0.14em;
+      font-variant-numeric: tabular-nums; font-size: var(--fs-clock); font-weight: 500;
+      letter-spacing: 0.06em; color: var(--st-text); }
+    .clock .sec { color: var(--st-ember); }
+    .date { margin-top: 8px; font-size: var(--fs-micro); letter-spacing: 0.26em;
+      color: var(--st-text-dim); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+
+    /* section header with a trailing hairline rule to the flank edge */
+    .sec-head { display: flex; align-items: center; gap: 10px;
+      font-size: var(--fs-label); letter-spacing: 0.22em; text-transform: uppercase;
+      color: var(--st-text-dim); white-space: nowrap; }
+    .sec-head::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--st-hairline); }
+    #flank-right .sec-head { flex-direction: row-reverse; }
+
+    .zone-tag { display: flex; align-items: center; gap: 10px;
+      font-size: var(--fs-micro); letter-spacing: 0.26em; text-transform: uppercase;
+      color: var(--st-text-faint); white-space: nowrap; }
+    .zone-tag::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--st-hairline-faint); }
+    #flank-right .zone-tag { flex-direction: row-reverse; }
+
+    /* reserved (empty) content wells — own their bounds now, fill in later slices */
+    .well { flex: 1 1 auto; min-height: 0; }
+    .corner-foot { margin-top: auto; }
+    .ask-hint { margin-top: 12px; font-size: var(--fs-micro); letter-spacing: 0.24em;
+      color: var(--st-text-faint); text-transform: uppercase; }
+    .ask-hint b { color: var(--st-text-dim); font-weight: 500; }
+
+    /* ── Z6 status strip (top-center) ── */
+    #status-strip { display: flex; align-items: center; gap: 0.7em; flex-wrap: nowrap;
+      font-size: var(--fs-label); letter-spacing: 0.20em; text-transform: uppercase;
+      color: var(--st-text-dim); white-space: nowrap; }
+    .ss { display: inline-flex; align-items: center; gap: 0.5em; }
+    .ss .dot { width: 6px; height: 6px; border-radius: 50%;
+      background: var(--st-text-faint); box-shadow: none;
+      transition: background var(--st-resolve-ms) ease, box-shadow var(--st-resolve-ms) ease; }
+    .ss.active .dot { background: var(--st-ember); box-shadow: 0 0 8px 1px var(--st-ember-dim); }
+    .ss .ss-key { color: var(--st-text-dim); }
+    .ss .ss-val { color: var(--st-text); }
+    .ss-sep { color: var(--st-text-faint); }
+
+    /* ── Z3 transform field + Z4 orb slot (center) — reserved, orb lands in G3 ── */
+    #field { flex: 1 1 auto; width: 100%; min-height: 0; position: relative;
+      display: flex; align-items: center; justify-content: center; }
+    #orb-slot { width: min(46vh, 46vw); height: min(46vh, 46vw); }
+
+    /* ── Z5 primary directive (bottom-center) — reserved, fills in G2 ── */
+    #primary { width: 100%; min-height: calc(var(--sp-gutter) * 3); }
   </style>
 </head>
 <body>
+  <!-- ceremony backdrop (G6) + perpetual GPU stage motion (G1) -->
   <div id="backdrop"></div>
-  <div id="void-over"></div>
-  <canvas id="stage"></canvas>
-  <div id="label-layer"></div>
-  <div id="panel-layer"></div>
-  <!-- ceremony title beat (§ignition) — resolves in during the strike, dissolves to the orb -->
-  <div id="ceremony-title">VULCAN</div>
+  <canvas id="bg"></canvas>
 
-  <!-- LEFT column — SYSTEM VITALS -->
-  <aside id="vault-left" class="vault-col">
-    <div class="vault-eyebrow"><span id="vault-mode">HOME</span><span>V.A.U.L.T</span></div>
-    <div class="vault-block">
-      <div class="vault-block-title">VITALS</div>
-      <div class="vault-row"><span class="k">STATE</span><span class="v" id="vt-state">IDLE</span></div>
-      <div class="vault-row"><span class="k">SESSION</span><span class="v dim" id="vt-session">DORMANT</span></div>
-      <div class="vault-row"><span class="k">VOICE</span><span class="v dim" id="vt-voice">OFFLINE</span></div>
-      <div class="vault-row"><span class="k">WIRE</span><span class="v dim" id="vt-wire">STANDBY</span></div>
-      <div class="vault-row"><span class="k">QUOTES</span><span class="v dim" id="vt-quotes">STANDBY</span></div>
-      <div class="vault-row"><span class="k">HEAT</span><span class="v" id="vt-heat">0.00</span></div>
-      <div class="vault-row"><span class="k">UPTIME</span><span class="v dim" id="vt-uptime">00:00</span></div>
-    </div>
-  </aside>
+  <!-- corner registration ticks -->
+  <div class="reg reg-tl"></div>
+  <div class="reg reg-tr"></div>
+  <div class="reg reg-bl"></div>
+  <div class="reg reg-br"></div>
 
-  <!-- RIGHT column — COMMAND DECK -->
-  <aside id="vault-right" class="vault-col">
-    <div class="vault-eyebrow"><span id="vault-profile">SILICON FORGE</span><span>DECK</span></div>
-    <div class="vault-block">
-      <div class="vault-block-title">DIRECTIVES</div>
-      <div id="vt-directives"></div>
-    </div>
-    <div class="vault-block">
-      <div class="vault-block-title">WIRE FEED</div>
-      <div id="vt-feed"></div>
-    </div>
-  </aside>
+  <div id="shell">
+    <!-- ═══ Z1 LEFT FLANK ═══ TL wordmark · SYSTEM VITALS (G2) · BL transcript/intent -->
+    <aside id="flank-left" class="flank" data-zone="Z1">
+      <header class="corner-head">
+        <div class="wordmark">V U L C A N</div>
+        <div class="mission">BONSAI LAUNCH · v2.1 · THE STAGE</div>
+      </header>
+      <div class="flank-body">
+        <div class="zone-tag">SYSTEM VITALS</div>
+        <div class="well"><!-- Z1 waitlist / GH velocity / Vercel / spend — G2 --></div>
+      </div>
+      <footer class="corner-foot" data-zone="Z8">
+        <div class="sec-head">TRANSCRIPT · INTENT LINE</div>
+        <div class="well" style="flex:0 0 auto; min-height: calc(var(--sp-gutter) * 2.2)"><!-- transcript + > intent — G5 --></div>
+        <div class="ask-hint"><b>HOLD SPACE</b> TO TALK</div>
+      </footer>
+    </aside>
 
-  <!-- v1.4 COMMAND CENTER PIVOT: scene shortcuts (t/v/n/k summon · x device · e
-       explode · 0 home · 1-4 orb state) are DEV/DEBUG overrides only — undocumented,
-       removed from the operator legend. Scenes are summoned by spoken intent (the
-       conductor), not keys. Only genuine operator controls are advertised. -->
-  <div id="keys">
-    <div><b>M</b> MUTE · <b>P</b> PROFILE</div>
+    <!-- ═══ Z2 RIGHT FLANK ═══ TR clock · COMMAND DECK + AUDIO (G2) · BR launch objectives -->
+    <aside id="flank-right" class="flank" data-zone="Z2">
+      <header class="corner-head">
+        <div class="clock"><span id="clock-hm">--:--</span><span id="clock-sec" class="sec">--</span></div>
+        <div class="date" id="clock-date">—</div>
+      </header>
+      <div class="flank-body">
+        <div class="zone-tag">COMMAND DECK</div>
+        <div class="well"><!-- Z2 command deck + audio I/O — G2 --></div>
+      </div>
+      <footer class="corner-foot">
+        <div class="sec-head">LAUNCH OBJECTIVES</div>
+        <div class="well" style="flex:0 0 auto; min-height: calc(var(--sp-gutter) * 2.2)"><!-- outreach / compliance / distribution — G2 --></div>
+      </footer>
+    </aside>
+
+    <!-- ═══ CENTER ═══ Z6 status strip · Z3 transform field (Z4 orb) · Z5 primary directive -->
+    <main id="center">
+      <div id="status-strip" data-zone="Z6">
+        <span class="ss" id="ss-core"><span class="dot"></span><span class="ss-key">CORE</span><span class="ss-sep">·</span><span class="ss-val">IDLE</span></span>
+        <span class="ss-sep">·</span>
+        <span class="ss" id="ss-wire"><span class="dot"></span><span class="ss-key">WIRE</span><span class="ss-sep">·</span><span class="ss-val">STANDBY</span></span>
+        <span class="ss-sep">·</span>
+        <span class="ss" id="ss-hands"><span class="dot"></span><span class="ss-key">HANDS</span><span class="ss-sep">·</span><span class="ss-val">STANDBY</span></span>
+      </div>
+      <div id="field" data-zone="Z3">
+        <div id="orb-slot" data-zone="Z4"><!-- a5 TWIN HELIX orb — G3 --></div>
+      </div>
+      <div id="primary" data-zone="Z5"><!-- Bonsai hero number + velocity + deploy — G2 --></div>
+    </main>
   </div>
-  <div id="bank-hint"><span class="k">ESC</span>BANK THE FIRE</div>
-  <!-- scene LEGEND (PART 3) — what this is + what the marks mean; theater only -->
-  <div id="legend"></div>
-  <script type="module" src="/src/orb/main.js"></script>
+
+  <script type="module" src="/src/stage/main.js"></script>
 </body>
 </html>

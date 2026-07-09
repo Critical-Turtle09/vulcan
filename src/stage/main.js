@@ -1,0 +1,170 @@
+// SPEC v1.6 THE STAGE — G1 THE SHELL. The v2.1 shell: near-black stage, adaptive-scale
+// zone scaffolding (Z1–Z8, bounded), the always-lit corners, and the only LIVE parts of
+// this slice — the TR clock and the Z6 status strip. Content for the flanks (G2), the orb
+// (G3), dispatch (G4), and the intent line (G5) lands in later slices; their zones own
+// their bounds now so nothing can ever collide (§0 adaptive scale law).
+//
+// The identity organs are UNCHANGED and kept intact: the voice loop (+ wire status) still
+// boots and runs through this shell, so summon/respond and every IPC path stay live even
+// though the orb view is not mounted until G3. A minimal stub stands in for the orb so the
+// voice session drives the CORE state read without the G3 engine.
+import { injectStageVars, stage } from './tokens.js';
+import { createBackground } from './background.js';
+import { createVoice } from '../voice/voice.js';
+import { createWire } from '../wire.js';
+import { activeProfile } from '../profile.js';
+import rawTokens from '../../tokens.json';
+
+injectStageVars();
+
+// ---- perpetual background (doctrine 5 + 11) ----
+const bg = createBackground(document.getElementById('bg'));
+
+// ---- the orb STUB (G3 mounts the real a5 engine). Satisfies exactly the surface the
+// voice loop touches — setState / setAmplitude / stateName — so the hot session runs and
+// the CORE read reflects it, with no visual until G3. ----
+function createOrbStub(onState) {
+  let stateName = 'idle', amp = 0;
+  return {
+    get stateName() { return stateName; },
+    setState(n) { if (n && n !== stateName) { stateName = n; onState && onState(n); } },
+    setAmplitude(v) { amp = v; },
+    getAmplitude() { return amp; },
+    pulseHeat() {},   // no-op until the orb exists (G3)
+  };
+}
+
+// ---- LIVE: TR clock — seconds in ember, date beneath. Resolves in, never snaps. ----
+const el = (id) => document.getElementById(id);
+const clockHM = el('clock-hm'), clockSec = el('clock-sec'), clockDate = el('clock-date');
+const DOW = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+const MON = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+const p2 = (n) => String(n).padStart(2, '0');
+let lastClockKey = '';
+function paintClock() {
+  const d = new Date();
+  const key = `${d.getHours()}:${d.getMinutes()}:${d.getSeconds()}`;
+  if (key === lastClockKey) return;
+  lastClockKey = key;
+  clockHM.textContent = `${p2(d.getHours())}:${p2(d.getMinutes())}`;
+  clockSec.textContent = p2(d.getSeconds());
+  clockDate.textContent = `${DOW[d.getDay()]} ${p2(d.getDate())} ${MON[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+// ---- LIVE: Z6 status strip. CORE ← the voice/orb session state (real). WIRE ← the wire
+// organ's online boolean (real, already in the codebase). HANDS ← placeholder until the
+// crew/dispatch lands. Each subsystem's dot turns ember when it is active. ----
+const CORE_LABEL = { idle: 'IDLE', listening: 'LISTENING', thinking: 'WORKING', speaking: 'SPEAKING' };
+function setSub(name, text, active) {
+  const s = el(`ss-${name}`);
+  if (!s) return;
+  s.querySelector('.ss-val').textContent = text;
+  s.classList.toggle('active', !!active);
+}
+function paintStatus() {
+  const core = orb.stateName;
+  setSub('core', CORE_LABEL[core] || 'IDLE', core !== 'idle');
+  const ws = wire.status();
+  setSub('wire', ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : 'STANDBY', ws.online);
+  setSub('hands', 'STANDBY', false);   // TODO(G4): wire to the crew/dispatch runner state
+}
+
+// ---- voice loop + wire (kept intact; the audio path must stay unbroken) ----
+const params = new URLSearchParams(location.search);
+const forceTest = params.get('voice') === 'test';
+const bridge = window.vulcan || {
+  async config() { return { hasKey: false, hasWhisper: false, hasEars: false, testMode: forceTest }; },
+  async tts() { return { ok: false }; },
+  async transcribe() { return { ok: false }; },
+};
+
+const orb = createOrbStub(paintStatus);
+const wire = createWire({ bridge, getProfile: activeProfile });
+
+// PART 6 local reflexes reaching the shell: only the session/audio controls exist here.
+function statusLine() {
+  const s = voice.status(), ws = wire.status();
+  return `Status. Voice ${s.online ? (s.local ? 'local' : 'online') : 'offline'}, wire ${ws.online ? 'live' : 'offline'}.`;
+}
+function runCommand(intent) {
+  switch (intent && intent.type) {
+    case 'mute': voice.setMuted(true); paintStatus(); return 'Muted.';
+    case 'unmute': voice.setMuted(false); paintStatus(); return 'Listening.';
+    case 'bank': if (bridge.requestHide) bridge.requestHide(); return null;
+    case 'status': return statusLine();
+    default: return null;
+  }
+}
+
+const voice = createVoice({
+  orb, bridge, forceTest,
+  // wake-from-hidden routes through the same summon path (main is idempotent when
+  // already visible); banking hides the overlay. The answer panel surface is G4, so
+  // onAnswer is a no-op here — the loop still SPEAKS every answer (audio path intact).
+  onWake: () => { if (bridge.requestSummon) bridge.requestSummon(); },
+  onDismiss: () => { if (bridge.requestHide) bridge.requestHide(); },
+  onCommand: (intent) => runCommand(intent),
+  onAnswer: () => {},                 // TODO(G4): resolve answers onto the Z3 transform field
+  onSession: () => paintStatus(),
+});
+
+// ---- IPC (resident overlay control) — kept in lockstep with the voice session ----
+if (bridge.onIgnite) bridge.onIgnite(() => { resolveIn(); voice.wake(); });
+if (bridge.onBank) bridge.onBank(() => { voice.goDormant(); if (bridge.requestHide) bridge.requestHide(); });
+if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintStatus(); });
+if (bridge.onForceHide) bridge.onForceHide(() => { voice.goDormant(); });
+if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' }));
+// §1a backdrop snapshot (ceremony material, exercised fully in G6) — kept intact.
+const backdrop = el('backdrop');
+if (bridge.onBackdrop) bridge.onBackdrop((url) => { if (backdrop) backdrop.style.backgroundImage = url ? `url(${url})` : 'none'; });
+
+// ---- PUSH-TO-TALK (v1.5.1 THE TRIGGER) — kept so the ears can capture through the shell.
+// The mic opens ONLY while the trigger (Space) is held and the window is focused; fn is
+// never bound. A blur while held ends the clip cleanly. ----
+const PTT_MODE = rawTokens.voice.capture_mode !== 'open';
+const PTT_KEY = rawTokens.voice.ptt_key || 'Space';
+const isPttKey = (e) => (PTT_KEY === 'Space' ? e.code === 'Space' : e.key.toLowerCase() === PTT_KEY.toLowerCase());
+let pttHeld = false;
+function pttRelease() { if (pttHeld) { pttHeld = false; voice.pttUp(); paintStatus(); } }
+window.addEventListener('keyup', (e) => { if (PTT_MODE && isPttKey(e)) { e.preventDefault(); pttRelease(); } });
+window.addEventListener('blur', pttRelease);
+window.addEventListener('keydown', (e) => {
+  if (PTT_MODE && isPttKey(e)) {
+    e.preventDefault();
+    if (!e.repeat && !pttHeld) { pttHeld = true; voice.pttDown(); paintStatus(); }
+    return;
+  }
+  if (e.key.toLowerCase() === rawTokens.voice.muteKey) { voice.toggleMute(); paintStatus(); }
+});
+
+// ---- doctrine 11: the stage RESOLVES in on launch (never a pop) ----
+function resolveIn() { document.getElementById('shell').classList.add('up'); document.getElementById('bg').classList.add('up'); }
+
+// ---- boot ----
+paintClock();
+paintStatus();
+voice.boot().then(paintStatus);
+wire.boot();
+requestAnimationFrame(() => resolveIn());   // trigger the resolve transition after first paint
+
+// ---- render + tick loop ----
+let last = performance.now(), t = 0, statusAccum = 0;
+function frame(now) {
+  const dt = Math.min((now - last) / 1000, 0.05); last = now; t += dt;
+  bg.render(t);
+  voice.tick();
+  paintClock();
+  statusAccum += dt;
+  if (statusAccum >= 0.5) { statusAccum = 0; paintStatus(); }   // catch wire-poll / session drift
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// minimal shell harness (self-check / operator screenshot aid)
+window.__vulcanStage = {
+  core: () => orb.stateName,
+  wire: () => wire.status(),
+  voice: () => voice.status(),
+  ignite: () => { resolveIn(); voice.wake(); },
+  bank: () => { voice.goDormant(); if (bridge.requestHide) bridge.requestHide(); },
+};
