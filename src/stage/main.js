@@ -86,7 +86,14 @@ const bridge = window.vulcan || {
     };
   },
   openExternal() {},
+  // G5 THE INTENT LINE — browser SIM of the conductor path so the typed router runs
+  // end-to-end without an Electron main (clearly labelled, executes nothing).
+  async conduct(text) {
+    return { text: `Simulated route of "${text}". The real router runs in the app.`, route: 'REFLEX', reason: 'NO_BRIDGE', needsConfirm: false, cost_usd: 0, day_total_usd: 0 };
+  },
+  async confirm() { return { text: 'Simulated — nothing left the machine.', route: 'SKILL', aborted: true, cost_usd: 0 }; },
 };
+const intentInput = el('intent-input');   // G5 — the > prompt (focus gates PTT vs typing)
 
 const orb = createOrb(el('orb-slot'), paintStatus);   // G3 — the a5 TWIN HELIX (Z4)
 const wire = createWire({ bridge, getProfile: activeProfile });
@@ -114,7 +121,13 @@ const voice = createVoice({
   onWake: () => { if (bridge.requestSummon) bridge.requestSummon(); },
   onDismiss: () => { if (bridge.requestHide) bridge.requestHide(); },
   onCommand: (intent) => runCommand(intent),
-  onAnswer: () => {},                 // TODO(G4): resolve answers onto the Z3 transform field
+  // G5 — the transcript reads BOTH channels: a spoken exchange echoes as YOU · <heard>
+  // then V · <answer>, the same log the typed channel writes to. (Dispatch answers echo
+  // from speakResult.)
+  onAnswer: (answer, transcript) => {
+    if (transcript) pushLine('you', transcript);
+    if (answer && answer.text) pushLine('v', answer.text, answer.aborted ? 'fail' : '');
+  },
   onSession: () => paintStatus(),
 });
 
@@ -136,9 +149,15 @@ const PTT_KEY = rawTokens.voice.ptt_key || 'Space';
 const isPttKey = (e) => (PTT_KEY === 'Space' ? e.code === 'Space' : e.key.toLowerCase() === PTT_KEY.toLowerCase());
 let pttHeld = false;
 function pttRelease() { if (pttHeld) { pttHeld = false; voice.pttUp(); paintStatus(); } }
-window.addEventListener('keyup', (e) => { if (PTT_MODE && isPttKey(e)) { e.preventDefault(); pttRelease(); } });
+// FOCUS BOUNDARY (G5) — while the > intent input is focused, Space is a typed space and
+// must NEVER trigger push-to-talk; the input's own keydown stopPropagation already keeps
+// typed keys off the window handlers, and this guard is the belt-and-braces. While the
+// input is BLURRED, hold-Space PTT is unchanged. Focusing the box mid-hold ends the clip.
+const typingIntent = () => document.activeElement === intentInput;
+window.addEventListener('keyup', (e) => { if (PTT_MODE && isPttKey(e) && !typingIntent()) { e.preventDefault(); pttRelease(); } });
 window.addEventListener('blur', pttRelease);
 window.addEventListener('keydown', (e) => {
+  if (typingIntent()) return;                 // typed keys are the intent line's, not the window's
   if (PTT_MODE && isPttKey(e)) {
     e.preventDefault();
     if (!e.repeat && !pttHeld) { pttHeld = true; voice.pttDown(); paintStatus(); }
@@ -220,7 +239,10 @@ function dismissChip(d) {
 }
 const done = [];   // resolved dispatches whose chips persist (filename shown, dismissible)
 
-// L-leader tethers: chip anchor → elbow → orb center (Palantir/Maverick grammar).
+// L-leader tethers (§5): from each chip's right edge, a short horizontal hop to the
+// orb's vertical centreline, then a vertical drop into the rim — an L reaching toward
+// the orb (Palantir/Maverick grammar). Chips hug the rim, so every tether is a brief,
+// legible hook rather than a long span across the field.
 function drawLeaders() {
   const svg = leadersSVG(), field = el('field'); if (!svg || !field) return;
   const fr = field.getBoundingClientRect();
@@ -228,14 +250,14 @@ function drawLeaders() {
   svg.setAttribute('viewBox', `0 0 ${fr.width} ${fr.height}`);
   const ox = fr.width / 2, oy = fr.height / 2;                 // orb center (orb-slot is centered)
   const slot = el('orb-slot'); const orbR = slot ? slot.getBoundingClientRect().width / 2 : 120;
+  const tx = ox - orbR * 0.9;                                  // vertical run sits just off the rim
   const chips = [...active, ...done].map((d) => d.chip).filter(Boolean);
   let paths = '';
   for (const chip of chips) {
     const cr = chip.getBoundingClientRect();
-    const ax = cr.right - fr.left, ay = cr.top + cr.height / 2 - fr.top;   // chip right-center
-    const tx = ox - orbR * 0.82, ty = oy;                                   // land just off the orb rim
-    const elbow = Math.max(ax + 16, (ax + tx) / 2);
-    paths += `<path d="M ${ax.toFixed(1)} ${ay.toFixed(1)} H ${elbow.toFixed(1)} V ${ty.toFixed(1)} H ${tx.toFixed(1)}"/>`;
+    const ax = cr.right - fr.left, ay = cr.top + cr.height / 2 - fr.top;   // chip right-center (anchor)
+    // L: horizontal from the chip to the rim column, then vertical to the orb centre.
+    paths += `<path d="M ${ax.toFixed(1)} ${ay.toFixed(1)} H ${tx.toFixed(1)} V ${oy.toFixed(1)}"/>`;
     paths += `<circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="2"/>`;
   }
   svg.innerHTML = paths;
@@ -287,6 +309,7 @@ async function startDispatch(d) {
 async function speakResult(d, res) {
   d.phase = 'speaking'; refreshOrb();
   audioLive(true);
+  pushLine('v', res.speak || 'Done.', res.failed ? 'fail' : '');   // G5 — the result reads in the transcript
   try { await voice.say(res.speak, { kind: 'answer' }); }
   finally { audioLive(false); }
 }
@@ -405,7 +428,158 @@ const dispatch = {
 };
 window.addEventListener('resize', drawLeaders);
 
-// ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
+// ═══ G5 THE INTENT LINE (Z8) ═══════════════════════════════════════════════════
+// A typed channel into the SAME intent router as voice. ONE router, two channels:
+// a DETERMINISTIC prefix match first (free, local — maps free text to an existing
+// deck command / skill), then the conductor's Haiku classifier (B1 SYNAPSE) for
+// anything it doesn't catch. Recognized commands run the FULL G4 lifecycle (chip near
+// the orb, states, real speech, artifact, overlay-capable file chip). Inference maps to
+// EXISTING skills only and NEVER lowers the write gate: a machine-leaving verb
+// (deploy/push/delete/tag/release/send) is ANNOUNCED and HELD until a typed `confirm`
+// proceeds through the constitution's existing WRITE_CONFIRM gate. Every path speaks
+// (never-silent). Transcript lines resolve in granularly (doctrine 11).
+const INTENT = stage.intent || {};
+const TRANSCRIPT_MAX = INTENT['transcript.max'] || 7;
+
+// transcript log — newest at the bottom; each line forms from dust, then is capped.
+function pushLine(who, text, cls = '') {
+  const host = el('transcript'); if (!host || !text) return;
+  const line = document.createElement('div');
+  line.className = `tline ${who}${cls ? ` ${cls}` : ''}`;
+  const label = who === 'you' ? 'YOU' : 'V';
+  line.innerHTML = `<span class="who">${label}</span><span class="msg"></span>`;
+  line.querySelector('.msg').textContent = text;
+  host.appendChild(line);
+  while (host.children.length > TRANSCRIPT_MAX) host.removeChild(host.firstChild);
+  requestAnimationFrame(() => requestAnimationFrame(() => line.classList.add('up')));
+}
+
+// ---- the router: deterministic prefix match → the ten existing deck commands -------
+// All ten dispatch runners are READ or DRAFT (dispatch.js), so a match here flows
+// freely. Deck match is checked BEFORE the write gate: a safe read that merely mentions
+// a verb ("send me the metrics") resolves to its command, never a false HOLD.
+const DEPLOY_READ = /\b(status|state|health|up|live|deployed|ok|working|standing|check|reachable|how'?s|is it)\b/;
+function matchDeckCommand(text) {
+  const t = ` ${String(text).toLowerCase().trim()} `;
+  const has = (re) => re.test(t);
+  if (has(/\b(deploy|deployment|vercel|prod|production)\b/) && has(DEPLOY_READ)) return 'DEPLOY CHECK';
+  if (has(/\bmission brief\b/) || has(/\b(morning|bonsai|daily) brief\b/) || (has(/\bmission\b/) && has(/\bbrief/)) || has(/\bbriefing\b/)) return 'MISSION BRIEF';
+  if (has(/\b(wire|headlines?|news|feeds?)\b/)) return 'WIRE SCAN';
+  if (has(/\b(metrics?|spend|velocity|numbers|stats|budget|ledger|burn|cap)\b/)) return 'METRICS PULL';
+  if (has(/\b(outreach|pilots?|districts?|prospects?)\b/) || (has(/\bemails?\b/) && !has(/\bread\b/))) return 'OUTREACH';
+  if (has(/\b(compliance|coppa|ferpa|privacy|posture)\b/)) return 'COMPLIANCE';
+  if (has(/\b(pitch|investors?|fundrais|the deck)\b/)) return 'PITCH DESK';
+  if (has(/\bvault\b/) && has(/\b(clean|tidy|cleanup|clean up|organi[sz]e|sort)\b/)) return 'VAULT CLEAN';
+  if (has(/\b(week|weekly|wk)\b/) && has(/\breview\b/)) return 'WK REVIEW';
+  if (has(/\bplan\b/) && has(/\b(today|day|for today)\b/)) return 'PLAN TODAY';
+  if (has(/\bmission\b/)) return 'MISSION BRIEF';    // a bare "mission" → the brief
+  return null;
+}
+
+// a machine-leaving verb NOT already answered by a safe deck read → the write gate.
+const GATE_VERB = /\b(deploy|deployment|publish|ship|push|delete|remove|drop|tag|release|send)\b/;
+function gatedVerb(text) {
+  const t = ` ${String(text).toLowerCase().trim()} `;
+  if (DEPLOY_READ.test(t)) return null;              // a status/check read, not an action
+  const m = t.match(GATE_VERB);
+  return m ? m[1] : null;
+}
+
+const deckCellFor = (cmd) => document.querySelector(`.deck-cell[data-cmd="${cmd}"]`);
+
+// speech from the typed channel rides the SAME serialized mouth as dispatch (no overlap).
+function queueSpeak(text, kind = 'answer') {
+  speechChain = speechChain.then(() => voice.say(text, { kind })).catch(() => {});
+  return speechChain;
+}
+
+// ---- the write gate: announce + HOLD until a typed confirm -------------------------
+let pendingGate = null;   // { text, verb } — a machine-leaving intent awaiting confirm/cancel
+const TYPED_CONFIRM = /^\s*(confirm|confirmed|yes|yeah|yep|do it|proceed|go ahead|approve|approved|y)\s*$/i;
+
+function beginGate(text, verb) {
+  pendingGate = { text, verb };
+  const form = el('intent-form'); if (form) form.classList.add('holding');
+  const line = `${verb.toUpperCase()} — ${INTENT.holdLine || 'That leaves the machine. Type confirm to proceed, or cancel.'}`;
+  pushLine('v', line, 'hold');
+  queueSpeak(line, 'confirm');                       // announce-class — always speaks
+}
+
+// resolve a pending HOLD from the operator's TYPED decision. Only an explicit affirmative
+// proceeds; anything else cancels (the gate never lowers). A confirm routes THROUGH THE
+// EXISTING conductor gate — no new execution path, no lowered gate.
+async function resolveGate(text) {
+  const g = pendingGate; pendingGate = null;
+  const form = el('intent-form'); if (form) form.classList.remove('holding');
+  if (!TYPED_CONFIRM.test(text)) {
+    const line = INTENT.cancelLine || 'Cancelled — nothing left the machine.';
+    pushLine('v', line, 'fail');
+    queueSpeak(line, 'confirm');
+    return;
+  }
+  let r = null;
+  try { r = await bridge.conduct(g.text); } catch (_) { r = null; }
+  if (r && r.needsConfirm && bridge.confirm) {
+    let fr = null;
+    try { fr = await bridge.confirm({ skill: r.skill, action: r.action, detail: r.detail, decision: 'confirm' }); } catch (_) { fr = null; }
+    const spoken = (fr && fr.text) || 'Done.';
+    pushLine('v', spoken, fr && fr.aborted ? 'fail' : '');
+    queueSpeak(spoken, 'confirm');
+  } else {
+    // no concrete WRITE hand exists for this verb yet — honest, nothing executed.
+    const line = INTENT.noHandLine || 'There is no hand wired for that yet — nothing left the machine.';
+    pushLine('v', line, 'fail');
+    queueSpeak(line, 'confirm');
+  }
+}
+
+// ---- existing router behavior: the conductor (Haiku + deterministic skill) speaks ----
+async function conductAndSpeak(text) {
+  let r = null;
+  try { r = await bridge.conduct(text); } catch (_) { r = null; }
+  if (r && r.needsConfirm) {                          // a WRITE_CONFIRM slipped the verb guard → HOLD
+    pendingGate = { text, verb: String(r.action || 'write') };
+    const form = el('intent-form'); if (form) form.classList.add('holding');
+    const line = r.text || (INTENT.holdLine || 'That leaves the machine. Type confirm to proceed, or cancel.');
+    pushLine('v', line, 'hold');
+    queueSpeak(line, 'confirm');
+    return;
+  }
+  const spoken = (r && r.text) || (INTENT.clarifyLine || "I didn't catch a command.");
+  pushLine('v', spoken, r ? '' : 'fail');
+  queueSpeak(spoken, 'answer');
+}
+
+// ---- submit: the one entry point for typed intent ---------------------------------
+function submitIntent(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return;
+  pushLine('you', text);
+  if (pendingGate) { resolveGate(text); return; }    // a HOLD is open → this is the decision
+  const cmd = matchDeckCommand(text);
+  if (cmd) {                                          // recognized command → FULL G4 lifecycle
+    pushLine('v', `INFERRED ${cmd} → DISPATCHING`);
+    dispatchCommand(cmd, deckCellFor(cmd));
+    return;
+  }
+  const verb = gatedVerb(text);
+  if (verb) { beginGate(text, verb); return; }        // machine-leaving, no safe hand → HOLD
+  conductAndSpeak(text);                               // existing router behavior (Haiku + skill)
+}
+
+// ---- input wiring: Enter submits · Esc blurs · Space types (never PTT while focused) ----
+(function wireIntent() {
+  const form = el('intent-form'); if (!form || !intentInput) return;
+  form.addEventListener('submit', (e) => { e.preventDefault(); const v = intentInput.value; intentInput.value = ''; submitIntent(v); });
+  // stopPropagation keeps EVERY typed key off the window PTT / mute / dev handlers, so
+  // Space types a space and 'm' types an 'm' while the box is focused (the focus boundary).
+  intentInput.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { e.preventDefault(); intentInput.blur(); }
+  });
+  // focusing the box mid-hold ends the PTT clip cleanly (never a wedged-open mic).
+  intentInput.addEventListener('focus', () => { if (pttHeld) pttRelease(); });
+})();
 
 // ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
 // Z1 SYSTEM VITALS (real wires: Claude spend·B0, Vercel·B5R, GH commits·B2 + one
@@ -567,4 +741,8 @@ window.__vulcanStage = {
   dispatch: (cmd) => dispatchCommand(cmd, document.querySelector(`.deck-cell[data-cmd="${cmd}"]`)),  // G4 self-check
   dispatchCounts: () => dispatch.counts(),            // G4 self-check: active/queued
   openLatest: () => { const d = done[done.length - 1] || active[active.length - 1]; if (d) openArtifact(d); },  // G4 self-check: overlay
+  intent: (text) => submitIntent(text),               // G5 self-check: submit a typed intent
+  route: (text) => ({ cmd: matchDeckCommand(text), verb: gatedVerb(text) }),  // G5 self-check: router read
+  holding: () => !!pendingGate,                       // G5 self-check: is a write gate open
+  transcript: () => [...document.querySelectorAll('#transcript .tline')].map((n) => n.textContent),
 };

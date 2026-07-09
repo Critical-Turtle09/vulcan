@@ -423,3 +423,94 @@ The ignition ceremony (kindle → strike → title → resolve) + the quench, sp
 | `ignition.quench.emberFall` | `0.55` |
 | `ignition.backdrop.enabled` | `true` |
 
+## `stage`
+
+| Token | Value |
+|---|---|
+| `stage._note` | `SPEC v1.6 THE STAGE (LOCKED 2026-07-08) — the v2.1 shell material law. Near-black stage (#0A0A0C family), greyscale world, EMBER (#E8562E) the single accent, hairline whites .06–.14. Adaptive scale law: type/space ship as [minPx, prefVw, maxPx] clamp() ramps so every zone owns viewport-scaled bounds — a collision at any resolution is a build-failing bug. Namespaced apart from the dormant v1.x palette so the fresh v2.1 identity never rewrites the archived orb/theater material.` |
+| `stage.bg` | `#0A0A0C` |
+| `stage.bg.deep` | `#060608` |
+| `stage.bg.raise` | `#101015` |
+| `stage.ember` | `#E8562E` |
+| `stage.ember.dim` | `#AF3F21` |
+| `stage.ember.deep` | `#5C2413` |
+| `stage.text` | `#E9E9EC` |
+| `stage.text.dim` | `#8B8C92` |
+| `stage.text.faint` | `#54565D` |
+| `stage.hairline` | `rgba(255,255,255,0.10)` |
+| `stage.hairline.strong` | `rgba(255,255,255,0.14)` |
+| `stage.hairline.faint` | `rgba(255,255,255,0.06)` |
+| `stage.reg.size` | `11` |
+| `stage.grain.amp` | `0.05` |
+| `stage.resolve.ms` | `560` |
+| `stage.resolve.stagger.ms` | `90` |
+| `stage.dispatch._note` | `G4 THE LIFECYCLE (SPEC v1.6 §5). Deck dispatch: max 3 active + queue, task chips near the orb (◆ + timer → artifact filename), the center-stage document overlay. Durations sit inside Doctrine 11's 240-700ms reveal band.` |
+| `stage.dispatch.maxActive` | `3` |
+| `stage.dispatch.chip.resolve.ms` | `320` |
+| `stage.dispatch.chip.timer.hz` | `10` |
+| `stage.dispatch.overlay.ms` | `420` |
+| `stage.intent._note` | `G5 THE INTENT LINE (SPEC v1.6 §1 Z8). Typed text enters the SAME router as voice — deterministic prefix match first, Haiku (B1 SYNAPSE) second. Reads/drafts flow freely; a machine-leaving verb (deploy/push/delete/tag/release) ANNOUNCES and HOLDS for a typed `confirm` through the existing constitution gate — inference never lowers the gate. transcript.max caps the visible log; the copy below is the never-silent spoken/echoed lines.` |
+| `stage.intent.transcript.max` | `7` |
+| `stage.intent.line.resolve.ms` | `300` |
+| `stage.intent.holdLine` | `That leaves the machine. Type confirm to proceed, or cancel.` |
+| `stage.intent.cancelLine` | `Cancelled — nothing left the machine.` |
+| `stage.intent.noHandLine` | `There is no hand wired for that yet — nothing left the machine.` |
+| `stage.intent.clarifyLine` | `I did not catch a command. Try a deck command, or ask for the mission brief.` |
+| `stage.type.micro` | `[8, 0.58, 10]` |
+| `stage.type.label` | `[9, 0.7, 12]` |
+| `stage.type.deck` | `[9, 0.55, 10]` |
+| `stage.type.body` | `[11, 0.95, 14]` |
+| `stage.type.head` | `[13, 1.15, 18]` |
+| `stage.type.wordmark` | `[13, 1.25, 19]` |
+| `stage.type.clock` | `[21, 2.1, 33]` |
+| `stage.type.hero` | `[44, 7, 104]` |
+| `stage.space.gutter` | `[14, 1.9, 34]` |
+| `stage.space.flank` | `[212, 20, 300]` |
+| `stage.space.row` | `[6, 0.7, 12]` |
+| `stage.orb._note` | `a5 TWIN HELIX (SPEC v1.6 §2). Particle-matter sphere with differential rotation (equator faster than poles) + two counter-tilted twin-line ribbon PAIRS (opposite flow) + one thin polar ring. Law: SPEECH IS CIRCULATION, NOT VIBRATION — no jitter, ever. Colours come from the stage palette (greyscale body/ribbons, ember the single accent). State changes ease per Doctrine 11 (state.tau) — nothing snaps.` |
+| `stage.orb.particleCount` | `1050` |
+| `stage.orb.radius` | `1` |
+| `stage.orb.pointSize` | `2.2` |
+| `stage.orb.camera.dist` | `5.4` |
+| `stage.orb.camera.elev` | `0.62` |
+| `stage.orb.camera.fov` | `34` |
+| `stage.orb.boot.ms` | `620` |
+| `stage.orb.state.tau` | `0.16` |
+| `stage.orb.orbit.base` | `0.14` |
+| `stage.orb.differential` | `0.62` |
+| `stage.orb.breathe.hz` | `0.15` |
+| `stage.orb.amp.tau` | `0.12` |
+| `stage.orb.ribbon.segments` | `168` |
+| `stage.orb.ribbon.tiltX` | `1.25` |
+| `stage.orb.ribbon.tiltZ` | `0.85` |
+| `stage.orb.ribbon.radius` | `1.07` |
+| `stage.orb.ribbon.twinGap` | `0.045` |
+| `stage.orb.ribbon.flow.base` | `0.16` |
+| `stage.orb.ribbon.precess` | `0.035` |
+| `stage.orb.ribbon.pairBphase` | `0.9` |
+| `stage.orb.ribbon.opacity` | `0.9` |
+| `stage.orb.ribbon.boneBright` | `0.5` |
+| `stage.orb.polar.segments` | `140` |
+| `stage.orb.polar.radius` | `1.12` |
+| `stage.orb.polar.opacity` | `0.42` |
+| `stage.orb.polar.boneBright` | `0.42` |
+| `stage.orb.polar.precess` | `0.02` |
+| `stage.orb.states.idle.orbitMul` | `1` |
+| `stage.orb.states.idle.flowMul` | `1` |
+| `stage.orb.states.idle.emberSpread` | `0.15` |
+| `stage.orb.states.idle.emberBright` | `0.9` |
+| `stage.orb.states.idle.swell` | `0` |
+| `stage.orb.states.idle.breatheAmp` | `0.006` |
+| `stage.orb.states.working.orbitMul` | `2` |
+| `stage.orb.states.working.flowMul` | `5` |
+| `stage.orb.states.working.emberSpread` | `0.55` |
+| `stage.orb.states.working.emberBright` | `0.95` |
+| `stage.orb.states.working.swell` | `0` |
+| `stage.orb.states.working.breatheAmp` | `0.01` |
+| `stage.orb.states.speaking.orbitMul` | `3.2` |
+| `stage.orb.states.speaking.flowMul` | `8` |
+| `stage.orb.states.speaking.emberSpread` | `1` |
+| `stage.orb.states.speaking.emberBright` | `1` |
+| `stage.orb.states.speaking.swell` | `0.06` |
+| `stage.orb.states.speaking.breatheAmp` | `0.012` |
+

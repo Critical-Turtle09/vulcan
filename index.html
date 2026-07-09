@@ -220,15 +220,20 @@
     .deck-cell.running .deck-sub { color: var(--st-ember); }
     .deck-cell.busy .deck-label { color: var(--st-text); }
 
-    /* Z7 TASK CHIPS — a stacked column just left of the orb; leaders tether to it. */
+    /* Z7 TASK CHIPS — spawn NEAR THE ORB (§5): a column hugging the orb's left rim,
+       vertically centered on it, each chip right-aligned toward the orb so its
+       L-leader is a short hop to the rim (the signed-mockup choreography). The
+       orb radius = half the orb-slot side (min(46vh,46vw)), so the column's right
+       edge sits one gutter clear of the rim at every viewport (adaptive-scale). */
     #leaders { position: absolute; inset: 0; width: 100%; height: 100%;
       pointer-events: none; overflow: visible; z-index: 1; }
     #leaders path { fill: none; stroke: var(--st-hairline-strong); stroke-width: 1;
       vector-effect: non-scaling-stroke; }
     #leaders circle { fill: var(--st-ember); }
-    #chips { position: absolute; left: 0; top: 8%; z-index: 2;
+    #chips { position: absolute; top: 50%; transform: translateY(-50%);
+      right: calc(50% + min(23vh, 23vw) + var(--sp-gutter)); z-index: 2;
       display: flex; flex-direction: column; gap: calc(var(--sp-row) * 1.1);
-      align-items: flex-start; max-width: 46%; pointer-events: none; }
+      align-items: flex-end; text-align: right; max-width: 34%; pointer-events: none; }
     .chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
       padding: calc(var(--sp-row) * 0.9) calc(var(--sp-gutter) * 0.55);
       border: 1px solid var(--st-hairline-strong); background: color-mix(in srgb, var(--st-bg) 82%, transparent);
@@ -306,6 +311,48 @@
       transition: border-color 150ms ease, background 150ms ease; }
     .ov-open:hover { border-color: var(--st-ember); background: color-mix(in srgb, var(--st-ember) 12%, transparent); }
     .ov-open span { display: inline-block; }
+
+    /* ══ G5 THE INTENT LINE (Z8) ═══════════════════════════════════════════════════
+       Bottom-left transcript + `>` prompt. Typed text enters the SAME router as voice.
+       YOU · <text> and V · <interpretation> lines resolve in granularly (doctrine 11 —
+       never a pop). Focus/caret feedback is instant (<100ms) via :focus-within. All
+       colours/sizes are --st-*/--fs-*/--sp-* tokens (grep-clean to greyscale + ember). */
+    .transcript { display: flex; flex-direction: column; justify-content: flex-end;
+      gap: calc(var(--sp-row) * 0.55); margin-top: calc(var(--sp-gutter) * 0.5);
+      min-height: calc(var(--sp-gutter) * 2.4); max-height: calc(var(--sp-gutter) * 8);
+      overflow: hidden; }
+    .tline { display: flex; align-items: baseline; gap: 8px; min-width: 0;
+      font-size: var(--fs-label); letter-spacing: 0.03em; line-height: 1.3;
+      opacity: 0; transform: translateY(5px); filter: blur(2px);
+      transition: opacity var(--st-resolve-ms) ease, transform var(--st-resolve-ms) ease,
+        filter var(--st-resolve-ms) ease; }
+    .tline.up { opacity: 1; transform: none; filter: none; }
+    .tline .who { flex: 0 0 auto; font-size: var(--fs-micro); letter-spacing: 0.16em;
+      text-transform: uppercase; }
+    .tline.you .who { color: var(--st-text-dim); }
+    .tline.v .who { color: var(--st-ember); }
+    .tline .msg { flex: 1 1 auto; min-width: 0; color: var(--st-text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tline.you .msg { color: var(--st-text); }
+    .tline.hold .msg { color: var(--st-ember); }          /* an announce/HOLD reads hot */
+    .tline.fail .msg { color: var(--st-text-dim); }
+
+    .intent { display: flex; align-items: center; gap: 8px;
+      margin-top: calc(var(--sp-gutter) * 0.55); padding-top: calc(var(--sp-gutter) * 0.5);
+      border-top: 1px solid var(--st-hairline);
+      transition: border-color 90ms ease; }          /* feedback <100ms */
+    .intent-prompt { flex: 0 0 auto; font-size: var(--fs-body); font-weight: 500;
+      line-height: 1; color: var(--st-ember); transition: text-shadow 90ms ease; }
+    .intent-input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent;
+      outline: none; color: var(--st-text); font-family: var(--type-mono);
+      font-size: var(--fs-label); letter-spacing: 0.04em; padding: 2px 0;
+      caret-color: var(--st-ember); }
+    .intent-input::placeholder { color: var(--st-text-faint); letter-spacing: 0.14em;
+      text-transform: uppercase; font-size: var(--fs-micro); }
+    .intent:focus-within { border-top-color: var(--st-hairline-strong); }
+    .intent:focus-within .intent-prompt { text-shadow: 0 0 8px var(--st-ember-dim); }
+    /* HOLD state — a machine-leaving intent is announced and waiting on a typed confirm */
+    .intent.holding { border-top-color: var(--st-ember-dim); }
   </style>
 </head>
 <body>
@@ -360,8 +407,20 @@
       </div>
       <footer class="corner-foot" data-zone="Z8">
         <div class="sec-head">TRANSCRIPT · INTENT LINE</div>
-        <div class="well" style="flex:0 0 auto; min-height: calc(var(--sp-gutter) * 2.2)"><!-- transcript + > intent — G5 --></div>
-        <div class="ask-hint"><b>HOLD SPACE</b> TO TALK</div>
+        <!-- G5 THE INTENT LINE — the transcript log: typed intent echoes as YOU · <text>,
+             the router's read resolves in beneath as V · <interpretation> (doctrine 11).
+             Voiced dispatch answers echo here too, so the one transcript reads both channels. -->
+        <div class="transcript" id="transcript"></div>
+        <!-- the > prompt. Typed text enters the SAME intent router as voice (deterministic
+             prefix match → Haiku B1). Enter submits · Esc blurs · while focused Space types
+             a space (PTT is not stolen); while blurred, hold-Space push-to-talk is unchanged. -->
+        <form class="intent" id="intent-form" autocomplete="off">
+          <span class="intent-prompt" aria-hidden="true">&gt;</span>
+          <input class="intent-input" id="intent-input" type="text" spellcheck="false"
+            autocomplete="off" autocapitalize="off" aria-label="Intent line — type a command or question"
+            placeholder="COMMAND OR ASK" />
+        </form>
+        <div class="ask-hint"><b>TYPE</b> TO COMMAND · <b>HOLD SPACE</b> TO TALK</div>
       </footer>
     </aside>
 
