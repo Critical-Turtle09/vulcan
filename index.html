@@ -172,7 +172,7 @@
 
     /* ── Z2 COMMAND DECK — 5×2, ember dot before each label, ruled rows ── */
     .deck { display: grid; grid-template-columns: 1fr 1fr; column-gap: calc(var(--sp-gutter) * 0.38); }
-    .deck-cell { min-width: 0; display: flex; align-items: center; gap: 6px; cursor: pointer; position: relative;
+    .deck-cell { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 6px; cursor: pointer; position: relative;
       padding: calc(var(--sp-row) * 1.3) 0; border-top: 1px solid var(--st-hairline); text-align: left; }
     .deck-cell:nth-last-child(-n+2) { border-bottom: 1px solid var(--st-hairline); }   /* last row ruled below */
     .deck-dot { flex: 0 0 auto; width: 6px; height: 6px; border-radius: 50%;
@@ -196,6 +196,116 @@
     .aio-micro { font-size: var(--fs-micro); letter-spacing: 0.14em; text-transform: uppercase; color: var(--st-text-dim); }
     .aio-micro .k { color: var(--st-text-faint); }
     .aio-micro + .aio-micro { margin-top: 5px; color: var(--st-text-faint); }
+    /* AUDIO I/O — a speaking bar rides ember; the tallest crest is the accent. */
+    .aio-wave.live i { background: var(--st-text-dim); }
+    .aio-wave.live i.hot { background: var(--st-ember); }
+
+    /* ══ G4 THE LIFECYCLE ═════════════════════════════════════════════════════════
+       Dispatch surfaces: the command-deck queue read, the task chips near the orb
+       (Z7) with their orb tethers, and the center-stage document overlay (§5.6). All
+       colours/sizes are --st-*/--fs-*/--sp-* tokens; ember is spent only on the
+       always-lit chip mark, the artifact edge, and the audio crest (heat = meaning). */
+
+    /* deck cell dispatch states — the RUNNING/QUEUED read wraps to its own SUB-LINE
+       beneath the label (flex-wrap: the sub takes a full 100% basis, so it drops to a
+       new row). The full command name never truncates and the two can never collide
+       horizontally at any width (the adaptive-scale law). The .deck-cell wrap is set
+       on its base rule above; the sub takes a 100% flex-basis so it drops to a new row. */
+    .deck-sub { flex: 1 0 100%; font-size: var(--fs-micro); letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--st-text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-height: 0; opacity: 0; transition: max-height 140ms ease, opacity 140ms ease; }
+    .deck-cell.busy .deck-sub { max-height: 1.4em; opacity: 1; margin-top: 2px; }
+    .deck-cell.busy .deck-arrow { opacity: 0 !important; }        /* no hover arrow while dispatching */
+    .deck-cell.queued .deck-sub { color: var(--st-text-dim); }
+    .deck-cell.running .deck-sub { color: var(--st-ember); }
+    .deck-cell.busy .deck-label { color: var(--st-text); }
+
+    /* Z7 TASK CHIPS — a stacked column just left of the orb; leaders tether to it. */
+    #leaders { position: absolute; inset: 0; width: 100%; height: 100%;
+      pointer-events: none; overflow: visible; z-index: 1; }
+    #leaders path { fill: none; stroke: var(--st-hairline-strong); stroke-width: 1;
+      vector-effect: non-scaling-stroke; }
+    #leaders circle { fill: var(--st-ember); }
+    #chips { position: absolute; left: 0; top: 8%; z-index: 2;
+      display: flex; flex-direction: column; gap: calc(var(--sp-row) * 1.1);
+      align-items: flex-start; max-width: 46%; pointer-events: none; }
+    .chip { pointer-events: auto; display: inline-flex; align-items: center; gap: 8px;
+      padding: calc(var(--sp-row) * 0.9) calc(var(--sp-gutter) * 0.55);
+      border: 1px solid var(--st-hairline-strong); background: color-mix(in srgb, var(--st-bg) 82%, transparent);
+      font-size: var(--fs-label); letter-spacing: 0.08em; text-transform: uppercase;
+      color: var(--st-text-dim); white-space: nowrap;
+      opacity: 0; transform: translateY(6px); filter: blur(2px);
+      transition: opacity var(--st-resolve-ms) ease, transform var(--st-resolve-ms) ease,
+        filter var(--st-resolve-ms) ease, border-color 200ms ease, color 200ms ease; }
+    .chip.up { opacity: 1; transform: none; filter: none; }
+    .chip-mark { flex: 0 0 auto; color: var(--st-ember); font-size: 0.9em;
+      text-shadow: 0 0 6px var(--st-ember-dim); }
+    .chip-name { color: var(--st-text); }
+    .chip-meta { color: var(--st-text-faint); font-variant-numeric: tabular-nums; letter-spacing: 0.10em; }
+    /* resolved: the timer becomes the artifact filename — ember-edged + dismissible */
+    .chip.done { border-color: var(--st-ember-dim); cursor: pointer; }
+    .chip.done:hover { border-color: var(--st-ember); color: var(--st-text); }
+    .chip.done .chip-meta { color: var(--st-ember); }
+    .chip.failed { border-color: var(--st-hairline-strong); }
+    .chip.failed .chip-mark { color: var(--st-text-dim); text-shadow: none; }
+    .chip-x { flex: 0 0 auto; margin-left: 4px; border: 0; background: none; cursor: pointer;
+      color: var(--st-text-faint); font-size: 0.9em; line-height: 1; padding: 0 2px;
+      opacity: 0; transition: opacity 150ms ease, color 150ms ease; }
+    .chip.done .chip-x { opacity: 1; }
+    .chip-x:hover { color: var(--st-text); }
+
+    /* Z1 DIRECTIVES reuse — BR launch objectives share the checkbox-row grammar */
+    .objs { display: flex; flex-direction: column; gap: calc(var(--sp-row) * 0.9); }
+    .obj { display: flex; align-items: center; gap: 9px; justify-content: flex-end; }
+    .obj .dir-text { flex: 0 1 auto; }
+    .obj.done .dir-text { color: var(--st-text-faint); }
+
+    /* §5.6 document overlay — dim scrim + center-stage artifact, granular resolve */
+    .ov { position: fixed; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity var(--st-dispatch-overlay-ms, 420ms) ease; }
+    .ov.up { opacity: 1; }
+    .ov-scrim { position: absolute; inset: 0; background: color-mix(in srgb, var(--st-bg) 74%, transparent);
+      backdrop-filter: blur(2px); }
+    .ov-doc { position: relative; z-index: 1; width: min(720px, 74vw); max-height: 78vh;
+      display: flex; flex-direction: column; background: var(--st-bg-deep, var(--st-bg));
+      border: 1px solid var(--st-hairline-strong);
+      transform: scale(0.985); transition: transform var(--st-dispatch-overlay-ms, 420ms) ease; }
+    .ov.up .ov-doc { transform: none; }
+    .ov-head { display: flex; align-items: baseline; gap: 10px;
+      padding: calc(var(--sp-gutter) * 0.9) calc(var(--sp-gutter) * 1.1);
+      border-bottom: 1px solid var(--st-hairline); }
+    .ov-eyebrow { font-size: var(--fs-micro); letter-spacing: 0.24em; text-transform: uppercase; color: var(--st-ember); }
+    .ov-title { flex: 1 1 auto; font-size: var(--fs-label); letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--st-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ov-x { flex: 0 0 auto; border: 0; background: none; cursor: pointer; color: var(--st-text-faint);
+      font-size: var(--fs-body); line-height: 1; padding: 2px 4px; }
+    .ov-x:hover { color: var(--st-text); }
+    .ov-body { flex: 1 1 auto; min-height: 0; overflow: auto;
+      padding: calc(var(--sp-gutter) * 1.0) calc(var(--sp-gutter) * 1.1);
+      font-family: var(--type-ui); font-size: var(--fs-body); line-height: 1.6; color: var(--st-text-dim); }
+    .ov-body h1 { font-size: var(--fs-head); font-weight: 600; color: var(--st-text); letter-spacing: 0.02em;
+      margin-bottom: calc(var(--sp-gutter) * 0.5); }
+    .ov-body h2 { font-family: var(--type-mono); font-size: var(--fs-label); letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--st-ember); margin: calc(var(--sp-gutter) * 0.9) 0 calc(var(--sp-gutter) * 0.4); }
+    .ov-body blockquote { font-family: var(--type-mono); font-size: var(--fs-micro); letter-spacing: 0.06em;
+      color: var(--st-text-faint); border-left: 1px solid var(--st-hairline); padding-left: 10px; margin: 6px 0; text-transform: uppercase; }
+    .ov-body ul { list-style: none; margin: 4px 0; padding: 0; }
+    .ov-body li { position: relative; padding-left: 14px; margin: 3px 0; font-family: var(--type-mono); font-size: var(--fs-label); }
+    .ov-body li::before { content: "·"; position: absolute; left: 2px; color: var(--st-ember); }
+    .ov-body strong { color: var(--st-text); font-weight: 600; }
+    .ov-body hr { border: 0; border-top: 1px solid var(--st-hairline); margin: calc(var(--sp-gutter) * 0.8) 0; }
+    .ov-body code { font-family: var(--type-mono); font-size: 0.92em; color: var(--st-text-dim); }
+    .ov-body pre { background: color-mix(in srgb, var(--st-text) 6%, transparent); padding: 8px 10px; overflow: auto; }
+    .ov-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: calc(var(--sp-gutter) * 0.8) calc(var(--sp-gutter) * 1.1); border-top: 1px solid var(--st-hairline); }
+    .ov-file { font-family: var(--type-mono); font-size: var(--fs-micro); letter-spacing: 0.08em;
+      color: var(--st-text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ov-open { flex: 0 0 auto; font-family: var(--type-mono); font-size: var(--fs-label); letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--st-ember); text-decoration: none;
+      border: 1px solid var(--st-ember-dim); padding: calc(var(--sp-row) * 0.9) calc(var(--sp-gutter) * 0.7);
+      transition: border-color 150ms ease, background 150ms ease; }
+    .ov-open:hover { border-color: var(--st-ember); background: color-mix(in srgb, var(--st-ember) 12%, transparent); }
+    .ov-open span { display: inline-block; }
   </style>
 </head>
 <body>
@@ -284,7 +394,13 @@
       </div>
       <footer class="corner-foot">
         <div class="sec-head">LAUNCH OBJECTIVES</div>
-        <div class="well" style="flex:0 0 auto; min-height: calc(var(--sp-gutter) * 2.2)"><!-- outreach / compliance / distribution — G2 --></div>
+        <!-- G4 rider — the three SIGNED objectives + checkbox states. Static content;
+             TODO(Front H): read live objective state from the vault once THE LEDGER lands. -->
+        <div class="objs" id="objs">
+          <div class="obj done"><span class="dir-box done"></span><span class="dir-text">COMPLIANCE · COPPA / FERPA</span></div>
+          <div class="obj"><span class="dir-box"></span><span class="dir-text">OUTREACH · 10 PILOTS</span></div>
+          <div class="obj"><span class="dir-box"></span><span class="dir-text">LAUNCH · DISTRIBUTION</span></div>
+        </div>
       </footer>
     </aside>
 
@@ -298,10 +414,33 @@
         <span class="ss" id="ss-hands"><span class="dot"></span><span class="ss-key">HANDS</span><span class="ss-sep">·</span><span class="ss-val">STANDBY</span></span>
       </div>
       <div id="field" data-zone="Z3">
+        <!-- Z7 TASK CHIPS — spawned near the orb during dispatch (◆ + name + live timer,
+             L-leader toward the orb). The leader SVG draws chip→orb tethers (G4 §5). -->
+        <svg id="leaders" aria-hidden="true"></svg>
+        <div id="chips" data-zone="Z7"></div>
         <div id="orb-slot" data-zone="Z4"><!-- a5 TWIN HELIX orb — G3 --></div>
       </div>
       <div id="primary" data-zone="Z5"><!-- Bonsai hero number + velocity + deploy — G2 --></div>
     </main>
+  </div>
+
+  <!-- G4 §5.6 — the document overlay. Click a resolved file chip → the rendered
+       markdown artifact resolves center-stage over a dim scrim (240-700ms), with an
+       OPEN IN VAULT ↗ handoff and a close. Esc / ✕ / scrim close it. -->
+  <div id="overlay" class="ov" hidden>
+    <div class="ov-scrim" data-close></div>
+    <div class="ov-doc" role="dialog" aria-modal="true">
+      <div class="ov-head">
+        <span class="ov-eyebrow" id="ov-eyebrow">ARTIFACT</span>
+        <span class="ov-title" id="ov-title">—</span>
+        <button class="ov-x" id="ov-x" data-close aria-label="Close">✕</button>
+      </div>
+      <div class="ov-body" id="ov-body"></div>
+      <div class="ov-foot">
+        <span class="ov-file" id="ov-file">—</span>
+        <a class="ov-open" id="ov-open" href="#">OPEN IN VAULT <span>↗</span></a>
+      </div>
+    </div>
   </div>
 
   <script type="module" src="/src/stage/main.js"></script>

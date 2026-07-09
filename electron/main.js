@@ -9,7 +9,7 @@
 // keeps the wake listener + audio alive while hidden (backgroundThrottling off).
 // Esc banks the fire ALWAYS while resolved (a global shortcut registered only
 // while the overlay is up, so it never swallows Esc from other apps when hidden).
-import { app, BrowserWindow, Tray, Menu, screen, session, systemPreferences, globalShortcut, ipcMain, nativeImage, desktopCapturer } from 'electron';
+import { app, BrowserWindow, Tray, Menu, screen, session, systemPreferences, globalShortcut, ipcMain, nativeImage, desktopCapturer, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
@@ -331,6 +331,16 @@ app.whenReady().then(() => {
   ipcMain.on('ui:request-show', () => summon());         // legacy alias
   ipcMain.on('ui:request-hide', () => hideOverlay());    // bank complete (FINDING 4)
   ipcMain.on('wd:pong', () => { lastPong = Date.now(); }); // PART 1 — watchdog heartbeat
+
+  // G4 THE LIFECYCLE — the overlay's "OPEN IN VAULT ↗" handoff. Only obsidian:// and
+  // file:// URIs are honoured (the renderer only ever sends a vault artifact handle) —
+  // never an arbitrary http(s) target, so a rogue string can't be turned into a browser
+  // pop. Fail-soft: an unopenable URI is logged, never thrown.
+  ipcMain.on('ui:open-external', (_e, uri) => {
+    const s = String(uri || '');
+    if (!/^(obsidian:|file:)/i.test(s)) { console.log('[dispatch] refused open-external:', s.slice(0, 40)); return; }
+    shell.openExternal(s).catch((err) => console.log('[dispatch] open-external failed:', err && err.message));
+  });
 
   // global summon hotkey — fail-soft: if registration is refused (e.g. accessibility
   // denied), the tray item + wake word still summon; nothing hard-fails.

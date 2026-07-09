@@ -309,16 +309,41 @@ async function brief() {
   };
 }
 
+// ---- THE READ: mission.pitch — the PITCH DESK alone ---------------------------
+// The outreach board, read LOCALLY ($0, no SYNTH call): rotate the next 2-3
+// uncontacted targets from VULCAN/Pipeline.md and surface them with their existing
+// notes. Same containment + never-invent guarantee as the brief's pitch section
+// (every pitched name is asserted to appear verbatim in the file). Fail-soft: a
+// missing pipeline reports empty (a template is created in PRESENT mode) — never throws.
+async function pitch() {
+  const vault = await vaultSection();
+  const targets = rotatePitch(vault.open || []).filter((t) => (vault.text || '').includes(t.name));
+  const pipeEmpty = (vault.open || []).length === 0;
+
+  if (!vault.ok) return { title: 'PITCH · DESK', lines: ['VAULT UNAVAILABLE'], speak: 'The vault is unavailable, so the pitch desk is empty.' };
+  if (vault.created) return { title: 'PITCH · DESK', lines: [`PIPELINE CREATED · ${vault.rel}`, 'ADD "- [ ]" TARGETS'], speak: 'The outreach pipeline was empty — I created a template. Add targets and I will work the desk.' };
+  if (pipeEmpty || !targets.length) return { title: 'PITCH · DESK', lines: ['PIPELINE EMPTY — ADD "- [ ]" TARGETS'], speak: 'The outreach pipeline has no uncontacted targets.' };
+
+  const lines = targets.map((t) => `${t.name} — ${clip(t.note || '(reach out)', 60)}`);
+  const speak = `Pitch desk: ${targets.length} target${targets.length === 1 ? '' : 's'} up — ${targets.map((t) => t.name).join(', ')}.`;
+  return { title: 'PITCH · DESK', body: targets.map((t) => `**${t.name}** — ${t.note || 'reach out re: the Bonsai Instant Citation launch.'}`).join('\n\n'), lines, speak, cost_usd: 0 };
+}
+
 // ---- skill definition ---------------------------------------------------------
 export default {
   id: 'mission',
   actions: {
     'mission.brief': { klass: 'READ', run: brief },
+    'mission.pitch': { klass: 'READ', run: pitch },
   },
   // Deterministic router — the mission-brief PREFIXES only. "brief me" stays with the
-  // wire skill (registered after this one), so plain briefs are unaffected.
+  // wire skill (registered after this one), so plain briefs are unaffected. "pitch
+  // desk" / "outreach board" route to the local $0 pitch read.
   route(text) {
     const t = ` ${String(text).toLowerCase().trim()} `;
+    if (/\b(pitch desk|outreach board|pitch board|work the desk)\b/.test(t)) {
+      return { action: 'mission.pitch', detail: {} };
+    }
     if (/\b(mission brief|morning brief|bonsai brief|launch brief|command brief)\b/.test(t)) {
       return { action: 'mission.brief', detail: {} };
     }

@@ -53,9 +53,11 @@ function paintStatus() {
   setSub('core', CORE_LABEL[core] || 'IDLE', core !== 'idle');
   const ws = wire.status();
   setSub('wire', ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : 'STANDBY', ws.online);
-  setSub('hands', 'STANDBY', false);   // TODO(G4): wire to the crew/dispatch runner state
-  // Z2 AUDIO I/O labels track the REAL TTS state (the speaking envelope is G4). The
-  // §4 microcopy is exact: TTS.STANDBY|LIVE and VOICE LINK · STANDBY|SPEAKING.
+  // HANDS ← real dispatch activity (G4): ACTIVE while any command is running or queued.
+  const hands = dispatch.busy();
+  setSub('hands', hands ? 'ACTIVE' : 'STANDBY', hands);
+  // Z2 AUDIO I/O labels track the REAL TTS state. The §4 microcopy is exact:
+  // TTS.STANDBY|LIVE and VOICE LINK · STANDBY|SPEAKING.
   const speaking = core === 'speaking';
   const aioState = el('aio-state'), aioLink = el('aio-link');
   if (aioState) aioState.textContent = speaking ? 'TTS.LIVE' : 'TTS.STANDBY';
@@ -69,6 +71,21 @@ const bridge = window.vulcan || {
   async config() { return { hasKey: false, hasWhisper: false, hasEars: false, testMode: forceTest }; },
   async tts() { return { ok: false }; },
   async transcribe() { return { ok: false }; },
+  // Browser-only SIM: no Electron main = no vault, no real hands. The dispatch
+  // lifecycle still renders end-to-end (chip → filename → overlay) so the shell can
+  // be screenshot-audited, but the result is CLEARLY LABELLED SIM and files NOTHING
+  // (artifact: null). In the packaged app the real window.vulcan.dispatch runs.
+  async dispatch(cmd) {
+    return {
+      ok: true, cmd, title: `${cmd} · SIM`,
+      lines: ['SIM · NO ELECTRON MAIN IN BROWSER', 'REAL HANDS + VAULT RUN IN THE APP'],
+      body: `**${cmd}** — SIM dispatch (browser preview).\n\n- No vault artifact is filed in the browser.\n- In the packaged app this runs the real hand and files to \`VULCAN/outputs/\`.`,
+      markdown: `# ${cmd} · SIM\n\n> ${cmd} · SIM · [BROWSER PREVIEW]\n\n**No artifact filed** — the real hand + vault run in the app.\n\n## Detail\n\n- SIM · NO ELECTRON MAIN IN BROWSER\n- REAL HANDS + VAULT RUN IN THE APP\n`,
+      speak: `Simulated ${cmd}. Real hands and the vault run in the app.`,
+      artifact: null, cost_usd: 0, day_total_usd: 0, sim: true,
+    };
+  },
+  openExternal() {},
 };
 
 const orb = createOrb(el('orb-slot'), paintStatus);   // G3 — the a5 TWIN HELIX (Z4)
@@ -128,13 +145,267 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key.toLowerCase() === rawTokens.voice.muteKey) { voice.toggleMute(); paintStatus(); }
-  // DEV/DEBUG override (v1.4 convention, undocumented): 1/2/3 cycle the three a5 orb states
-  // so all are demonstrable without the live loop. The REAL wiring is unchanged — IDLE←session,
-  // WORKING←thinking/dispatch, SPEAKING←TTS all still drive orb.setState. // TODO(G4: dispatch drives WORKING)
-  if (e.code === 'Digit1') orb._devVisual('idle');
-  else if (e.code === 'Digit2') orb._devVisual('working');
-  else if (e.code === 'Digit3') orb._devVisual('speaking');
+  // DEV/DEBUG override — 1/2/3 cycle the three a5 orb states so all are demonstrable
+  // without a live loop. G4: dispatch now drives WORKING/SPEAKING for real, so these
+  // keys are gated behind a dev flag (?dev=1) only — off in normal operation. The REAL
+  // wiring is unchanged: IDLE←session, WORKING←dispatch/thinking, SPEAKING←TTS.
+  if (DEV_KEYS) {
+    if (e.code === 'Digit1') orb._devVisual('idle');
+    else if (e.code === 'Digit2') orb._devVisual('working');
+    else if (e.code === 'Digit3') orb._devVisual('speaking');
+  }
 });
+const DEV_KEYS = params.get('dev') === '1';
+
+// ═══ G4 THE LIFECYCLE ═════════════════════════════════════════════════════════
+// The dispatch engine: a deck click drives the full §5 lifecycle — QUEUED → task chip
+// (◆ + live timer, L-leader to the orb) → CORE·WORKING → CORE·SPEAKING (real voice +
+// live audio bars) → the timer becomes the artifact filename (ember-edged, dismissible)
+// → idle restore. Concurrency: at most `maxActive` run at once; the rest queue. Every
+// dispatch ends in speech or an explicit spoken failure (never-silent), and files a
+// real artifact through the Obsidian containment (main-side). Orb state is the
+// aggregate read: any speaking → SPEAKING, else any working → WORKING, else the
+// session's resting read. Speech is serialized (one mouth) via a promise chain.
+const DISP = rawTokens.stage.dispatch || {};
+const MAX_ACTIVE = DISP.maxActive || 3;
+const OVERLAY_MS = DISP['overlay.ms'] || 420;
+document.documentElement.style.setProperty('--st-dispatch-overlay-ms', `${OVERLAY_MS}ms`);
+
+const MAX_DONE = 6;       // soft cap on persistent resolved chips (oldest retires)
+const active = [];        // dispatch entries currently running (working|speaking)
+const pending = [];       // dispatch entries waiting for a slot (queued)
+let seq = 0;
+let speechChain = Promise.resolve();   // serialize TTS across concurrent dispatches
+
+const chipsHost = () => el('chips');
+const leadersSVG = () => el('leaders');
+
+// deck header + HANDS read follow the live counts. CORE follows the orb (paintStatus).
+function refreshDeckHeader() {
+  const sub = el('deck-sub'); if (!sub) return;
+  const n = active.length, q = pending.length;
+  sub.textContent = (n || q) ? `ENGAGED · ${n}/${MAX_ACTIVE} ACTIVE · ${q} QUEUED` : `IDLE · 0/${MAX_ACTIVE} ACTIVE · 0 QUEUED`;
+}
+
+// aggregate orb state: dispatch owns the orb while any command is live; otherwise it
+// hands back to the voice session's resting read (attentive→listening, else idle).
+function refreshOrb() {
+  if (active.some((d) => d.phase === 'speaking')) return;   // a speak() owns the orb
+  if (active.some((d) => d.phase === 'working')) { orb.setState('thinking'); return; }
+  orb.setState(voice.session === 'attentive' ? 'listening' : 'idle');
+}
+
+// ---- task chips (Z7) --------------------------------------------------------
+function spawnChip(d) {
+  const host = chipsHost(); if (!host) return;
+  const chip = document.createElement('div');
+  chip.className = 'chip';
+  chip.dataset.id = String(d.id);
+  chip.innerHTML = `<span class="chip-mark">◆</span><span class="chip-name">${d.cmd}</span>`
+    + `<span class="chip-meta">${d.phase === 'queued' ? 'QUEUED' : '0.0s'}</span>`
+    + `<button class="chip-x" title="Dismiss" aria-label="Dismiss">✕</button>`;
+  host.appendChild(chip);
+  d.chip = chip;
+  chip.querySelector('.chip-x').addEventListener('click', (ev) => { ev.stopPropagation(); dismissChip(d); });
+  chip.addEventListener('click', () => { if (d.artifact || d.done) openArtifact(d); });
+  requestAnimationFrame(() => requestAnimationFrame(() => chip.classList.add('up')));
+  drawLeaders();
+}
+function chipMeta(d, text) { const m = d.chip && d.chip.querySelector('.chip-meta'); if (m) m.textContent = text; }
+function tickTimer(d) { if (d.phase === 'working' || d.phase === 'speaking') chipMeta(d, `${((performance.now() - d.t0) / 1000).toFixed(1)}s`); }
+function dismissChip(d) {
+  if (d.chip) { d.chip.classList.remove('up'); const c = d.chip; setTimeout(() => c.remove(), 260); d.chip = null; }
+  const i = done.indexOf(d); if (i >= 0) done.splice(i, 1);
+  setTimeout(drawLeaders, 40);
+}
+const done = [];   // resolved dispatches whose chips persist (filename shown, dismissible)
+
+// L-leader tethers: chip anchor → elbow → orb center (Palantir/Maverick grammar).
+function drawLeaders() {
+  const svg = leadersSVG(), field = el('field'); if (!svg || !field) return;
+  const fr = field.getBoundingClientRect();
+  svg.setAttribute('width', fr.width); svg.setAttribute('height', fr.height);
+  svg.setAttribute('viewBox', `0 0 ${fr.width} ${fr.height}`);
+  const ox = fr.width / 2, oy = fr.height / 2;                 // orb center (orb-slot is centered)
+  const slot = el('orb-slot'); const orbR = slot ? slot.getBoundingClientRect().width / 2 : 120;
+  const chips = [...active, ...done].map((d) => d.chip).filter(Boolean);
+  let paths = '';
+  for (const chip of chips) {
+    const cr = chip.getBoundingClientRect();
+    const ax = cr.right - fr.left, ay = cr.top + cr.height / 2 - fr.top;   // chip right-center
+    const tx = ox - orbR * 0.82, ty = oy;                                   // land just off the orb rim
+    const elbow = Math.max(ax + 16, (ax + tx) / 2);
+    paths += `<path d="M ${ax.toFixed(1)} ${ay.toFixed(1)} H ${elbow.toFixed(1)} V ${ty.toFixed(1)} H ${tx.toFixed(1)}"/>`;
+    paths += `<circle cx="${ax.toFixed(1)}" cy="${ay.toFixed(1)}" r="2"/>`;
+  }
+  svg.innerHTML = paths;
+}
+
+// ---- the lifecycle ----------------------------------------------------------
+function dispatchCommand(cmd, cell) {
+  if (!cmd) return;
+  const d = { id: ++seq, cmd, cell, phase: 'queued', t0: 0, chip: null, artifact: null, done: false, result: null };
+  if (cell) { cell.classList.add('busy'); }
+  spawnChip(d);
+  if (active.length < MAX_ACTIVE) startDispatch(d);
+  else { pending.push(d); setCellSub(cell, 'QUEUED', 'queued'); refreshDeckHeader(); paintStatus(); }
+}
+
+function setCellSub(cell, text, cls) {
+  if (!cell) return;
+  cell.classList.remove('queued', 'running');
+  if (cls) cell.classList.add(cls);
+  const sub = cell.querySelector('.deck-sub'); if (sub) sub.textContent = text;
+}
+
+async function startDispatch(d) {
+  d.phase = 'working'; d.t0 = performance.now();
+  active.push(d);
+  setCellSub(d.cell, 'RUNNING', 'running');
+  chipMeta(d, '0.0s');
+  refreshDeckHeader(); refreshOrb(); paintStatus();
+
+  // run the command main-side (real hand or honest stub); it files the artifact.
+  let res;
+  try {
+    res = bridge.dispatch ? await bridge.dispatch(d.cmd) : null;
+  } catch (_) { res = null; }
+  if (!res) res = { ok: false, failed: true, title: `${d.cmd} · FAILED`, lines: ['DISPATCH UNAVAILABLE'], speak: `${d.cmd} could not run. Nothing left the machine.`, artifact: null };
+  d.result = res; d.artifact = res.artifact || null;
+
+  // speak the result (serialized — one mouth). The dispatch STAYS in 'working' until
+  // it is actually its turn at the mouth, so the orb reads WORKING continuously while
+  // speech is pending rather than flickering to idle between serialized exchanges.
+  speechChain = speechChain.then(() => speakResult(d, res)).catch(() => {});
+  await speechChain;
+
+  // resolve: the timer becomes the artifact filename (ember-edged, dismissible).
+  finishDispatch(d, res);
+}
+
+// CORE·SPEAKING for the duration of the real voice line + live audio bars.
+async function speakResult(d, res) {
+  d.phase = 'speaking'; refreshOrb();
+  audioLive(true);
+  try { await voice.say(res.speak, { kind: 'answer' }); }
+  finally { audioLive(false); }
+}
+
+function finishDispatch(d, res) {
+  const i = active.indexOf(d); if (i >= 0) active.splice(i, 1);
+  d.phase = 'idle'; d.done = true;
+  if (d.chip) {
+    d.chip.classList.add('done');
+    if (res.failed) d.chip.classList.add('failed');
+    chipMeta(d, res.artifact ? res.artifact.filename : (res.failed ? 'FAILED' : (res.sim ? 'SIM' : 'NO FILE')));
+  }
+  done.push(d);
+  // persistent + dismissible, but soft-capped so the stack never overflows the field:
+  // retire the OLDEST done chip beyond the cap (the artifact still lives in the vault +
+  // the DOCUMENTS trail — only its transient chip is cleared).
+  while (done.length > MAX_DONE) dismissChip(done[0]);
+  if (d.cell) { d.cell.classList.remove('busy', 'queued', 'running'); setCellSub(d.cell, '', null); }
+  // promote the next queued dispatch into the freed slot.
+  if (pending.length && active.length < MAX_ACTIVE) { const nx = pending.shift(); startDispatch(nx); }
+  refreshDeckHeader(); refreshOrb(); paintStatus(); drawLeaders();
+}
+
+// ---- audio I/O live bars (§4) ----------------------------------------------
+// STANDBY renders the static dash-block; SPEAKING rides the REAL TTS envelope
+// (orb.getAmplitude, the same analyser that drives the orb). The tallest crest is
+// the single ember accent (heat = the live signal).
+const WAVE_PAT = [3, 7, 3, 14, 3, 5, 11, 3, 3, 18, 3, 7, 3, 3, 12, 3, 6, 3, 16, 3, 3, 9, 3, 13, 3, 5, 3, 10];
+let waveLive = false;
+function audioLive(on) { waveLive = on; const host = el('aio-wave'); if (host) host.classList.toggle('live', on); if (!on) paintWaveStatic(); }
+function paintWaveStatic() {
+  const host = el('aio-wave'); if (!host) return;
+  const bars = host.querySelectorAll('i'); if (!bars.length) return;
+  bars.forEach((b, i) => { b.style.height = `${WAVE_PAT[i % WAVE_PAT.length]}px`; b.classList.remove('hot'); });
+}
+function paintWaveLive(amp) {
+  const host = el('aio-wave'); if (!host) return;
+  const bars = host.querySelectorAll('i'); if (!bars.length) return;
+  const t = performance.now() / 1000;
+  bars.forEach((b, i) => {
+    // a standing shape modulated by the live envelope — circulation, not RNG jitter.
+    const base = 0.35 + 0.65 * Math.abs(Math.sin(i * 0.7 + t * 6.0));
+    const h = 3 + base * amp * 22;
+    b.style.height = `${h.toFixed(1)}px`;
+    b.classList.toggle('hot', h > 16);
+  });
+}
+function tickWave() {
+  if (waveLive) paintWaveLive(Math.max(orb.getAmplitude ? orb.getAmplitude() : 0, 0));
+}
+
+// ---- §5.6 document overlay --------------------------------------------------
+let overlayDispatch = null;
+function mdToHtml(md) {
+  const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/`([^`]+)`/g, '<code>$1</code>');
+  const lines = String(md || '').split('\n');
+  let html = '', inList = false, inCode = false, code = '';
+  const closeList = () => { if (inList) { html += '</ul>'; inList = false; } };
+  for (const raw of lines) {
+    if (raw.trim().startsWith('```')) {
+      if (inCode) { html += `<pre><code>${esc(code)}</code></pre>`; code = ''; inCode = false; }
+      else { closeList(); inCode = true; }
+      continue;
+    }
+    if (inCode) { code += `${raw}\n`; continue; }
+    const line = raw.trimEnd();
+    if (!line.trim()) { closeList(); continue; }
+    if (line.startsWith('# ')) { closeList(); html += `<h1>${inline(line.slice(2))}</h1>`; }
+    else if (line.startsWith('## ')) { closeList(); html += `<h2>${inline(line.slice(3))}</h2>`; }
+    else if (line.startsWith('> ')) { closeList(); html += `<blockquote>${inline(line.slice(2))}</blockquote>`; }
+    else if (line.startsWith('- ')) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${inline(line.slice(2))}</li>`; }
+    else if (line.startsWith('---')) { closeList(); html += '<hr>'; }
+    else { closeList(); html += `<p>${inline(line)}</p>`; }
+  }
+  closeList();
+  if (inCode) html += `<pre><code>${esc(code)}</code></pre>`;
+  return html;
+}
+function openArtifact(d) {
+  const ov = el('overlay'); if (!ov || !d.result) return;
+  overlayDispatch = d;
+  el('ov-eyebrow').textContent = d.result.stub ? 'ARTIFACT · STANDBY' : (d.result.failed ? 'ARTIFACT · FAILED' : 'ARTIFACT');
+  el('ov-title').textContent = d.result.title || d.cmd;
+  el('ov-body').innerHTML = mdToHtml(d.result.markdown || `# ${d.cmd}\n\n${(d.result.lines || []).map((l) => `- ${l}`).join('\n')}`);
+  const file = d.artifact ? d.artifact.rel : 'ARTIFACT NOT FILED';
+  el('ov-file').textContent = file;
+  const open = el('ov-open');
+  if (d.artifact && d.artifact.obsidianUri) { open.style.display = ''; open.dataset.uri = d.artifact.obsidianUri; }
+  else { open.style.display = 'none'; }
+  ov.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add('up')));
+}
+function closeOverlay() {
+  const ov = el('overlay'); if (!ov || ov.hidden) return;
+  ov.classList.remove('up');
+  overlayDispatch = null;
+  setTimeout(() => { ov.hidden = true; }, OVERLAY_MS);
+}
+(function wireOverlay() {
+  const ov = el('overlay'); if (!ov) return;
+  ov.querySelectorAll('[data-close]').forEach((n) => n.addEventListener('click', closeOverlay));
+  const open = el('ov-open');
+  if (open) open.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const uri = open.dataset.uri; if (uri && bridge.openExternal) bridge.openExternal(uri);
+  });
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ov.hidden) { e.stopPropagation(); closeOverlay(); } }, true);
+})();
+
+// the object paintStatus / the frame loop read for the HANDS + audio reads.
+const dispatch = {
+  busy: () => active.length > 0 || pending.length > 0,
+  counts: () => ({ active: active.length, queued: pending.length }),
+  tickFrame: () => { active.forEach(tickTimer); tickWave(); },
+};
+window.addEventListener('resize', drawLeaders);
+
+// ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
 
 // ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
 // Z1 SYSTEM VITALS (real wires: Claude spend·B0, Vercel·B5R, GH commits·B2 + one
@@ -223,11 +494,11 @@ const DECK = [
 function buildDeck() {
   const host = el('deck'); if (!host) return;
   host.innerHTML = DECK.map((name) =>
-    `<div class="deck-cell rz" data-cmd="${name}"><span class="deck-dot"></span><span class="deck-label">${name}</span><span class="deck-arrow">→</span></div>`).join('');
-  // click = stub only — chips/queue/states are G4. No Space/Enter key binding: Space
-  // is the PTT trigger and must never be shadowed by a focused deck cell.
+    `<div class="deck-cell rz" data-cmd="${name}"><span class="deck-dot"></span><span class="deck-label">${name}</span><span class="deck-sub"></span><span class="deck-arrow">→</span></div>`).join('');
+  // G4 — click dispatches the command through the full lifecycle (§5). No Space/Enter
+  // key binding: Space is the PTT trigger and must never be shadowed by a focused cell.
   host.querySelectorAll('.deck-cell').forEach((cell) =>
-    cell.addEventListener('click', () => console.log(`[deck] intent: ${cell.dataset.cmd}`)));  // TODO(G4: dispatch lifecycle)
+    cell.addEventListener('click', () => dispatchCommand(cell.dataset.cmd, cell)));
 }
 
 // AUDIO I/O — a STATIC mixed dash-block waveform (short bars = dashes, tall = blocks).
@@ -273,6 +544,7 @@ function frame(now) {
   bg.render(t);
   orb.render(dt);
   voice.tick();
+  dispatch.tickFrame();   // G4 — chip timers + live audio bars
   paintClock();
   statusAccum += dt;
   if (statusAccum >= 0.5) { statusAccum = 0; paintStatus(); }   // catch wire-poll / session drift
@@ -292,4 +564,7 @@ window.__vulcanStage = {
   orb: () => orb._debug,                              // G3 self-check: live orb state model
   orbState: (v) => orb._devVisual(v),                 // G3 self-check: dev-drive a visual state
   orbAmp: (v) => orb.setAmplitude(v),                 // G3 self-check: feed a speaking envelope
+  dispatch: (cmd) => dispatchCommand(cmd, document.querySelector(`.deck-cell[data-cmd="${cmd}"]`)),  // G4 self-check
+  dispatchCounts: () => dispatch.counts(),            // G4 self-check: active/queued
+  openLatest: () => { const d = done[done.length - 1] || active[active.length - 1]; if (d) openArtifact(d); },  // G4 self-check: overlay
 };

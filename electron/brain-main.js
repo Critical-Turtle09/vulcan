@@ -7,6 +7,7 @@
 import { ipcMain } from 'electron';
 import { conduct, resolveConfirm } from '../brain/conductor.js';
 import { execute, getMode } from '../brain/constitution.js';
+import { dispatch } from '../brain/dispatch.js';   // G4 THE LIFECYCLE — deck dispatch engine
 
 // getWin: () => BrowserWindow | null — lets announce() reach the renderer voice.
 export function registerBrainIpc(getWin) {
@@ -46,4 +47,17 @@ export function registerBrainIpc(getWin) {
   });
 
   ipcMain.handle('brain:mode', () => getMode());
+
+  // G4 THE LIFECYCLE — dispatch a deck command. Runs the real hand (or an honest
+  // stub), files the artifact through the Obsidian containment, and returns the
+  // uniform result + the spoken line + the artifact handle. Never rejects: a total
+  // failure comes back as an honest, spoken failure result (never-silent law).
+  ipcMain.handle('brain:dispatch', async (_e, cmd) => {
+    try {
+      return await dispatch(String(cmd || ''));
+    } catch (e) {
+      const msg = String((e && e.message) || e);
+      return { ok: false, failed: true, cmd, title: `${cmd} · FAILED`, lines: ['DISPATCH ERROR', msg.slice(0, 100).toUpperCase()], body: '', speak: `${cmd} failed. Nothing left the machine.`, artifact: null, cost_usd: 0, day_total_usd: 0 };
+    }
+  });
 }

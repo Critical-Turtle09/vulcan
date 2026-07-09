@@ -19,6 +19,11 @@ contextBridge.exposeInMainWorld('vulcan', {
   confirm: (payload) => ipcRenderer.invoke('brain:confirm', payload),   // B2 — resolve a WRITE_CONFIRM
   testWrite: () => ipcRenderer.invoke('brain:test-write'),   // fire the mock WRITE action
   brainMode: () => ipcRenderer.invoke('brain:mode'),
+  // G4 THE LIFECYCLE — dispatch a deck command; returns { ok, title, lines, body,
+  // speak, artifact, ... }. The dispatch files its artifact main-side (containment).
+  dispatch: (cmd) => ipcRenderer.invoke('brain:dispatch', cmd),
+  // G4 — open a vault handoff (obsidian://) in the OS default handler (shell.openExternal).
+  openExternal: (uri) => ipcRenderer.send('ui:open-external', uri),
   // G2 FLANKS — Z1 SYSTEM VITALS reads (main-side hands; renderer never sees the
   // ledger, the Vercel token, or the shell). All READ-only, all fail-soft.
   vitalsSpend: () => ipcRenderer.invoke('vitals:spend'),     // B0 governor: % of $2 cap + spark

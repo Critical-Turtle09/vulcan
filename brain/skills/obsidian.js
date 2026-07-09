@@ -222,6 +222,39 @@ async function capture(detail = {}) {
   };
 }
 
+// ---- ARTIFACT WRITE (G4 THE LIFECYCLE) --------------------------------------
+// Every dispatch files a rendered markdown artifact through this ONE hand, so the
+// containment guarantee is identical to note.capture: writes are forced inside the
+// VULCAN/ subtree (here VULCAN/outputs/, the pre-LEDGER path — Front H restructures
+// later). Returns the vault-relative path + an obsidian:// open URI so the renderer
+// overlay's "OPEN IN VAULT ↗" handoff needs no path logic of its own. Throws only on
+// a genuine containment/vault failure (the dispatch reports that honestly).
+const ARTIFACT_DIR = 'outputs';   // VULCAN/outputs/ — dispatch artifacts
+
+function slugify(s) {
+  return String(s || 'artifact').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'artifact';
+}
+function stamp(d = new Date()) {
+  return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+}
+
+// name: a human command label ("MISSION BRIEF"); markdown: the full artifact body.
+// Writes VULCAN/outputs/<stamp>-<slug>.md and returns the handle. Vault name (for the
+// obsidian URI) is the vault folder's basename — Obsidian keys vaults by that name.
+export function writeArtifact(name, markdown) {
+  const vault = resolveVault();                              // throws → dispatch reports it
+  const dir = path.join(vault, WRITE_DIR, ARTIFACT_DIR);
+  fs.mkdirSync(dir, { recursive: true });                    // containment root must exist before safePath
+  const filename = `${stamp()}-${slugify(name)}.md`;
+  const rel = path.join(ARTIFACT_DIR, filename);
+  const file = safePath(vault, rel, { confine: true });      // throws on any escape
+  fs.writeFileSync(file, String(markdown));
+  const vaultRel = path.relative(vault, file);               // e.g. VULCAN/outputs/…md
+  const vaultName = path.basename(vault);
+  const obsidianUri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(vaultRel.replace(/\.md$/i, ''))}`;
+  return { filename, rel: vaultRel, vaultPath: file, obsidianUri, vaultName };
+}
+
 // pull the search phrase out of a find/search utterance
 function extractQuery(raw) {
   return String(raw)
