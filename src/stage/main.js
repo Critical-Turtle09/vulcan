@@ -10,6 +10,7 @@
 // voice session drives the CORE state read without the G3 engine.
 import { injectStageVars, stage } from './tokens.js';
 import { createBackground } from './background.js';
+import { createOrb } from './orb.js';
 import { createVoice } from '../voice/voice.js';
 import { createWire } from '../wire.js';
 import { activeProfile } from '../profile.js';
@@ -19,20 +20,6 @@ injectStageVars();
 
 // ---- perpetual background (doctrine 5 + 11) ----
 const bg = createBackground(document.getElementById('bg'));
-
-// ---- the orb STUB (G3 mounts the real a5 engine). Satisfies exactly the surface the
-// voice loop touches — setState / setAmplitude / stateName — so the hot session runs and
-// the CORE read reflects it, with no visual until G3. ----
-function createOrbStub(onState) {
-  let stateName = 'idle', amp = 0;
-  return {
-    get stateName() { return stateName; },
-    setState(n) { if (n && n !== stateName) { stateName = n; onState && onState(n); } },
-    setAmplitude(v) { amp = v; },
-    getAmplitude() { return amp; },
-    pulseHeat() {},   // no-op until the orb exists (G3)
-  };
-}
 
 // ---- LIVE: TR clock — seconds in ember, date beneath. Resolves in, never snaps. ----
 const el = (id) => document.getElementById(id);
@@ -84,7 +71,7 @@ const bridge = window.vulcan || {
   async transcribe() { return { ok: false }; },
 };
 
-const orb = createOrbStub(paintStatus);
+const orb = createOrb(el('orb-slot'), paintStatus);   // G3 — the a5 TWIN HELIX (Z4)
 const wire = createWire({ bridge, getProfile: activeProfile });
 
 // PART 6 local reflexes reaching the shell: only the session/audio controls exist here.
@@ -141,6 +128,12 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key.toLowerCase() === rawTokens.voice.muteKey) { voice.toggleMute(); paintStatus(); }
+  // DEV/DEBUG override (v1.4 convention, undocumented): 1/2/3 cycle the three a5 orb states
+  // so all are demonstrable without the live loop. The REAL wiring is unchanged — IDLE←session,
+  // WORKING←thinking/dispatch, SPEAKING←TTS all still drive orb.setState. // TODO(G4: dispatch drives WORKING)
+  if (e.code === 'Digit1') orb._devVisual('idle');
+  else if (e.code === 'Digit2') orb._devVisual('working');
+  else if (e.code === 'Digit3') orb._devVisual('speaking');
 });
 
 // ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
@@ -278,6 +271,7 @@ let last = performance.now(), t = 0, statusAccum = 0;
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05); last = now; t += dt;
   bg.render(t);
+  orb.render(dt);
   voice.tick();
   paintClock();
   statusAccum += dt;
@@ -295,4 +289,7 @@ window.__vulcanStage = {
   bank: () => { voice.goDormant(); if (bridge.requestHide) bridge.requestHide(); },
   vitals: () => JSON.parse(JSON.stringify(VITALS)),   // G2 self-check: current card model
   refreshVitals: () => Promise.all([refreshSpend(), refreshCommits(), refreshVercel()]),
+  orb: () => orb._debug,                              // G3 self-check: live orb state model
+  orbState: (v) => orb._devVisual(v),                 // G3 self-check: dev-drive a visual state
+  orbAmp: (v) => orb.setAmplitude(v),                 // G3 self-check: feed a speaking envelope
 };
