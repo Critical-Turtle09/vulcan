@@ -387,3 +387,78 @@ actually traversing its graph). Both references survive, each as a state.
 
 One full-screen scene, no UI, no data feeds: `void` + grain + atmosphere → a particle-terrain patch drifting (idle physics) → one node heartbeat → one ember event ignites, propagates two hops, begins cooling → one mono-caps label resolves in per-glyph beside the event, holds, dissolves (fluidity-law test). Camera drifts on Perlin. All values from tokens.
 **Review protocol:** Claude Code renders → screenshots itself via Playwright → operator judges against §7 acceptance tests. Pass = proceed to Slice 1 (orb). Fail = tune tokens, not doctrine.
+
+## SPEC v1.6 — THE STAGE (LOCKED 2026-07-08)
+
+Master reference: operator-signed mockup v0.3.2 (VULCAN UI INTERFACE chat, Jul 8 2026). This section is law for all v2.1 UI slices.
+
+### 0 · Material law
+- Near-black stage (#0A0A0C family). Greyscale world, white data, EMBER (#E8562E) as the single accent. No other hues, ever. State is expressed by ember allocation, never hue swaps.
+- Type: quiet grotesk / mono HUD (ui-monospace family). Uppercase letterspaced labels. Hairline rules rgba(255,255,255,.08–.14).
+- Blueprint chrome: corner registration ticks; section headers carry trailing rules to the edge.
+- Adaptive scale law: all type and spacing on viewport-scaled clamped tokens; every zone owns reserved bounds; ANY text collision at ANY resolution is a build-failing bug (Doctrine 11 family).
+- Doctrine 11 governs every state change: feedback <100ms, reveals resolve 240–700ms, nothing pops, backgrounds perpetually move.
+
+### 1 · Zones (the skeleton — V.A.U.L.T.-derived, surfaces ours)
+- Z1 LEFT FLANK — SYSTEM VITALS (Bonsai): waitlist, GH commit velocity, Vercel deploy state, Claude spend vs $2 cap; big number + sparkline per card. DIRECTIVES (top 3, live checkboxes). DOCUMENTS (vault trail: name + age).
+- Z2 RIGHT FLANK — COMMAND DECK (§3) + AUDIO I/O (§4).
+- Z3 TRANSFORM FIELD — center; answers/artifacts take the stage here (§5 step 6).
+- Z4 ORB — center of Z3 (§2).
+- Z5 PRIMARY DIRECTIVE — bottom-center hero: one huge Bonsai number (waitlist), velocity line beneath, latest-deploy line.
+- Z6 STATUS STRIP — top-center: `● CORE · <STATE>  ·  WIRE · <STATE>  ·  HANDS · <STATE>`; dot turns ember when active.
+- Z7 TASK CHIPS — spawn near orb during dispatch (§5).
+- Z8 INTENT LINE — bottom-left, with transcript: `>` prompt input. Typed text enters the SAME intent router as voice (deterministic prefix match first, Haiku classification second). Inference may freely trigger reads and drafts; pushes, deletions, deploys, anything leaving the machine or costing money still require explicit confirmation. Conductor Constitution unchanged.
+- Corners never empty: TL wordmark + mission tag (`VULCAN / BONSAI LAUNCH · v2.1`) · TR clock (seconds in ember) + date · BL transcript + intent line + ask-hint · BR launch objectives (outreach / compliance COPPA-FERPA / distribution).
+
+### 2 · Orb law — a5 TWIN HELIX
+- Particle-matter sphere (~800–1200 points), differential rotation: per-particle angular velocity, equator faster than poles.
+- Structure always shown: two counter-tilted twin-line ribbon pairs (tiltX ≈ 1.25, tiltZ ≈ ±0.85) streaming in OPPOSITE directions, plus one thin polar ring.
+- Motion law: SPEECH IS CIRCULATION, NOT VIBRATION. No jitter, ever. Ribbons flow along their own paths; ribbon planes precess; the body breathes.
+- States (ember allocation):
+  - IDLE — all motions slow; a single ember segment (~15% arc) drifts around the ribbons; imperceptible breathing.
+  - WORKING — orbits ×2, ribbon flow ×5, ember spread constant across ribbons (~55%), no voice modulation.
+  - SPEAKING — orbits ×3.2, flow full, both ribbon pairs ember with brightness riding a voice envelope (pairs offset ~0.9 phase); body swells ~6% with amplitude.
+- Implementation: Three.js points/lines inside the Electron stage. Acceptance test: parity with the signed mockup's orb behavior.
+
+### 3 · Command deck (identical anatomy — locked against operator reference frame)
+- 5 rows × 2 columns, ten commands: MISSION BRIEF · DEPLOY CHECK / METRICS PULL · OUTREACH / WIRE SCAN · COMPLIANCE / PITCH DESK · VAULT CLEAN / PLAN TODAY · WK REVIEW.
+- Every row: hairline rule above; the last row also ruled below. Always-lit ember dot before each label. Uppercase, wide tracking, generous row height.
+- Header: `COMMAND DECK` (ember) + `IDLE · 0/3 ACTIVE · 0 QUEUED` (dim) + trailing rule to edge.
+- Below the grid, exact wording: `INTENTS WRITE TO SYSTEM/QUEUE — RUNNER EXECUTES`.
+- Hover: arrow affordance resolves. Click = dispatch (§5).
+
+### 4 · Audio I/O
+- Header: `AUDIO I/O` (ember) + `TTS.STANDBY` / `TTS.LIVE` + trailing rule.
+- Standby: static mixed dash-block pattern. Speaking: animated amplitude bars.
+- Microcopy exact: `VOICE LINK · STANDBY|SPEAKING` — `HOLD SPACE TO TALK · ESC TO STOP`.
+
+### 5 · Dispatch lifecycle (behavior law)
+1. Hover deck item → arrow affordance resolves.
+2. Click or routed intent → item shows QUEUED; deck header `ENGAGED · 1/3 ACTIVE`; task chip spawns near orb (◆ + name + live timer, L-leader line toward orb).
+3. `CORE · WORKING`; orb → working state; item sub → RUNNING.
+4. Done → `CORE · SPEAKING`; orb → speaking; audio `TTS.LIVE` + waveform; VULCAN speaks the result; transcript line resolves in.
+5. Chip transforms: timer → artifact filename (ember-edged, persistent, dismissible ✕).
+6. Click chip → document overlay resolves center-stage (dim scrim, scale/fade within 240–700ms): rendered markdown artifact + `OPEN IN VAULT ↗` handoff + close.
+7. Idle restore: `CORE · IDLE`, audio standby, orb rest. Never-silent rule holds: every dispatch ends in speech or an explicit spoken failure.
+- Every dispatch writes its artifact to the vault (interlock with Front H).
+
+### 6 · Crew — Front I (signed roster; built AFTER UI slices)
+- Claude Code subagents in `.claude/agents/`, constitution-bound, dispatched by the router:
+  - HERMES — outreach/comms drafts (pilot emails, district follow-ups).
+  - FRAMER — Bonsai site hand (HTML/CSS/frontend).
+  - WARDEN — COPPA/FERPA posture, extension permissions audit.
+  - SMITH — extension code patches, in worktrees.
+- Intent-line routing example: "make the website dark mode" → FRAMER drafts freely; any deploy confirms first.
+
+### 7 · Front H — THE LEDGER (queued after UI)
+- Obsidian, inside B3 containment: `VULCAN/BONSAI/` → `index.md`, `raw/`, `wiki/`, `outputs/`, `daily/`.
+- Dispatch artifacts file to `daily/` + `outputs/`; Z1 DOCUMENTS and the activity trail read from the vault.
+
+### 8 · Slice ladder (one at a time; operator sign-off between; independent GitHub verification each)
+- G1 THE SHELL — stage window, tokens, adaptive scale system, corners, status strip, clock.
+- G2 THE FLANKS — Z1 + Z2 anatomy (placeholder data where live sources absent).
+- G3 THE ORB — a5 engine, three states.
+- G4 THE LIFECYCLE — dispatch wiring end-to-end, incl. overlay + vault handoff.
+- G5 THE INTENT LINE — typed channel into the router.
+- G6 SUMMON-FROM-HIDDEN + Doctrine-11 polish pass.
+- Then: v2.1 live signing ceremony. Tag `v2.1-signed` fires only after the ceremony passes.
