@@ -60,8 +60,11 @@
     /* ── type roles ── */
     .wordmark { font-family: var(--type-mono); font-weight: 500; font-size: var(--fs-wordmark);
       letter-spacing: 0.22em; padding-left: 0.22em; color: var(--st-text); white-space: nowrap; }
+    /* mission tag — a DELIBERATE two-line lockup (§1 corners). Each line is nowrap so it
+       can never wrap by accident at any resolution or during a font swap (G6 nit 6). */
     .mission { font-size: var(--fs-micro); letter-spacing: 0.20em; color: var(--st-text-faint);
-      margin-top: 8px; text-transform: uppercase; }
+      margin-top: 8px; text-transform: uppercase; display: flex; flex-direction: column; gap: 3px; }
+    .mission span { white-space: nowrap; }
 
     .clock { display: flex; justify-content: flex-end; align-items: baseline; gap: 0.14em;
       font-variant-numeric: tabular-nums; font-size: var(--fs-clock); font-weight: 500;
@@ -87,8 +90,11 @@
     .well { flex: 1 1 auto; min-height: 0; }
     .corner-foot { margin-top: auto; }
     .ask-hint { margin-top: 12px; font-size: var(--fs-micro); letter-spacing: 0.24em;
-      color: var(--st-text-faint); text-transform: uppercase; }
+      color: var(--st-text-faint); text-transform: uppercase; line-height: 1.5; }
     .ask-hint b { color: var(--st-text-dim); font-weight: 500; }
+    .ask-hint .summon { white-space: nowrap; }            /* the summon chord line never wraps */
+    .ask-hint .summon b { color: var(--st-ember); }        /* the global summon chord reads hot */
+    .ask-hint .talk { display: block; margin-top: 3px; }
 
     /* ── Z6 status strip (top-center) ── */
     #status-strip { display: flex; align-items: center; gap: 0.7em; flex-wrap: nowrap;
@@ -121,6 +127,11 @@
     .rz { opacity: 0; transform: translateY(6px); filter: blur(2px);
       transition: opacity var(--st-resolve-ms) ease, transform var(--st-resolve-ms) ease, filter var(--st-resolve-ms) ease; }
     .rz.up { opacity: 1; transform: none; filter: none; }
+
+    /* doctrine 11 — a vitals card whose LIVE value refreshes in place resolves (granular),
+       it never snaps from a dash to a number (G6 nit 9). Applied only on a real change. */
+    @keyframes vreflow { from { opacity: 0.2; filter: blur(1.6px); } to { opacity: 1; filter: none; } }
+    .vcard.reflow { animation: vreflow var(--st-resolve-ms) ease; }
 
     /* section header: ember title + dim sub + trailing hairline rule to the edge */
     .fsec { margin-top: calc(var(--sp-gutter) * 0.6); }
@@ -371,7 +382,7 @@
     <aside id="flank-left" class="flank" data-zone="Z1">
       <header class="corner-head">
         <div class="wordmark">V U L C A N</div>
-        <div class="mission">BONSAI LAUNCH · v2.1 · THE STAGE</div>
+        <div class="mission"><span>BONSAI LAUNCH · v2.1</span><span>THE STAGE</span></div>
       </header>
       <div class="flank-body">
         <!-- SYSTEM VITALS — four cards. Cards are injected by stage/main.js so the
@@ -420,7 +431,12 @@
             autocomplete="off" autocapitalize="off" aria-label="Intent line — type a command or question"
             placeholder="COMMAND OR ASK" />
         </form>
-        <div class="ask-hint"><b>TYPE</b> TO COMMAND · <b>HOLD SPACE</b> TO TALK</div>
+        <!-- G6 — the documented global summon chord (⌥⌘V, from ignition.hotkey) rides the
+             BL hint. #hint-summon is set from the token in stage/main.js (doctrine 10). -->
+        <div class="ask-hint">
+          <span class="summon"><b id="hint-summon">⌥⌘V</b> TO SUMMON</span>
+          <span class="talk"><b>TYPE</b> TO COMMAND · <b>HOLD SPACE</b> TO TALK</span>
+        </div>
       </footer>
     </aside>
 
@@ -432,7 +448,7 @@
       </header>
       <div class="flank-body">
         <!-- COMMAND DECK — 5×2, ten commands (§3). Cells injected by stage/main.js;
-             hover resolves an arrow (<100ms), click logs the intent (G4 dispatch stub). -->
+             hover resolves an arrow (<100ms), click dispatches through the full G4 lifecycle. -->
         <section class="fsec rz" data-zone="Z2" style="margin-top:0">
           <div class="fsec-head"><span class="fsec-title">COMMAND DECK</span><span class="fsec-sub" id="deck-sub">IDLE · 0/3 ACTIVE · 0 QUEUED</span></div>
           <div class="fsec-body">
@@ -440,8 +456,9 @@
             <div class="deck-note">INTENTS WRITE TO SYSTEM/QUEUE — RUNNER EXECUTES</div>
           </div>
         </section>
-        <!-- AUDIO I/O (§4) — static dash-block waveform now; the amplitude animation is
-             TODO(G4). The state + link labels wire to the real TTS/voice speaking state. -->
+        <!-- AUDIO I/O (§4) — static dash-block waveform at rest; while speaking the bars
+             ride the real TTS envelope (G4, live). The state + link labels track the real
+             TTS/voice speaking state. -->
         <section class="fsec rz">
           <div class="fsec-head"><span class="fsec-title">AUDIO I/O</span><span class="fsec-sub" id="aio-state">TTS.STANDBY</span></div>
           <div class="fsec-body">
@@ -456,7 +473,7 @@
         <!-- G4 rider — the three SIGNED objectives + checkbox states. Static content;
              TODO(Front H): read live objective state from the vault once THE LEDGER lands. -->
         <div class="objs" id="objs">
-          <div class="obj done"><span class="dir-box done"></span><span class="dir-text">COMPLIANCE · COPPA / FERPA</span></div>
+          <div class="obj done"><span class="dir-box done"></span><span class="dir-text">COPPA / FERPA POSTURE</span></div>
           <div class="obj"><span class="dir-box"></span><span class="dir-text">OUTREACH · 10 PILOTS</span></div>
           <div class="obj"><span class="dir-box"></span><span class="dir-text">LAUNCH · DISTRIBUTION</span></div>
         </div>

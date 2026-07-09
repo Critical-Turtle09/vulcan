@@ -1,9 +1,9 @@
 // Electron shell — RESIDENT OVERLAY (STAGE D + final-pass FINDING 3). VULCAN is a
 // borderless, always-on-top overlay that JOINS the currently active Space and
 // monitor — it is NEVER a native macOS fullscreen window (that would open a
-// separate Space and yank the user away). Say "Fire and Forge" (or Alt+Space) in
-// Chrome/Mail and the command center resolves OVER that screen; banking hides it
-// and reveals the same apps untouched — no Space animation, no app switch.
+// separate Space and yank the user away). Summon it with the global ⌥⌘V chord (or the
+// tray) from Chrome/Mail and the command center resolves OVER that screen; banking hides
+// it and reveals the same apps untouched — no Space animation, no app switch.
 //
 // It launches at login, hides to a menu-bar (tray) item instead of quitting, and
 // keeps the wake listener + audio alive while hidden (backgroundThrottling off).
@@ -24,8 +24,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 loadEnv(ROOT);
 const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273/';
-// ignition.hotkey token (read via fs — main-process, no bundler) with a safe default
-let HOTKEY = 'Alt+Space';
+// ignition.hotkey token (read via fs — main-process, no bundler) with a safe default.
+// G6 SUMMON FROM HIDDEN — the documented global summon chord is ⌥⌘V (Alt+Command+V):
+// a sane, unclaimed chord that raises the stage from ANY Space/app (globalShortcut is
+// system-wide). Space stays reserved for push-to-talk, so the two never collide.
+let HOTKEY = 'Alt+Command+V';
 try { HOTKEY = JSON.parse(fs.readFileSync(path.join(ROOT, 'tokens.json'), 'utf8')).ignition.hotkey || HOTKEY; } catch (_) {}
 
 let win = null, tray = null, isQuitting = false;
@@ -283,7 +286,7 @@ function buildTray() {
     tray.setTitle('◆ VULCAN');
     tray.setToolTip('VULCAN — Silicon Forge Intelligence');
     const menu = Menu.buildFromTemplate([
-      { label: 'Fire and Forge (Summon)', accelerator: HOTKEY, click: () => summon() },
+      { label: 'Summon VULCAN', accelerator: HOTKEY, click: () => summon() },
       { label: 'Bank the Fire', click: () => { if (win.isVisible()) win.webContents.send('ui:bank'); } },
       { type: 'separator' },
       { label: 'Mute Mic (M)', click: () => win.webContents.send('ui:mute') },

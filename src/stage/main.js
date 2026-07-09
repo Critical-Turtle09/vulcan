@@ -1,13 +1,13 @@
-// SPEC v1.6 THE STAGE — G1 THE SHELL. The v2.1 shell: near-black stage, adaptive-scale
-// zone scaffolding (Z1–Z8, bounded), the always-lit corners, and the only LIVE parts of
-// this slice — the TR clock and the Z6 status strip. Content for the flanks (G2), the orb
-// (G3), dispatch (G4), and the intent line (G5) lands in later slices; their zones own
-// their bounds now so nothing can ever collide (§0 adaptive scale law).
+// SPEC v1.6 THE STAGE — the v2.1 shell, assembled: near-black stage, adaptive-scale zone
+// scaffolding (Z1–Z8, bounded), the always-lit corners, the LIVE TR clock + Z6 status
+// strip (G1); the Z1 vitals/directives/documents + Z2 command deck/audio flanks (G2); the
+// a5 TWIN HELIX orb (G3); the dispatch lifecycle — chips, states, overlay, vault (G4); and
+// the typed intent line into the router (G5). Every zone owns its bounds so nothing can
+// collide (§0 adaptive scale law). G6 adds summon-from-hidden plumbing + the polish pass.
 //
-// The identity organs are UNCHANGED and kept intact: the voice loop (+ wire status) still
-// boots and runs through this shell, so summon/respond and every IPC path stay live even
-// though the orb view is not mounted until G3. A minimal stub stands in for the orb so the
-// voice session drives the CORE state read without the G3 engine.
+// The identity organs are UNCHANGED and kept intact: the voice loop (+ wire status) boots
+// and runs through this shell, so summon/respond and every IPC path stay live. The real
+// a5 orb drives the CORE state read.
 import { injectStageVars, stage } from './tokens.js';
 import { createBackground } from './background.js';
 import { createOrb } from './orb.js';
@@ -39,8 +39,9 @@ function paintClock() {
 }
 
 // ---- LIVE: Z6 status strip. CORE ← the voice/orb session state (real). WIRE ← the wire
-// organ's online boolean (real, already in the codebase). HANDS ← placeholder until the
-// crew/dispatch lands. Each subsystem's dot turns ember when it is active. ----
+// organ's online boolean (real, already in the codebase). HANDS ← real dispatch activity
+// (G4): ACTIVE while any command runs or is queued. Each subsystem's dot turns ember when
+// it is active. ----
 const CORE_LABEL = { idle: 'IDLE', listening: 'LISTENING', thinking: 'WORKING', speaking: 'SPEAKING' };
 function setSub(name, text, active) {
   const s = el(`ss-${name}`);
@@ -107,7 +108,7 @@ function runCommand(intent) {
   switch (intent && intent.type) {
     case 'mute': voice.setMuted(true); paintStatus(); return 'Muted.';
     case 'unmute': voice.setMuted(false); paintStatus(); return 'Listening.';
-    case 'bank': if (bridge.requestHide) bridge.requestHide(); return null;
+    case 'bank': bankHide(); return null;
     case 'status': return statusLine();
     default: return null;
   }
@@ -119,7 +120,7 @@ const voice = createVoice({
   // already visible); banking hides the overlay. The answer panel surface is G4, so
   // onAnswer is a no-op here — the loop still SPEAKS every answer (audio path intact).
   onWake: () => { if (bridge.requestSummon) bridge.requestSummon(); },
-  onDismiss: () => { if (bridge.requestHide) bridge.requestHide(); },
+  onDismiss: () => bankHide(),
   onCommand: (intent) => runCommand(intent),
   // G5 — the transcript reads BOTH channels: a spoken exchange echoes as YOU · <heard>
   // then V · <answer>, the same log the typed channel writes to. (Dispatch answers echo
@@ -133,7 +134,14 @@ const voice = createVoice({
 
 // ---- IPC (resident overlay control) — kept in lockstep with the voice session ----
 if (bridge.onIgnite) bridge.onIgnite(() => { resolveIn(); voice.wake(); });
-if (bridge.onBank) bridge.onBank(() => { voice.goDormant(); if (bridge.requestHide) bridge.requestHide(); });
+// Esc / tray Bank / hotkey-toggle bank. If a modal artifact overlay is open, Esc resolves
+// THAT first (never a jarring whole-stage bank over an open document). Otherwise bank the
+// fire: quench the session, play the resolve-OUT transition, then hide (G6 scope A · 4).
+if (bridge.onBank) bridge.onBank(() => {
+  const ov = el('overlay');
+  if (ov && !ov.hidden) { closeOverlay(); return; }
+  voice.goDormant(); bankHide();
+});
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintStatus(); });
 if (bridge.onForceHide) bridge.onForceHide(() => { voice.goDormant(); });
 if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' }));
@@ -584,8 +592,8 @@ function submitIntent(raw) {
 // ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
 // Z1 SYSTEM VITALS (real wires: Claude spend·B0, Vercel·B5R, GH commits·B2 + one
 // TODO'd placeholder), and Z2 COMMAND DECK + AUDIO I/O. All content resolves in
-// staggered on mount (doctrine 11). Dispatch (chips/queue/states) is G4 — the deck
-// click is a logged stub here.
+// staggered on mount (doctrine 11). A deck click dispatches through the full G4
+// lifecycle (chips/queue/states/overlay).
 
 // sparkline: values[] -> a tiny inline SVG polyline. Greyscale only — a sparkline
 // encodes a TREND, never a heat event, so it never spends the ember accent. Fewer
@@ -618,7 +626,18 @@ function cardInner(c) {
     : `<div class="vdelta off">—</div>`;
   return `<div class="vlabel">${c.label}</div><div class="vnum">${c.num}${unit}</div>${sparkSVG(c.spark)}${delta}`;
 }
-function updateCard(k) { const node = el(`vc-${k}`); if (node) node.innerHTML = cardInner(VITALS[k]); }
+// doctrine 11: a card is painted on mount (placeholder), then its LIVE value resolves in
+// place on the first real read + any later change — never a snap from a dash to a number.
+function updateCard(k) {
+  const node = el(`vc-${k}`); if (!node) return;
+  const html = cardInner(VITALS[k]);
+  if (node.innerHTML === html) return;                 // nothing changed → no reflow
+  const first = !node.dataset.filled;
+  node.innerHTML = html; node.dataset.filled = '1';
+  if (!first) {                                        // a live refresh resolves in (granular)
+    node.classList.remove('reflow'); void node.offsetWidth; node.classList.add('reflow');
+  }
+}
 function buildVitals() {
   const host = el('vitals'); if (!host) return;
   host.innerHTML = VITALS_ORDER.map((k) => `<div class="vcard rz" id="vc-${k}"></div>`).join('');
@@ -675,8 +694,9 @@ function buildDeck() {
     cell.addEventListener('click', () => dispatchCommand(cell.dataset.cmd, cell)));
 }
 
-// AUDIO I/O — a STATIC mixed dash-block waveform (short bars = dashes, tall = blocks).
-// The live amplitude animation is TODO(G4). Fixed pattern (no RNG) so it reads stable.
+// AUDIO I/O — a STATIC mixed dash-block waveform (short bars = dashes, tall = blocks) at
+// rest; while speaking the bars ride the real TTS envelope (paintWaveLive, G4). Fixed
+// pattern (no RNG) so the resting read is stable.
 function buildWave() {
   const host = el('aio-wave'); if (!host) return;
   const pat = [3, 7, 3, 14, 3, 5, 11, 3, 3, 18, 3, 7, 3, 3, 12, 3, 6, 3, 16, 3, 3, 9, 3, 13, 3, 5, 3, 10];
@@ -702,6 +722,26 @@ function bootFlanks() {
 
 // ---- doctrine 11: the stage RESOLVES in on launch (never a pop) ----
 function resolveIn() { document.getElementById('shell').classList.add('up'); document.getElementById('bg').classList.add('up'); }
+// bank resolve-OUT — the shell dissolves (opacity + blur, the reverse of resolveIn) over the
+// resolve band, THEN the window hides. No hard cut on bank (doctrine 11 + G6 scope A · 4).
+function resolveOut(done) {
+  document.getElementById('shell').classList.remove('up');
+  document.getElementById('bg').classList.remove('up');
+  setTimeout(() => { if (done) done(); }, stage['resolve.ms'] || 560);
+}
+function bankHide() { resolveOut(() => { if (bridge.requestHide) bridge.requestHide(); }); }
+
+// ---- G6: the BL hint documents the global summon chord, rendered from the ignition.hotkey
+// token (doctrine 10 — never hardcode the chord). "Alt+Command+V" -> "⌥⌘V". ----
+function hotkeyGlyphs(spec) {
+  const G = { command: '⌘', cmd: '⌘', commandorcontrol: '⌘', meta: '⌘', super: '⌘',
+              control: '⌃', ctrl: '⌃', alt: '⌥', option: '⌥', shift: '⇧' };
+  return String(spec || '').split('+').map((k) => {
+    const key = k.trim().toLowerCase();
+    return G[key] || (key === 'space' ? 'SPACE' : k.trim().toUpperCase());
+  }).join('');
+}
+{ const h = el('hint-summon'); if (h) h.textContent = hotkeyGlyphs(rawTokens.ignition.hotkey); }
 
 // ---- boot ----
 paintClock();
@@ -732,7 +772,7 @@ window.__vulcanStage = {
   wire: () => wire.status(),
   voice: () => voice.status(),
   ignite: () => { resolveIn(); voice.wake(); },
-  bank: () => { voice.goDormant(); if (bridge.requestHide) bridge.requestHide(); },
+  bank: () => { voice.goDormant(); bankHide(); },
   vitals: () => JSON.parse(JSON.stringify(VITALS)),   // G2 self-check: current card model
   refreshVitals: () => Promise.all([refreshSpend(), refreshCommits(), refreshVercel()]),
   orb: () => orb._debug,                              // G3 self-check: live orb state model
