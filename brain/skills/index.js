@@ -16,6 +16,7 @@ import obsidian from './obsidian.js';
 import vercel from './vercel.js';
 import mission from './mission.js';
 import wire from './wire.js';
+import crew from './crew.js';   // FRONT I — the crew's runtime hands (outreach drafts, …)
 
 const skills = new Map();
 
@@ -55,3 +56,4 @@ registerSkill(obsidian);
 registerSkill(vercel);
 registerSkill(mission);
 registerSkill(wire);
+registerSkill(crew);   // FRONT I — after mission so "outreach board" (mission) still wins over "outreach draft" (crew)

@@ -114,7 +114,7 @@ const RUNNERS = {
   'DEPLOY CHECK':  () => conduct('deploy status').then((r) => fromConduct('DEPLOY CHECK', r)),
   'PITCH DESK':    () => conduct('pitch desk').then((r) => fromConduct('PITCH DESK', r)),
   'METRICS PULL':  () => metricsPull(),
-  'OUTREACH':      () => stub('OUTREACH', { arrives: 'Front I · HERMES', will: 'draft pilot / district outreach from the vault pipeline', speak: 'Outreach drafting arrives with Hermes in the crew. Nothing to send yet — I filed the standby note.' }),
+  'OUTREACH':      () => conduct('outreach draft').then((r) => fromConduct('OUTREACH', r)),
   'COMPLIANCE':    () => stub('COMPLIANCE', { arrives: 'Front I · WARDEN', will: 'audit COPPA / FERPA posture and extension permissions', speak: 'The compliance audit arrives with Warden. I filed the standby note.' }),
   'VAULT CLEAN':   () => stub('VAULT CLEAN', { arrives: 'Front H · THE LEDGER', will: 'tidy and re-file the VULCAN vault trail', speak: 'Vault cleanup arrives with the Ledger. I filed the standby note.' }),
   'PLAN TODAY':    () => stub('PLAN TODAY', { arrives: 'Front H · THE LEDGER', will: 'compose today\'s plan from directives and the daily notes', speak: 'The daily plan arrives with the Ledger. I filed the standby note.' }),
