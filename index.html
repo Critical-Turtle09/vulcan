@@ -112,7 +112,9 @@
     /* ── Z3 transform field + Z4 orb slot (center) — reserved, orb lands in G3 ── */
     #field { flex: 1 1 auto; width: 100%; min-height: 0; position: relative;
       display: flex; align-items: center; justify-content: center; }
-    #orb-slot { width: min(46vh, 46vw); height: min(46vh, 46vw); }
+    /* P2 — the orb is VULCAN's presence; ~1.4x larger, Z3 rebalanced (§2). Clamped on
+       both axes so it never crowds the status strip (Z6) or primary directive (Z5). */
+    #orb-slot { width: min(64vh, 64vw); height: min(64vh, 64vw); }
 
     /* ── Z5 primary directive (bottom-center) — reserved (out of G2 scope) ── */
     #primary { width: 100%; min-height: calc(var(--sp-gutter) * 3); }
@@ -413,6 +415,56 @@
     .intent:focus-within .intent-prompt { text-shadow: 0 0 8px var(--st-ember-dim); }
     /* HOLD state — a machine-leaving intent is announced and waiting on a typed confirm */
     .intent.holding { border-top-color: var(--st-ember-dim); }
+
+    /* ══ P2 THE CONSOLE — clickable workspaces + affordances ══════════════════════
+       Every panel/card/row is clickable (opens a center-stage workspace in the same
+       overlay chrome). Greyscale + the single ember accent only; no other hues. */
+    .vcard, #dirs .dir, #objs .obj, .fsec.ws-open { cursor: pointer; }
+    .docs .doc.open, .docs .doc { cursor: pointer; }
+    .ws { display: flex; flex-direction: column; gap: calc(var(--sp-row) * 0.9); }
+    .ws-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+      font-family: var(--type-mono); font-size: var(--fs-label); letter-spacing: 0.04em; }
+    .ws-k { color: var(--st-text-faint); text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--fs-micro); }
+    .ws-v { color: var(--st-text); }
+    .ws-sub { font-family: var(--type-mono); font-size: var(--fs-micro); letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--st-ember); margin-top: calc(var(--sp-row) * 0.6); }
+    .ws-note { color: var(--st-text-dim); font-size: var(--fs-label); line-height: 1.45; }
+    .ws-bar { height: 4px; background: color-mix(in srgb, var(--st-text) 8%, transparent); overflow: hidden; }
+    .ws-bar i { display: block; height: 100%; background: var(--st-ember); }
+    .ws-table { display: flex; flex-direction: column; gap: 2px; max-height: 34vh; overflow: auto; }
+    .ws-trow { display: flex; gap: 10px; align-items: baseline; font-family: var(--type-mono);
+      font-size: var(--fs-micro); letter-spacing: 0.04em; color: var(--st-text-dim);
+      padding: calc(var(--sp-row) * 0.5) 0; border-bottom: 1px solid var(--st-hairline); }
+    .ws-trow .ws-hash { color: var(--st-ember); flex: 0 0 auto; }
+    .ws-trow .ws-date { color: var(--st-text-faint); flex: 0 0 auto; }
+    .ws-trow .ws-subj, .ws-trow span:last-child { flex: 1 1 auto; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ws-trow .ws-usd { color: var(--st-text); flex: 0 0 auto; }
+    .ws-field { display: flex; gap: 8px; }
+    .ws-input { flex: 1 1 auto; min-width: 0; background: color-mix(in srgb, var(--st-text) 5%, transparent);
+      border: 1px solid var(--st-hairline); color: var(--st-text); font-family: var(--type-mono);
+      font-size: var(--fs-label); letter-spacing: 0.04em; padding: calc(var(--sp-row) * 0.7) 10px; outline: none;
+      transition: border-color 90ms ease; }
+    .ws-input:focus { border-color: var(--st-ember-dim); }
+    .ws-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: calc(var(--sp-row) * 0.8);
+      padding-top: calc(var(--sp-gutter) * 0.7); border-top: 1px solid var(--st-hairline); }
+    .ws-btn { font-family: var(--type-mono); font-size: var(--fs-label); letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--st-text); background: transparent;
+      border: 1px solid var(--st-hairline-strong); padding: calc(var(--sp-row) * 0.8) calc(var(--sp-gutter) * 0.8);
+      cursor: pointer; transition: border-color 150ms ease, color 150ms ease; }
+    .ws-btn:hover { border-color: var(--st-ember-dim); color: var(--st-text); }
+    .ws-btn.primary { color: var(--st-ember); border-color: var(--st-ember-dim); }
+    .ws-btn.primary:hover { border-color: var(--st-ember); background: color-mix(in srgb, var(--st-ember) 12%, transparent); }
+    .ws-btn:disabled { opacity: 0.55; cursor: default; }
+    .ws-editlist { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow: auto; }
+    .ws-edit { display: flex; align-items: center; gap: 8px; }
+    .ws-tick { flex: 0 0 auto; width: 22px; height: 22px; border: 1px solid var(--st-hairline-strong);
+      background: transparent; color: var(--st-ember); cursor: pointer; font-size: var(--fs-micro); line-height: 1; }
+    .ws-tick.on { border-color: var(--st-ember-dim); }
+    .ws-edit-in { flex: 1 1 auto; }
+    .ws-del { flex: 0 0 auto; width: 22px; height: 22px; border: 1px solid var(--st-hairline);
+      background: transparent; color: var(--st-text-faint); cursor: pointer; }
+    .ws-del:hover { color: var(--st-text); border-color: var(--st-hairline-strong); }
   </style>
 </head>
 <body>

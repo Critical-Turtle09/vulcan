@@ -345,6 +345,44 @@ export function writeDailyDoc(name, markdown) {
   return { filename, rel: vaultRel, vaultPath: file, obsidianUri: obsidianUriFor(vault, vaultRel), vaultName: path.basename(vault) };
 }
 
+// P2 THE CONSOLE — editable console state (DIRECTIVES + LAUNCH OBJECTIVES), vault-
+// persisted so operator edits survive restarts. Stored as one contained JSON file at
+// VULCAN/BONSAI/state/console.json (inside the WRITE_DIR containment, never outside).
+// Fail-soft: a missing/corrupt file reads as null (caller supplies its defaults).
+const STATE_DIR = path.join(BONSAI_DIR, 'state');
+export function readConsoleState() {
+  try {
+    const vault = resolveVault();
+    const file = safePath(vault, path.join(STATE_DIR, 'console.json'), { confine: true });
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (_) { return null; }
+}
+export function writeConsoleState(state) {
+  const vault = resolveVault();
+  ensureBonsai(vault);
+  const dir = path.join(vault, WRITE_DIR, STATE_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = safePath(vault, path.join(STATE_DIR, 'console.json'), { confine: true });
+  fs.writeFileSync(file, JSON.stringify(state || {}, null, 2));
+  return { ok: true, rel: path.relative(vault, file) };
+}
+
+// P2 THE CONSOLE — read a filed artifact's markdown by basename, for the DOCUMENTS
+// workspace's summarize-aloud. Contained to BONSAI/outputs/ + daily/; basename only
+// (path parts are stripped) so it can never escape the vault subtree.
+export function readArtifact(name) {
+  const vault = resolveVault();
+  const base = path.basename(String(name || ''));
+  for (const sub of ['outputs', 'daily']) {
+    try {
+      const file = safePath(vault, path.join(BONSAI_DIR, sub, base), { confine: true });
+      if (fs.existsSync(file)) return { ok: true, name: base, text: fs.readFileSync(file, 'utf8') };
+    } catch (_) { /* try next */ }
+  }
+  return { ok: false, name: base, text: '' };
+}
+
 // I2 THE CREW — VAULT CLEAN re-index. Refresh a managed, auto-generated inventory
 // section inside VULCAN/BONSAI/index.md WITHOUT clobbering the H1 front-door prose or
 // any operator edits: everything between the two markers is replaced; the rest is left

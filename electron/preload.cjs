@@ -30,6 +30,13 @@ contextBridge.exposeInMainWorld('vulcan', {
   vitalsVercel: () => ipcRenderer.invoke('vitals:vercel'),   // B5R deploy eye: state · health
   vitalsCommits: () => ipcRenderer.invoke('vitals:commits'), // B2 machinery: 7-day commit spark
   vitalsDocuments: () => ipcRenderer.invoke('vitals:documents'), // H1 THE LEDGER: Z1 DOCUMENTS vault trail
+  // P2 THE CONSOLE — clickable-workspace hands (all READ or contained/local writes).
+  consoleLedger: () => ipcRenderer.invoke('console:ledger'),               // SPEND: per-dispatch ledger + cap
+  consoleCommitsList: () => ipcRenderer.invoke('console:commitsList'),     // COMMITS: recent commit list
+  consoleSetVercelToken: (token) => ipcRenderer.invoke('console:setVercelToken', token), // VERCEL: write token to .env (local) + announce
+  consoleObjectivesRead: () => ipcRenderer.invoke('console:objectivesRead'),   // DIRECTIVES/OBJECTIVES: vault-persisted read
+  consoleObjectivesWrite: (state) => ipcRenderer.invoke('console:objectivesWrite', state), // ...persisted write
+  consoleDocRead: (name) => ipcRenderer.invoke('console:docRead', name),   // DOCUMENTS: read artifact for summarize-aloud
   onSpeak: (cb) => ipcRenderer.on('brain:speak', (_e, text) => cb(text)),  // announce → voice
   // STAGE D — THE IGNITION (resident overlay control)
   requestSummon: () => ipcRenderer.send('ui:request-summon'), // wake-from-hidden -> summon + ignite

@@ -107,6 +107,15 @@ const bridge = window.vulcan || {
     };
   },
   openExternal() {},
+  // P2 THE CONSOLE — browser-SIM of the workspace hands (no Electron main). Honest,
+  // clearly-labelled placeholders so the console can be screenshot/CDP-audited; the
+  // real ledger/commits/token/vault run in the packaged app.
+  async consoleLedger() { return { ok: true, sim: true, total_usd: 0, cap_usd: 2, calls: [] }; },
+  async consoleCommitsList() { return { ok: true, sim: true, list: [] }; },
+  async consoleSetVercelToken() { return { ok: false, sim: true, reason: 'NO ELECTRON MAIN (BROWSER)' }; },
+  async consoleObjectivesRead() { return { ok: true, sim: true }; },
+  async consoleObjectivesWrite(s) { return { ok: true, sim: true, ...(s || {}) }; },
+  async consoleDocRead() { return { ok: false, sim: true, text: '' }; },
   // G5 THE INTENT LINE — browser SIM of the conductor path so the typed router runs
   // end-to-end without an Electron main (clearly labelled, executes nothing).
   async conduct(text) {
@@ -863,10 +872,246 @@ function hotkeyGlyphs(spec) {
 }
 { const h = el('hint-summon'); if (h) h.textContent = hotkeyGlyphs(rawTokens.ignition.hotkey); }
 
+// ═══ P2 THE CONSOLE ═══════════════════════════════════════════════════════════
+// Nothing on the stage stays inert. Every vitals card, directive, objective, document
+// row, and the audio panel opens a CENTER-STAGE WORKSPACE in the existing overlay
+// chrome (Doctrine 11, Esc closes), each with REAL wired actions. All actions are
+// READ or CONTAINED/LOCAL — nothing pushes, deploys, or leaves the machine without the
+// write gate. The workspace reuses #overlay: eyebrow + title + a custom body (content
+// + an actions row); the artifact foot (file/open-in-vault) is hidden for workspaces.
+const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// open a workspace. cfg: { eyebrow, title, html, actions:[{label,cls,run}], onOpen }.
+function openWorkspace(cfg) {
+  const ov = el('overlay'); if (!ov) return;
+  overlayDispatch = null;                          // a workspace is not an artifact
+  el('ov-eyebrow').textContent = cfg.eyebrow || 'WORKSPACE';
+  el('ov-title').textContent = cfg.title || '';
+  const actions = (cfg.actions || []).filter(Boolean);
+  const actionsHTML = actions.length
+    ? `<div class="ws-actions">${actions.map((a, i) => `<button class="ws-btn${a.cls ? ` ${a.cls}` : ''}" data-ws-act="${i}">${esc(a.label)}</button>`).join('')}</div>`
+    : '';
+  el('ov-body').innerHTML = `<div class="ws">${cfg.html || ''}${actionsHTML}</div>`;
+  // the artifact foot is meaningless for a workspace — blank the file, hide open-in-vault.
+  el('ov-file').textContent = cfg.foot || '';
+  const open = el('ov-open'); if (open) open.style.display = 'none';
+  // wire action buttons
+  el('ov-body').querySelectorAll('[data-ws-act]').forEach((btn) => {
+    const a = actions[+btn.dataset.wsAct];
+    btn.addEventListener('click', async (e) => { e.preventDefault(); try { await a.run({ btn, ws: el('ov-body') }); } catch (_) {} });
+  });
+  ov.hidden = false;
+  requestAnimationFrame(() => requestAnimationFrame(() => ov.classList.add('up')));
+  if (cfg.onOpen) { try { cfg.onOpen(el('ov-body')); } catch (_) {} }
+}
+
+// small helpers for workspace bodies
+const kv = (k, v) => `<div class="ws-row"><span class="ws-k">${esc(k)}</span><span class="ws-v">${esc(v)}</span></div>`;
+const note = (t) => `<p class="ws-note">${esc(t)}</p>`;
+function speakWs(text) { queueSpeak(text, 'answer'); pushLine('v', text); }
+
+// ---- SPEND workspace: per-dispatch ledger + cap -------------------------------
+async function wsSpend() {
+  openWorkspace({ eyebrow: 'VITALS · WORKSPACE', title: 'CLAUDE SPEND', html: note('Reading the governor ledger…') });
+  const r = bridge.consoleLedger ? await bridge.consoleLedger() : null;
+  const body = el('ov-body'); if (!body) return;
+  if (!r || !r.ok) { body.querySelector('.ws').innerHTML = note('Ledger unavailable.'); return; }
+  const rows = r.calls.length
+    ? `<div class="ws-table">${r.calls.map((c) => `<div class="ws-trow"><span>${esc(c.model)}</span><span>${c.in}/${c.out} tok</span><span class="ws-usd">$${(c.usd || 0).toFixed(4)}</span></div>`).join('')}</div>`
+    : note(r.sim ? 'SIM — the real per-dispatch ledger runs in the app.' : 'No metered calls yet today.');
+  const pct = Math.min(100, Math.round((r.total_usd / (r.cap_usd || 2)) * 100));
+  body.querySelector('.ws').innerHTML =
+    kv('SPENT TODAY', `$${r.total_usd.toFixed(4)}`) + kv('DAILY CAP', `$${(r.cap_usd || 2).toFixed(2)}`) + kv('USED', `${pct}%`)
+    + `<div class="ws-bar"><i style="width:${pct}%"></i></div>`
+    + `<div class="ws-sub">METERED CALLS · ${r.calls.length}</div>` + rows;
+}
+
+// ---- COMMITS workspace: recent commits + commit-digest dispatch ---------------
+async function wsCommits() {
+  openWorkspace({
+    eyebrow: 'VITALS · WORKSPACE', title: 'GH COMMITS', html: note('Reading git…'),
+    actions: [{ label: 'FILE COMMIT DIGEST', cls: 'primary', run: async ({ btn }) => {
+      btn.disabled = true; btn.textContent = 'FILING…';
+      let r = null; try { r = await bridge.conduct('commit digest'); } catch (_) {}
+      speakWs((r && r.text) || 'Commit digest filed.'); refreshDocs();
+      btn.textContent = 'DIGEST FILED ✓';
+    } }],
+  });
+  const r = bridge.consoleCommitsList ? await bridge.consoleCommitsList() : null;
+  const ws = el('ov-body') && el('ov-body').querySelector('.ws'); if (!ws) return;
+  const list = (r && r.list && r.list.length)
+    ? `<div class="ws-table">${r.list.map((c) => `<div class="ws-trow"><span class="ws-hash">${esc(c.hash)}</span><span class="ws-date">${esc(c.date)}</span><span class="ws-subj">${esc(c.subject)}</span></div>`).join('')}</div>`
+    : note(r && r.sim ? 'SIM — recent commits + the digest run in the app.' : 'No recent commits.');
+  ws.insertAdjacentHTML('afterbegin', list + `<div class="ws-sub">RECENT COMMITS</div>`);
+}
+
+// ---- VERCEL workspace: SET TOKEN (writes .env locally, announce+confirm) + status + deploy-check ----
+async function wsVercel() {
+  const v = bridge.vitalsVercel ? await bridge.vitalsVercel().catch(() => null) : null;
+  const statusHtml = v
+    ? kv('STATE', v.primary || 'N/C') + kv('DETAIL', v.sub || '') + (v.url ? kv('URL', v.url) : '')
+    : note('Deploy status unavailable.');
+  openWorkspace({
+    eyebrow: 'VITALS · WORKSPACE', title: 'VERCEL DEPLOY',
+    html: statusHtml
+      + `<div class="ws-sub">SET TOKEN</div>`
+      + note('Paste a Vercel token to connect the deploy eye. It is written to your local .env only — it never leaves the machine.')
+      + `<div class="ws-field"><input class="ws-input" id="ws-vercel-token" type="password" placeholder="VERCEL TOKEN" spellcheck="false" autocomplete="off" /></div>`,
+    actions: [
+      { label: 'SAVE TOKEN', cls: 'primary', run: async ({ btn, ws }) => {
+        const inp = ws.querySelector('#ws-vercel-token'); const tok = inp && inp.value.trim();
+        if (!tok) { btn.textContent = 'ENTER A TOKEN'; return; }
+        btn.disabled = true; btn.textContent = 'SAVING…';
+        let r = null; try { r = await bridge.consoleSetVercelToken(tok); } catch (_) {}
+        if (r && r.ok) { if (inp) inp.value = ''; btn.textContent = 'SAVED ✓'; refreshVercel(); speakWs('Vercel token set and saved locally. Nothing left the machine.'); }
+        else { btn.disabled = false; btn.textContent = r && r.sim ? 'APP-ONLY (SIM)' : 'SAVE FAILED'; }
+      } },
+      { label: 'DEPLOY CHECK', run: async () => { closeOverlay(); dispatchCommand('DEPLOY CHECK', deckCellFor('DEPLOY CHECK')); } },
+    ],
+  });
+}
+
+// ---- WAITLIST workspace: honest, no live source ------------------------------
+function wsWaitlist() {
+  openWorkspace({
+    eyebrow: 'VITALS · WORKSPACE', title: 'WAITLIST',
+    html: kv('SHOWN', (VITALS.waitlist.num || '—'))
+      + note('This number is a PLACEHOLDER — there is no live waitlist source wired yet. VULCAN never presents an unsourced number as real, so this card is labelled and will stay a placeholder until a real signup feed (or a manual figure) is connected.')
+      + `<div class="ws-sub">TO MAKE IT REAL</div>`
+      + note('Wire a signups source (form export, DB, or a manual value) into vitals — then this card reads live.'),
+  });
+}
+
+// ---- AUDIO I/O workspace: status + test-voice --------------------------------
+function wsAudio() {
+  const s = voice.status();
+  openWorkspace({
+    eyebrow: 'AUDIO · WORKSPACE', title: 'AUDIO I/O',
+    html: kv('VOICE', s.online ? (s.local ? 'LOCAL' : 'ONLINE') : 'OFFLINE')
+      + kv('EARS', s.ears ? 'READY' : 'NONE')
+      + kv('MUTED', s.muted ? 'YES' : 'NO')
+      + note('Hold Space anywhere to talk; Esc stops. Test the voice below.'),
+    actions: [{ label: 'TEST VOICE', cls: 'primary', run: () => { voice.say('VULCAN online. Voice link nominal.', { kind: 'answer' }); } }],
+  });
+}
+
+// ---- DOCUMENTS workspace: open in vault · summarize-aloud · draft follow-up ----
+function summarize(md, name) {
+  const lines = String(md || '').split('\n').map((l) => l.trim());
+  const h1 = (lines.find((l) => l.startsWith('# ')) || `# ${name}`).replace(/^#\s+/, '');
+  const quote = lines.find((l) => l.startsWith('> '));
+  const para = lines.find((l) => l && !l.startsWith('#') && !l.startsWith('>') && !l.startsWith('-') && !l.startsWith('*') && !l.startsWith('```'));
+  const bullets = lines.filter((l) => l.startsWith('- ')).length;
+  const parts = [`${h1}.`];
+  if (quote) parts.push(quote.replace(/^>\s+/, '').replace(/\*\*/g, ''));
+  else if (para) parts.push(para.replace(/\*\*/g, ''));
+  if (bullets) parts.push(`${bullets} point${bullets === 1 ? '' : 's'}.`);
+  return parts.join(' ');
+}
+function wsDocument(docName, uri) {
+  openWorkspace({
+    eyebrow: 'DOCUMENT · WORKSPACE', title: String(docName).toUpperCase(),
+    html: kv('ARTIFACT', docName) + note('Open it in the vault, hear a summary, or draft a follow-up (drafts only — nothing is sent).'),
+    actions: [
+      uri ? { label: 'OPEN IN VAULT ↗', cls: 'primary', run: () => { if (bridge.openExternal) bridge.openExternal(uri); } } : null,
+      { label: 'SUMMARIZE ALOUD', run: async ({ btn }) => {
+        btn.disabled = true; btn.textContent = 'READING…';
+        let r = null; try { r = bridge.consoleDocRead ? await bridge.consoleDocRead(docName) : null; } catch (_) {}
+        if (r && r.ok && r.text) { speakWs(summarize(r.text, docName)); btn.textContent = 'SUMMARIZED ✓'; }
+        else { btn.textContent = r && r.sim ? 'APP-ONLY (SIM)' : 'UNREADABLE'; }
+      } },
+      { label: 'DRAFT FOLLOW-UP', run: async ({ btn }) => {
+        btn.disabled = true; btn.textContent = 'DRAFTING…';
+        let r = null; try { r = await bridge.conduct(`follow up re: ${docName}`); } catch (_) {}
+        speakWs((r && r.text) || 'Follow-up drafted and held in the vault.'); refreshDocs();
+        btn.textContent = 'DRAFTED ✓';
+      } },
+    ],
+  });
+}
+
+// ---- DIRECTIVES + LAUNCH OBJECTIVES: editable, vault-persisted ----------------
+let consoleState = null;   // { directives:[{text,done}], objectives:[{text,done}] }
+function renderList(hostId, key, rowCls) {
+  const host = el(hostId); if (!host || !consoleState) return;
+  const items = consoleState[key] || [];
+  host.innerHTML = items.map((d, i) =>
+    `<div class="${rowCls}${d.done ? ' done' : ''}" data-k="${key}" data-i="${i}"><span class="dir-box${d.done ? ' done' : ''}"></span><span class="dir-text">${esc(d.text)}</span></div>`).join('');
+}
+function renderObjectives() { renderList('dirs', 'directives', 'dir'); renderList('objs', 'objectives', 'obj'); }
+async function persistObjectives() {
+  if (!bridge.consoleObjectivesWrite) return;
+  try { await bridge.consoleObjectivesWrite(consoleState); } catch (_) {}
+}
+async function loadObjectives() {
+  let s = null;
+  try { s = bridge.consoleObjectivesRead ? await bridge.consoleObjectivesRead() : null; } catch (_) {}
+  if (!s || (!s.directives && !s.objectives)) {
+    // browser SIM / first run → seed from the DOM's static rows so the console isn't blank.
+    const grab = (id, cls) => [...(el(id) ? el(id).querySelectorAll('.' + cls) : [])].map((n) => ({ text: n.querySelector('.dir-text').textContent, done: n.classList.contains('done') }));
+    s = { directives: grab('dirs', 'dir'), objectives: grab('objs', 'obj') };
+  }
+  consoleState = { directives: s.directives || [], objectives: s.objectives || [] };
+  renderObjectives();
+}
+// the editor workspace for a list (directives | objectives)
+function wsEditList(key, title) {
+  const items = (consoleState && consoleState[key]) || [];
+  const rows = items.map((d, i) =>
+    `<div class="ws-edit" data-i="${i}"><button class="ws-tick${d.done ? ' on' : ''}" data-act="toggle" title="Toggle">${d.done ? '✓' : ''}</button>`
+    + `<input class="ws-input ws-edit-in" data-act="text" value="${esc(d.text)}" spellcheck="false" />`
+    + `<button class="ws-del" data-act="del" title="Remove">✕</button></div>`).join('');
+  openWorkspace({
+    eyebrow: 'CONSOLE · EDIT', title,
+    html: `<div class="ws-editlist">${rows || note('Empty — add one below.')}</div>`
+      + `<div class="ws-field"><input class="ws-input" id="ws-add" placeholder="ADD ${title}…" spellcheck="false" /></div>`
+      + note('Edits persist to the vault and survive restarts. Toggle the tick to mark done.'),
+    actions: [
+      { label: 'ADD', run: async ({ ws }) => { const inp = ws.querySelector('#ws-add'); const v = inp && inp.value.trim(); if (!v) return; consoleState[key].push({ text: v, done: false }); await persistObjectives(); renderObjectives(); wsEditList(key, title); } },
+      { label: 'SAVE & CLOSE', cls: 'primary', run: async ({ ws }) => { syncEdits(ws, key); await persistObjectives(); renderObjectives(); closeOverlay(); speakWs(`${title} saved.`); } },
+    ],
+    onOpen: (body) => {
+      body.querySelectorAll('.ws-edit').forEach((row) => {
+        const i = +row.dataset.i;
+        row.querySelector('[data-act="toggle"]').addEventListener('click', (e) => { e.preventDefault(); consoleState[key][i].done = !consoleState[key][i].done; const b = e.currentTarget; b.classList.toggle('on', consoleState[key][i].done); b.textContent = consoleState[key][i].done ? '✓' : ''; });
+        row.querySelector('[data-act="del"]').addEventListener('click', async (e) => { e.preventDefault(); syncEdits(body, key); consoleState[key].splice(i, 1); await persistObjectives(); renderObjectives(); wsEditList(key, title); });
+      });
+    },
+  });
+}
+function syncEdits(body, key) {
+  body.querySelectorAll('.ws-edit').forEach((row) => { const i = +row.dataset.i; const inp = row.querySelector('[data-act="text"]'); if (consoleState[key][i] && inp) consoleState[key][i].text = inp.value.trim(); });
+}
+
+// ---- click wiring (event delegation — survives innerHTML rebuilds) ------------
+function wireConsole() {
+  const vitals = el('vitals');
+  if (vitals) vitals.addEventListener('click', (e) => {
+    const card = e.target.closest('.vcard'); if (!card) return;
+    const id = card.id.replace('vc-', '');
+    ({ spend: wsSpend, commits: wsCommits, vercel: wsVercel, waitlist: wsWaitlist })[id]?.();
+  });
+  el('dirs') && el('dirs').addEventListener('click', () => wsEditList('directives', 'DIRECTIVES'));
+  el('objs') && el('objs').addEventListener('click', () => wsEditList('objectives', 'LAUNCH OBJECTIVES'));
+  // AUDIO I/O panel → workspace (the section around the wave).
+  const aio = el('aio-wave'); const aioSec = aio && aio.closest('.fsec');
+  if (aioSec) { aioSec.classList.add('ws-open'); aioSec.addEventListener('click', (e) => { if (e.target.closest('.deck-cell')) return; wsAudio(); }); }
+  // DOCUMENTS rows now open a document workspace (was: straight open-in-vault).
+  const docs = el('docs');
+  if (docs) docs.addEventListener('click', (e) => {
+    const row = e.target.closest('.doc'); if (!row || row.classList.contains('empty')) return;
+    e.stopImmediatePropagation();
+    wsDocument(row.querySelector('.doc-name').textContent.replace(/^▪\s*/, ''), row.dataset.uri || '');
+  }, true);   // capture: intercept before renderDocs' own row handler
+}
+
+// ═══ boot ═══
 // ---- boot ----
 paintClock();
 paintStatus();
 bootFlanks();                               // G2 — Z1 vitals + Z2 deck/audio (resolves in)
+wireConsole();                              // P2 — clickable workspaces on every surface
+loadObjectives();                           // P2 — editable, vault-persisted directives/objectives
 voice.boot().then(paintStatus);
 wire.boot();
 requestAnimationFrame(() => resolveIn());   // trigger the resolve transition after first paint

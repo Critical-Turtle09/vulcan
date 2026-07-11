@@ -16,7 +16,7 @@ import os from 'node:os';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { ROOT } from '../env.js';
-import { vaultTrail, writeDailyDoc, reindexVault } from './obsidian.js';
+import { vaultTrail, writeDailyDoc, reindexVault, writeArtifact } from './obsidian.js';
 
 const run = promisify(execFile);
 const expandHome = (p) => (p && p.startsWith('~') ? path.join(os.homedir(), p.slice(1)) : p);
@@ -348,11 +348,78 @@ function vaultClean() {
   };
 }
 
+// ---- HERMES · followup.draft (READ; self-files a follow-up draft) -------------
+// The DOCUMENTS workspace "draft follow-up" hand: a short, held follow-up template
+// the operator can adapt. Drafts only — no addresses, no sending. Self-files to
+// outputs/ (so it lands in the vault whatever the entry path) and returns the handle.
+function followupDraft(detail = {}) {
+  const ref = detail && detail.ref ? ` (re: ${String(detail.ref).replace(/\.md$/i, '')})` : '';
+  const body = [
+    `# HERMES — Follow-up Draft${ref}`,
+    '',
+    HELD_BANNER,
+    '',
+    '**Subject:** Following up — Bonsai pilot for [School]',
+    '',
+    'Hi [Name],',
+    '',
+    'Circling back on my note about Bonsai — the browser citation tool for students'
+      + ' (MLA, APA, Chicago, IEEE), force-installed through Google Admin, zero student data.',
+    '',
+    'No pressure at all — if a free 60-day pilot is worth a quick look, I can set it up'
+      + ' with your IT on one call. And if the timing is off, just say so and I\'ll follow'
+      + ' up next term.',
+    '',
+    'Thanks, [Your name]',
+    '',
+    '---',
+    'Drafts only — fill the brackets and send from your own client. Nothing has left the machine.',
+    '',
+    '*Drafted by HERMES · Front I · THE CREW.*',
+  ].join('\n');
+  let filed = null;
+  try { filed = writeArtifact('FOLLOW-UP', body); } catch (_) { /* vault unreachable → still returns the draft */ }
+  return {
+    title: 'HERMES · FOLLOW-UP DRAFT',
+    lines: ['CREW · HERMES', 'DRAFT · FOLLOW-UP', filed ? `FILED · ${filed.rel}` : 'HELD (VAULT UNREACHABLE)'],
+    body,
+    speak: 'Hermes drafted a follow-up. It is held in the vault as a draft; nothing was sent.',
+    cost_usd: 0,
+    route: 'DRAFT',
+  };
+}
+
+// ---- COMMIT DIGEST · commit.digest (READ; self-files) -------------------------
+// The GH COMMITS workspace "commit digest" hand: a $0 local rollup of recent commits
+// filed to the vault. Facts only, straight from git — never invented.
+async function commitDigest() {
+  const commits = await gitLines(['log', '-20', '--pretty=%h|%cd|%s', '--date=format:%Y-%m-%d']);
+  const rows = (commits || []).map((l) => { const [h, d, ...s] = l.split('|'); return { h, d, s: s.join('|') }; });
+  const body = [
+    `# Commit Digest · ${new Date().toISOString().slice(0, 10)}`,
+    '', '> Local rollup of the last 20 commits, straight from git. Facts only.', '',
+    ...(rows.length ? rows.map((r) => `- \`${r.h}\` ${r.d} — ${r.s}`) : ['- (no commits found)']),
+    '', '*Filed by VULCAN · COMMIT DIGEST · Front I.*',
+  ].join('\n');
+  let filed = null;
+  try { filed = writeArtifact('COMMIT-DIGEST', body); } catch (_) { /* still returns the digest */ }
+  return {
+    title: 'COMMIT · DIGEST',
+    lines: [`COMMITS · ${rows.length}`, filed ? `FILED · ${filed.rel}` : 'HELD (VAULT UNREACHABLE)'],
+    body,
+    speak: `Commit digest filed — the last ${rows.length} commit${rows.length === 1 ? '' : 's'}.`,
+    cost_usd: 0,
+    route: 'READ',
+  };
+}
+
 // ---- skill definition ---------------------------------------------------------
 export default {
   id: 'crew',
   actions: {
     'crew.outreach': { klass: 'READ', run: outreachDrafts },
+    'crew.followup': { klass: 'READ', run: followupDraft },
+    'crew.commitdigest': { klass: 'READ', run: commitDigest },
     'crew.plan': { klass: 'READ', run: planToday },
     'crew.review': { klass: 'READ', run: reviewWeek },
     'crew.compliance': { klass: 'READ', run: complianceAudit },
@@ -377,6 +444,13 @@ export default {
     }
     if (/\b(vault clean|clean (the|my) vault|tidy (the|my) vault|re-?index (the )?vault)\b/.test(t)) {
       return { action: 'crew.vaultclean', detail: {} };
+    }
+    if (/\b(follow[- ]?up draft|draft (a )?follow[- ]?up|follow[- ]?up email)\b/.test(t)) {
+      const rm = t.match(/\bre:?\s*([\w.\- ]+?)\s*$/);
+      return { action: 'crew.followup', detail: rm ? { ref: rm[1].trim() } : {} };
+    }
+    if (/\b(commit digest|digest (the )?commits|commits digest)\b/.test(t)) {
+      return { action: 'crew.commitdigest', detail: {} };
     }
     return null;
   },
