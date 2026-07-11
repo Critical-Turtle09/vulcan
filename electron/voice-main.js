@@ -26,6 +26,20 @@ export function loadEnv(root) {
   }
 }
 
+// P1.1 — packaged env resolution. Overlay a SECOND .env whose values OVERRIDE any
+// already-loaded ones. In the packaged app the operator's keys live in a writable,
+// per-user location (app.getPath('userData')/.env) that survives a reinstall and is
+// NOT baked into the distributable — so the bundle's .env is only a fallback, and
+// SET TOKEN writes land somewhere durable. `file` absent/missing is a silent no-op.
+export function loadEnvOverride(file) {
+  if (!file || !fs.existsSync(file)) return;
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+    if (!m) continue;
+    process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');   // override, last-write-wins
+  }
+}
+
 export function registerVoiceIpc() {
   ipcMain.handle('voice:config', () => {
     const hasWhisper = !!(process.env.WHISPER_BIN && process.env.WHISPER_MODEL

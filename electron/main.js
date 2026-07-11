@@ -14,7 +14,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
-import { loadEnv, registerVoiceIpc } from './voice-main.js';
+import { loadEnv, loadEnvOverride, registerVoiceIpc } from './voice-main.js';
 import { registerWireIpc } from './wire-main.js';
 import { registerQuotesIpc } from './quotes-main.js';
 import { registerBrainIpc } from './brain-main.js';   // B1 SYNAPSE — voice→brain→panel
@@ -22,7 +22,15 @@ import { registerVitalsIpc } from './vitals-main.js';   // G2 FLANKS — Z1 syst
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-loadEnv(ROOT);
+loadEnv(ROOT);   // bundle/repo .env (dev + packaged fallback)
+
+// P1.1 — the durable, writable env location: per-user userData in the packaged app
+// (survives reinstall, never baked into the distributable), the repo .env in dev.
+// This is where the packaged overlay reads from and where SET TOKEN writes to.
+function envWritePath() {
+  try { return app.isPackaged ? path.join(app.getPath('userData'), '.env') : path.join(ROOT, '.env'); }
+  catch (_) { return path.join(ROOT, '.env'); }
+}
 const DEV_URL = process.env.VULCAN_DEV_URL || 'http://localhost:5273/';
 // ignition.hotkey token (read via fs — main-process, no bundler) with a safe default.
 // G6 SUMMON FROM HIDDEN — the documented global summon chord is ⌥⌘V (Alt+Command+V):
@@ -310,6 +318,15 @@ function buildTray() {
 }
 
 app.whenReady().then(() => {
+  // P1.1 — no Dock icon: VULCAN is a menu-bar (tray) resident, so it must never show
+  // in the Dock. app.dock.hide() is the correct fix for this electron-packager build
+  // (no asar/plist pipeline to set LSUIElement); macOS-only, guarded elsewhere it's undefined.
+  try { if (process.platform === 'darwin' && app.dock) app.dock.hide(); } catch (_) {}
+
+  // P1.1 — packaged env resolution: overlay the writable user .env OVER the bundle's,
+  // so operator keys (and SET TOKEN writes) resolve without rebuilding and survive reinstall.
+  try { if (app.isPackaged) loadEnvOverride(envWritePath()); } catch (_) {}
+
   registerVoiceIpc();
   registerWireIpc();
   registerQuotesIpc();
