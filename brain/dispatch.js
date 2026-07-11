@@ -115,10 +115,10 @@ const RUNNERS = {
   'PITCH DESK':    () => conduct('pitch desk').then((r) => fromConduct('PITCH DESK', r)),
   'METRICS PULL':  () => metricsPull(),
   'OUTREACH':      () => conduct('outreach draft').then((r) => fromConduct('OUTREACH', r)),
-  'COMPLIANCE':    () => stub('COMPLIANCE', { arrives: 'Front I · WARDEN', will: 'audit COPPA / FERPA posture and extension permissions', speak: 'The compliance audit arrives with Warden. I filed the standby note.' }),
-  'VAULT CLEAN':   () => stub('VAULT CLEAN', { arrives: 'Front H · THE LEDGER', will: 'tidy and re-file the VULCAN vault trail', speak: 'Vault cleanup arrives with the Ledger. I filed the standby note.' }),
-  'PLAN TODAY':    () => stub('PLAN TODAY', { arrives: 'Front H · THE LEDGER', will: 'compose today\'s plan from directives and the daily notes', speak: 'The daily plan arrives with the Ledger. I filed the standby note.' }),
-  'WK REVIEW':     () => stub('WK REVIEW', { arrives: 'Front H · THE LEDGER', will: 'roll up the week from the vault and commit history', speak: 'The weekly review arrives with the Ledger. I filed the standby note.' }),
+  'COMPLIANCE':    () => conduct('compliance audit').then((r) => fromConduct('COMPLIANCE', r)),
+  'VAULT CLEAN':   () => conduct('vault clean').then((r) => fromConduct('VAULT CLEAN', r)),
+  'PLAN TODAY':    () => conduct('plan today').then((r) => fromConduct('PLAN TODAY', r)),
+  'WK REVIEW':     () => conduct('wk review').then((r) => fromConduct('WK REVIEW', r)),
 };
 
 export function knownCommands() { return Object.keys(RUNNERS); }
