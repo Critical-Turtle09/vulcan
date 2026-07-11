@@ -454,7 +454,7 @@
       cursor: pointer; transition: border-color 150ms ease, color 150ms ease; }
     .ws-btn:hover { border-color: var(--st-ember-dim); color: var(--st-text); }
     .ws-btn.primary { color: var(--st-ember); border-color: var(--st-ember-dim); }
-    .ws-btn.primary:hover { border-color: var(--st-ember); background: color-mix(in srgb, var(--st-ember) 12%, transparent); }
+    .ws-btn.primary:hover { border-color: var(--st-ember); background-color: color-mix(in srgb, var(--st-ember) 12%, transparent); }
     .ws-btn:disabled { opacity: 0.55; cursor: default; }
     .ws-editlist { display: flex; flex-direction: column; gap: 6px; max-height: 40vh; overflow: auto; }
     .ws-edit { display: flex; align-items: center; gap: 8px; }
@@ -465,6 +465,121 @@
     .ws-del { flex: 0 0 auto; width: 22px; height: 22px; border: 1px solid var(--st-hairline);
       background: transparent; color: var(--st-text-faint); cursor: pointer; }
     .ws-del:hover { color: var(--st-text); border-color: var(--st-hairline-strong); }
+
+    /* ══ P2.1 THE TOUCH — micro-interaction vocabulary (ember-only; no scale() hovers;
+       onset <100ms, complete 90–240ms; reduced-motion honored). One family per element
+       type, consistent:
+         deck cells       → BORDER DRAW + DOT IGNITION (+ subtle TRACKING SHIFT)
+         workspace actions→ GRANULAR FILL on press + HAIRLINE SWEEP on hover
+         document rows    → HAIRLINE SWEEP + BRACKET REVEAL
+         vitals cards     → BRACKET REVEAL
+         toggles          → box GRANULAR FILL
+         intent line      → focus BRACKET REVEAL                                         */
+
+    /* BRACKET REVEAL — two corner ticks draw in (vitals cards, document rows). */
+    .vcard, .docs .doc { position: relative; }
+    .vcard::before, .vcard::after, .docs .doc::before, .docs .doc::after {
+      content: ""; position: absolute; width: 7px; height: 7px; border: 1px solid var(--st-ember);
+      opacity: 0; pointer-events: none; transition: opacity 110ms ease, width 160ms ease, height 160ms ease; }
+    .vcard::before, .docs .doc::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+    .vcard::after,  .docs .doc::after  { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+    .vcard:hover::before, .vcard:hover::after,
+    .docs .doc:hover::before, .docs .doc:hover::after { opacity: 0.9; }
+
+    /* HAIRLINE SWEEP — a hairline wipes across the bottom (document rows + workspace actions). */
+    .docs .doc { overflow: hidden; }
+    .docs .doc::marker { content: none; }
+    .doc-sweep, .docs .doc > .doc-name { position: relative; }
+    .docs .doc { --sweep: inset(0 100% 0 0); }
+    .docs .doc:hover { --sweep: inset(0 0 0 0); }
+    .docs .doc > .doc-name::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 1px;
+      background: var(--st-ember); clip-path: var(--sweep); transition: clip-path 200ms ease; }
+
+    /* workspace actions — GRANULAR FILL on press + HAIRLINE SWEEP on hover */
+    .ws-btn { position: relative; overflow: hidden;
+      background-image: linear-gradient(to top, color-mix(in srgb, var(--st-ember) 20%, transparent),
+        color-mix(in srgb, var(--st-ember) 20%, transparent));
+      background-repeat: no-repeat; background-position: bottom; background-size: 100% 0%;
+      transition: background-size 150ms ease, border-color 150ms ease, color 150ms ease; }
+    .ws-btn:active { background-size: 100% 100%; transition-duration: 90ms; }   /* granular fill up on press */
+    .ws-btn::after { content: ""; position: absolute; left: 0; bottom: 0; height: 1px; width: 100%;
+      background: var(--st-ember); clip-path: inset(0 100% 0 0); transition: clip-path 200ms ease; }
+    .ws-btn:hover::after { clip-path: inset(0 0 0 0); }                          /* hairline sweep on hover */
+
+    /* deck cells — BORDER DRAW + DOT IGNITION + TRACKING SHIFT */
+    .deck-cell::after { content: ""; position: absolute; inset: 0; border: 1px solid var(--st-ember-dim);
+      clip-path: inset(0 0 100% 0); transition: clip-path 200ms ease; pointer-events: none; }
+    .deck-cell:hover::after { clip-path: inset(0 0 0 0); }                        /* border draws down */
+    .deck-cell .deck-dot { transition: box-shadow 110ms ease, background 110ms ease; }
+    .deck-cell:hover .deck-dot { box-shadow: 0 0 8px 1px var(--st-ember-dim); }   /* dot ignition */
+    .deck-cell .deck-label { transition: letter-spacing 140ms ease, color 140ms ease; }
+    .deck-cell:hover .deck-label { letter-spacing: 0.18em; }                      /* tracking shift */
+
+    /* toggles — box GRANULAR FILL (directives/objectives boxes + workspace tick) */
+    .dir-box::after { content: ""; position: absolute; inset: 2px; background: var(--st-ember); opacity: 0.85;
+      clip-path: inset(100% 0 0 0); transition: clip-path 160ms ease; }
+    .dir-box.done::after { clip-path: inset(0 0 0 0); }                            /* fills up when done */
+    .ws-tick { position: relative; overflow: hidden;
+      background-image: linear-gradient(to top, color-mix(in srgb, var(--st-ember) 55%, transparent),
+        color-mix(in srgb, var(--st-ember) 55%, transparent));
+      background-repeat: no-repeat; background-position: bottom; background-size: 100% 0%;
+      transition: background-size 150ms ease, border-color 120ms ease; }
+    .ws-tick.on { background-size: 100% 100%; }
+
+    /* intent line — focus BRACKET REVEAL (composes with the existing focus glow) */
+    .intent { position: relative; }
+    .intent::before, .intent::after { content: ""; position: absolute; width: 7px; height: 7px;
+      border: 1px solid var(--st-ember); opacity: 0; pointer-events: none;
+      transition: opacity 110ms ease; }
+    .intent::before { top: 2px; left: -2px; border-right: 0; border-bottom: 0; }
+    .intent::after  { bottom: -2px; right: -2px; border-left: 0; border-top: 0; }
+    .intent:focus-within::before, .intent:focus-within::after { opacity: 0.9; }
+
+    @media (prefers-reduced-motion: reduce) {
+      .vcard::before, .vcard::after, .docs .doc::before, .docs .doc::after,
+      .docs .doc > .doc-name::after, .ws-btn, .ws-btn::after, .deck-cell::after,
+      .deck-cell .deck-dot, .deck-cell .deck-label, .dir-box::after, .ws-tick,
+      .intent::before, .intent::after { transition: none !important; }
+    }
+
+    /* ══ P2.1 THE MANUAL — spotlight walkthrough ══════════════════════════════════ */
+    .manual { position: fixed; inset: 0; z-index: 20; opacity: 0; pointer-events: none;
+      transition: opacity 200ms ease; }
+    .manual.up { opacity: 1; pointer-events: auto; }
+    .manual-cut { position: absolute; border: 1px solid var(--st-ember); border-radius: 2px;
+      box-shadow: 0 0 0 9999px rgba(5, 5, 7, 0.86), 0 0 18px 1px var(--st-ember-dim);
+      transition: left 260ms cubic-bezier(0.16,1,0.3,1), top 260ms cubic-bezier(0.16,1,0.3,1),
+        width 260ms cubic-bezier(0.16,1,0.3,1), height 260ms cubic-bezier(0.16,1,0.3,1); }
+    .manual-card { position: absolute; width: 340px; max-width: calc(100vw - 24px);
+      background: #0b0b0e; border: 1px solid var(--st-hairline-strong);
+      padding: 16px 18px; display: flex; flex-direction: column; gap: 10px;
+      transition: left 260ms cubic-bezier(0.16,1,0.3,1), top 260ms cubic-bezier(0.16,1,0.3,1); }
+    .manual-eyebrow { font-family: var(--type-mono); font-size: var(--fs-micro); letter-spacing: 0.16em;
+      text-transform: uppercase; color: var(--st-text-faint); }
+    .manual-eyebrow .manual-step { color: var(--st-ember); }
+    .manual-title { font-family: var(--type-mono); font-size: var(--fs-label); letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--st-text); }
+    .manual-text { color: var(--st-text-dim); font-size: var(--fs-label); line-height: 1.5; }
+    .manual-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .manual-btn { font-family: var(--type-mono); font-size: var(--fs-micro); letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--st-text); background: transparent;
+      border: 1px solid var(--st-hairline-strong); padding: 6px 10px; cursor: pointer;
+      transition: border-color 120ms ease, color 120ms ease; }
+    .manual-btn:hover { border-color: var(--st-ember-dim); }
+    .manual-btn.primary { color: var(--st-ember); border-color: var(--st-ember-dim); }
+    .manual-btn.on { color: var(--st-ember); border-color: var(--st-ember); }
+    .manual-btn:disabled { opacity: 0.5; cursor: default; }
+    .manual-btn.manual-done { margin-left: auto; }
+    .manual-offer { position: fixed; z-index: 19; right: 18px; bottom: 18px; display: flex;
+      align-items: center; gap: 10px; background: #0b0b0e; border: 1px solid var(--st-hairline-strong);
+      padding: 10px 12px; opacity: 0; transform: translateY(6px);
+      transition: opacity 200ms ease, transform 200ms ease; }
+    .manual-offer.up { opacity: 1; transform: none; }
+    .manual-offer span { font-size: var(--fs-label); color: var(--st-text-dim); }
+    @media (prefers-reduced-motion: reduce) {
+      .manual, .manual-cut, .manual-card, .manual-offer { transition: none !important; }
+    }
   </style>
 </head>
 <body>

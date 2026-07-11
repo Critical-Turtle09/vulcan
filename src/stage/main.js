@@ -11,6 +11,7 @@
 import { injectStageVars, stage } from './tokens.js';
 import { createBackground } from './background.js';
 import { createOrb } from './orb.js';
+import { createManual } from './manual.js';   // P2.1 THE MANUAL — spotlight walkthrough
 import { createVoice } from '../voice/voice.js';
 import { createWire } from '../wire.js';
 import { activeProfile } from '../profile.js';
@@ -161,6 +162,11 @@ const voice = createVoice({
   onSession: () => paintStatus(),
 });
 
+// P2.1 THE MANUAL — the spotlight tour. Narration speaks each step through the same
+// voice. Opened by `?` (input blurred) or by typing/saying "tour"; first-launch offer
+// on boot (once, persisted). Declared here so the keyboard controller can reach it.
+const manual = createManual({ speak: (t) => voice.say(t, { kind: 'answer' }) });
+
 // ---- IPC (resident overlay control) — kept in lockstep with the voice session ----
 if (bridge.onIgnite) bridge.onIgnite(() => { resolveIn(); voice.wake(); });
 // Esc / tray Bank / hotkey-toggle bank. If a modal artifact overlay is open, Esc resolves
@@ -246,6 +252,9 @@ window.addEventListener('keydown', (e) => {
   }
   if (intentFocused()) return;                 // the input owns every other key while focused
   if (e.key === 'Escape') return;              // Esc is the global bank (do-not-touch)
+  // P2.1 — `?` (with the intent line blurred) opens THE MANUAL. Checked before
+  // type-anywhere so it never lands a literal '?' in the input.
+  if (e.key === '?') { e.preventDefault(); if (manual.isOpen()) manual.close(); else manual.open(); return; }
   // DEV/DEBUG override (?dev=1 only) — 1/2/3 cycle the three a5 orb states. Checked before
   // type-anywhere so the debug digits still drive the orb in dev; off in normal operation.
   if (DEV_KEYS && isDevDigit(e)) {
@@ -658,6 +667,7 @@ function submitIntent(raw) {
   const text = String(raw || '').trim();
   if (!text) return;
   pushLine('you', text);
+  if (/^(tour|help|manual|guide)$/i.test(text)) { pushLine('v', 'Opening the tour.'); manual.open(); return; }   // P2.1 THE MANUAL
   if (pendingGate) { resolveGate(text); return; }    // a HOLD is open → this is the decision
   const cmd = matchDeckCommand(text);
   if (cmd) {                                          // recognized command → FULL G4 lifecycle
@@ -1112,6 +1122,7 @@ paintStatus();
 bootFlanks();                               // G2 — Z1 vitals + Z2 deck/audio (resolves in)
 wireConsole();                              // P2 — clickable workspaces on every surface
 loadObjectives();                           // P2 — editable, vault-persisted directives/objectives
+setTimeout(() => manual.maybeOfferFirstLaunch(), 1400);   // P2.1 — one-time first-launch tour offer
 voice.boot().then(paintStatus);
 wire.boot();
 requestAnimationFrame(() => resolveIn());   // trigger the resolve transition after first paint
@@ -1160,4 +1171,10 @@ window.__vulcanStage = {
   intentState: () => ({ focused: intentFocused(), value: intentInput.value }),
   ptt: (down) => { if (down) beginPtt(); else pttRelease(); },
   typeAnywhere: (ch) => focusIntentAndType({ key: ch, preventDefault() {} }),
+  // P2 THE CONSOLE / P2.1 THE MANUAL self-checks.
+  openWorkspace: (which) => ({ spend: wsSpend, commits: wsCommits, vercel: wsVercel, waitlist: wsWaitlist, audio: wsAudio }[which] || (() => {}))(),
+  objectives: () => JSON.parse(JSON.stringify(consoleState || {})),
+  manual: () => manual.isOpen(),
+  openManual: (i) => manual.open(i || 0),
+  closeManual: () => manual.close(),
 };
