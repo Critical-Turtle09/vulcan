@@ -210,6 +210,49 @@
     /* AUDIO I/O — a speaking bar rides ember; the tallest crest is the accent. */
     .aio-wave.live i { background: var(--st-text-dim); }
     .aio-wave.live i.hot { background: var(--st-ember); }
+    /* ── G6.3 · 4 UNMISSABLE MIC FEEDBACK — the CAPTURING read ──────────────────────
+       While Space is held the whole audio strip runs hot: the wave bars pick up an ember
+       base (mic-live, distinct from the grey speaking bars), and the AUDIO I/O header +
+       VOICE LINK labels turn ember. On release, a brief TRANSCRIBING read cools to bone. */
+    .aio-wave.capturing i { background: var(--st-ember-dim); }
+    .aio-wave.capturing i.hot { background: var(--st-ember); }
+    #shell.capturing #aio-state, #shell.capturing #aio-link { color: var(--st-ember); }
+    #shell.transcribing #aio-link { color: var(--st-text); }
+    /* the near-orb listening cue: a pulsing ember dot + CAPTURING, just below the orb. */
+    #orb-cue { position: absolute; left: 50%; top: calc(50% + min(23vh, 23vw) + 2vh);
+      transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
+      font-family: var(--type-mono); font-size: var(--fs-micro); letter-spacing: 0.26em;
+      text-transform: uppercase; color: var(--st-ember); white-space: nowrap;
+      pointer-events: none; opacity: 0; transition: opacity 90ms ease; }
+    #orb-cue::before { content: ""; width: 7px; height: 7px; border-radius: 50%;
+      background: var(--st-ember); box-shadow: 0 0 8px 1px var(--st-ember-dim); }
+    #shell.capturing #orb-cue { opacity: 1; }
+    #shell.capturing #orb-cue::before { animation: cuePulse 1.1s ease-in-out infinite; }
+    #shell.transcribing #orb-cue { opacity: 0.72; color: var(--st-text-dim); }
+    #shell.transcribing #orb-cue::before { background: var(--st-text-dim); box-shadow: none; animation: none; }
+    @keyframes cuePulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.22; } }
+    /* a soft ember halo breathes around the orb while the mic is open (active-state heat,
+       not ambient — shown only while capturing, so it never spends the resting heat budget). */
+    #orb-slot { position: relative; }
+    #orb-slot::after { content: ""; position: absolute; inset: -4%; border-radius: 50%;
+      pointer-events: none; opacity: 0; transition: opacity 120ms ease;
+      box-shadow: 0 0 26px 2px var(--st-ember-dim), inset 0 0 22px 0 var(--st-ember-dim); }
+    #shell.capturing #orb-slot::after { opacity: 1; animation: capHalo 1.4s ease-in-out infinite; }
+    @keyframes capHalo { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.9; } }
+
+    /* ── G6.3 · 5 INTERACTION FEEDBACK PASS — every clickable answers on PRESS (<100ms,
+       doctrine 11). Hover affordances already exist; these are the press acknowledgements. */
+    .deck-cell:active .deck-label { color: var(--st-ember); }
+    .deck-cell:active .deck-arrow { opacity: 1; transform: translateY(-50%); }
+    .deck-cell:active .deck-dot { box-shadow: 0 0 10px 1px var(--st-ember); }
+    /* chips press via border/color/mark-glow (onset instant) — NOT transform, so the
+       granular .up reveal (transform over the resolve band) is never shortened. */
+    .chip:active { border-color: var(--st-ember); color: var(--st-text); }
+    .chip:active .chip-mark { text-shadow: 0 0 10px var(--st-ember); }
+    .chip.done:active { border-color: var(--st-ember); color: var(--st-text); }
+    .chip-x:active { color: var(--st-ember); }
+    .ov-open:active, .ov-x:active { border-color: var(--st-ember); color: var(--st-text); }
+    .obj:active .dir-text { color: var(--st-text); }
 
     /* ══ G4 THE LIFECYCLE ═════════════════════════════════════════════════════════
        Dispatch surfaces: the command-deck queue read, the task chips near the orb
@@ -495,6 +538,10 @@
         <svg id="leaders" aria-hidden="true"></svg>
         <div id="chips" data-zone="Z7"></div>
         <div id="orb-slot" data-zone="Z4"><!-- a5 TWIN HELIX orb — G3 --></div>
+        <!-- G6.3 · 4 — the near-orb listening cue. Empty + hidden at rest; while Space is
+             held it reads CAPTURING (then TRANSCRIBING on release) with a pulsing ember dot,
+             so the operator sees the mic is live without hunting the flank. Text set in JS. -->
+        <div id="orb-cue" data-zone="Z4" aria-hidden="true"></div>
       </div>
       <div id="primary" data-zone="Z5"><!-- Bonsai hero number + velocity + deploy — G2 --></div>
     </main>

@@ -249,7 +249,16 @@ function showOverlay() {
   win.setBounds(activeBounds());               // resolve over whatever screen the operator is on
   win.setAlwaysOnTop(true, OVERLAY_LEVEL);
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreenScreen: true });
-  win.showInactive();                          // NON-ACTIVATING — never .show()+focus (Part 1)
+  // G6.3 THE FOCUS — OWNERSHIP ON SUMMON. The overlay must OWN the keyboard the instant it
+  // resolves: the app behind loses focus, VULCAN's window becomes key, so typing / hold-Space
+  // land on the stage (not the app underneath). This DELIBERATELY reverses the NIGHT II
+  // non-activating panel (showInactive) — the operator asked for immediate keyboard ownership.
+  // The panel + visibleOnAllWorkspaces still keeps VULCAN on the CURRENT Space (no Space
+  // switch): app.focus activates VULCAN over whatever the operator is looking at right now.
+  app.focus({ steal: true });                  // pull VULCAN frontmost, steal from the app behind
+  win.show();                                  // ACTIVATING show (not showInactive)
+  win.moveTop();
+  win.focus();                                 // take key focus — the keyboard now belongs to VULCAN
   registerBankEsc();
   startWatchdog();                             // arm the hang detector while visible
 }

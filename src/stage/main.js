@@ -51,18 +51,38 @@ function setSub(name, text, active) {
 }
 function paintStatus() {
   const core = orb.stateName;
+  // G6.3 · the transcribe read only holds while the orb is still 'thinking' (the ears
+  // hand-off); the moment it resolves to speak/listen/idle, clear it so the label moves on
+  // and the wave strip settles back to its static dash-block (unless a TTS bar owns it).
+  if (capturePhase === 'transcribing' && core !== 'thinking') {
+    capturePhase = 'idle';
+    const wave = el('aio-wave');
+    if (wave && !waveLive) { wave.classList.remove('live', 'capturing'); paintWaveStatic(); }
+  }
   setSub('core', CORE_LABEL[core] || 'IDLE', core !== 'idle');
   const ws = wire.status();
   setSub('wire', ws.online ? `LIVE · ${ws.sources} FEED${ws.sources === 1 ? '' : 'S'}` : 'STANDBY', ws.online);
   // HANDS ← real dispatch activity (G4): ACTIVE while any command is running or queued.
   const hands = dispatch.busy();
   setSub('hands', hands ? 'ACTIVE' : 'STANDBY', hands);
-  // Z2 AUDIO I/O labels track the REAL TTS state. The §4 microcopy is exact:
+  // Z2 AUDIO I/O labels track the REAL audio state. G6.3 · 4 — UNMISSABLE MIC FEEDBACK:
+  // capture (Space held, mic open) and its transcribe hand-off outrank speaking, because
+  // they're what the operator is doing RIGHT NOW. Otherwise the §4 microcopy is exact:
   // TTS.STANDBY|LIVE and VOICE LINK · STANDBY|SPEAKING.
   const speaking = core === 'speaking';
+  const capturing = voice.capturing || capturePhase === 'capturing';
+  const transcribing = capturePhase === 'transcribing';
   const aioState = el('aio-state'), aioLink = el('aio-link');
-  if (aioState) aioState.textContent = speaking ? 'TTS.LIVE' : 'TTS.STANDBY';
-  if (aioLink) aioLink.textContent = speaking ? 'SPEAKING' : 'STANDBY';
+  let sTxt = 'TTS.STANDBY', lTxt = 'STANDBY';
+  if (capturing)         { sTxt = 'MIC.CAPTURING'; lTxt = 'CAPTURING'; }
+  else if (speaking)     { sTxt = 'TTS.LIVE';      lTxt = 'SPEAKING'; }
+  else if (transcribing) { sTxt = 'STT.WORKING';   lTxt = 'TRANSCRIBING'; }
+  if (aioState) aioState.textContent = sTxt;
+  if (aioLink) aioLink.textContent = lTxt;
+  // near-orb listening cue + audio-strip capture styling (doctrine 11 — visible <100ms).
+  const shell = document.getElementById('shell');
+  if (shell) { shell.classList.toggle('capturing', capturing); shell.classList.toggle('transcribing', transcribing); }
+  const cue = el('orb-cue'); if (cue) cue.textContent = capturing ? 'CAPTURING' : (transcribing ? 'TRANSCRIBING' : '');
 }
 
 // ---- voice loop + wire (kept intact; the audio path must stay unbroken) ----
@@ -149,40 +169,103 @@ if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' 
 const backdrop = el('backdrop');
 if (bridge.onBackdrop) bridge.onBackdrop((url) => { if (backdrop) backdrop.style.backgroundImage = url ? `url(${url})` : 'none'; });
 
-// ---- PUSH-TO-TALK (v1.5.1 THE TRIGGER) — kept so the ears can capture through the shell.
-// The mic opens ONLY while the trigger (Space) is held and the window is focused; fn is
-// never bound. A blur while held ends the clip cleanly. ----
+// ---- PUSH-TO-TALK (v1.5.1) + G6.3 TYPE-ANYWHERE ------------------------------------
+// The mic opens ONLY while the trigger (Space) is held and the VULCAN window is focused;
+// fn is never bound; a blur while held ends the clip cleanly. G6.3 adds the Spotlight
+// pattern: with the stage up and the intent line NOT actively being typed into, any
+// printable key auto-focuses the intent line and inserts that character. Space stays PTT
+// whenever the input is BLURRED or EMPTY; only a NON-EMPTY input turns Space into a typed
+// space (spec 3). The controller runs in CAPTURE phase so it is authoritative over the
+// input's own keydown (which now only manages Enter/Esc) — no stopPropagation tug-of-war.
 const PTT_MODE = rawTokens.voice.capture_mode !== 'open';
 const PTT_KEY = rawTokens.voice.ptt_key || 'Space';
 const isPttKey = (e) => (PTT_KEY === 'Space' ? e.code === 'Space' : e.key.toLowerCase() === PTT_KEY.toLowerCase());
+const DEV_KEYS = params.get('dev') === '1';
 let pttHeld = false;
-function pttRelease() { if (pttHeld) { pttHeld = false; voice.pttUp(); paintStatus(); } }
-// FOCUS BOUNDARY (G5) — while the > intent input is focused, Space is a typed space and
-// must NEVER trigger push-to-talk; the input's own keydown stopPropagation already keeps
-// typed keys off the window handlers, and this guard is the belt-and-braces. While the
-// input is BLURRED, hold-Space PTT is unchanged. Focusing the box mid-hold ends the clip.
-const typingIntent = () => document.activeElement === intentInput;
-window.addEventListener('keyup', (e) => { if (PTT_MODE && isPttKey(e) && !typingIntent()) { e.preventDefault(); pttRelease(); } });
-window.addEventListener('blur', pttRelease);
+
+const intentFocused = () => document.activeElement === intentInput;
+// Space types a literal space ONLY when the input is focused AND already has content;
+// focused-but-empty (or blurred) keeps Space as push-to-talk (spec 3).
+const spaceTypes = () => intentFocused() && intentInput.value.length > 0;
+// a lone printable character (no command modifiers) — the type-anywhere trigger.
+const isPrintable = (e) => e.key.length === 1 && e.key !== ' ' && !e.ctrlKey && !e.metaKey && !e.altKey;
+const isDevDigit = (e) => e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'Digit3';
+
+// ---- capture visual phase (spec 4): CAPTURING → TRANSCRIBING, each visible <100ms ----
+let capturePhase = 'idle';   // 'idle' | 'capturing' | 'transcribing'
+function setCapturePhase(p) {
+  capturePhase = p;
+  const wave = el('aio-wave');
+  if (wave) {
+    wave.classList.toggle('live', p === 'capturing' || waveLive);   // bars come alive with the mic
+    wave.classList.toggle('capturing', p === 'capturing');
+    if (p === 'idle' && !waveLive) paintWaveStatic();
+  }
+  paintStatus();             // flip the labels + near-orb cue immediately (never awaits the mic)
+}
+function beginPtt() {
+  if (pttHeld) return;
+  pttHeld = true;
+  setCapturePhase('capturing');   // UNMISSABLE cue FIRST (doctrine 11), then open the mic
+  voice.pttDown();
+}
+function pttRelease() {
+  if (!pttHeld) return;
+  pttHeld = false;
+  voice.pttUp();
+  setCapturePhase('transcribing');
+}
+// TYPE-ANYWHERE — focus the intent line and land the character at the caret (Spotlight).
+function focusIntentAndType(e) {
+  e.preventDefault();
+  intentInput.focus();
+  const start = intentInput.selectionStart ?? intentInput.value.length;
+  const end = intentInput.selectionEnd ?? intentInput.value.length;
+  intentInput.value = intentInput.value.slice(0, start) + e.key + intentInput.value.slice(end);
+  const caret = start + 1;
+  try { intentInput.setSelectionRange(caret, caret); } catch (_) {}
+}
+
+// master keyboard controller (CAPTURE phase = authoritative). Order: Space→PTT/type,
+// then let a focused input own the rest, then type-anywhere, then the stage shortcuts.
 window.addEventListener('keydown', (e) => {
-  if (typingIntent()) return;                 // typed keys are the intent line's, not the window's
   if (PTT_MODE && isPttKey(e)) {
-    e.preventDefault();
-    if (!e.repeat && !pttHeld) { pttHeld = true; voice.pttDown(); paintStatus(); }
+    if (spaceTypes()) return;                 // a typed space inside a non-empty command
+    e.preventDefault();                        // never let Space scroll or insert while it's PTT
+    if (!e.repeat) beginPtt();
     return;
   }
-  if (e.key.toLowerCase() === rawTokens.voice.muteKey) { voice.toggleMute(); paintStatus(); }
-  // DEV/DEBUG override — 1/2/3 cycle the three a5 orb states so all are demonstrable
-  // without a live loop. G4: dispatch now drives WORKING/SPEAKING for real, so these
-  // keys are gated behind a dev flag (?dev=1) only — off in normal operation. The REAL
-  // wiring is unchanged: IDLE←session, WORKING←dispatch/thinking, SPEAKING←TTS.
-  if (DEV_KEYS) {
+  if (intentFocused()) return;                 // the input owns every other key while focused
+  if (e.key === 'Escape') return;              // Esc is the global bank (do-not-touch)
+  // DEV/DEBUG override (?dev=1 only) — 1/2/3 cycle the three a5 orb states. Checked before
+  // type-anywhere so the debug digits still drive the orb in dev; off in normal operation.
+  if (DEV_KEYS && isDevDigit(e)) {
     if (e.code === 'Digit1') orb._devVisual('idle');
     else if (e.code === 'Digit2') orb._devVisual('working');
     else if (e.code === 'Digit3') orb._devVisual('speaking');
+    return;
   }
+  if (isPrintable(e)) { focusIntentAndType(e); return; }   // TYPE-ANYWHERE (Spotlight)
+}, true);
+// release ALWAYS ends a held clip on Space-up (even if a letter made the input non-empty
+// mid-hold), so the mic can never wedge open; a pure typed space (no hold) is a no-op.
+window.addEventListener('keyup', (e) => {
+  if (PTT_MODE && isPttKey(e) && pttHeld) { e.preventDefault(); pttRelease(); }
+}, true);
+window.addEventListener('blur', pttRelease);
+
+// ---- G6.3 · 2 CLICK ACTIVATES — a click anywhere on the stage that isn't itself an
+// interactive control focuses the intent line: with the window already key from summon,
+// this hands the keyboard to VULCAN and shows an unmistakable <100ms cue (the caret +
+// the prompt's focus glow, Spotlight-style). Interactive controls (deck / chips / overlay
+// / objectives / the input) keep their own click behaviour and never steal this. Focusing
+// the empty input is safe: Space stays PTT until the operator actually types something.
+const INTERACTIVE_SEL = '.deck-cell, .chip, .chip-x, button, a, input, textarea, .ov-doc, [data-close], .obj';
+window.addEventListener('mousedown', (e) => {
+  const t = e.target;
+  if (t && t.closest && t.closest(INTERACTIVE_SEL)) return;
+  if (!intentFocused()) intentInput.focus();
 });
-const DEV_KEYS = params.get('dev') === '1';
 
 // ═══ G4 THE LIFECYCLE ═════════════════════════════════════════════════════════
 // The dispatch engine: a deck click drives the full §5 lifecycle — QUEUED → task chip
@@ -366,7 +449,9 @@ function paintWaveLive(amp) {
   });
 }
 function tickWave() {
-  if (waveLive) paintWaveLive(Math.max(orb.getAmplitude ? orb.getAmplitude() : 0, 0));
+  // SPEAKING rides the TTS envelope; CAPTURING rides the live MIC level (both surface as
+  // orb.getAmplitude — the ears feed it while listening, the mouth while speaking).
+  if (waveLive || capturePhase === 'capturing') paintWaveLive(Math.max(orb.getAmplitude ? orb.getAmplitude() : 0, 0));
 }
 
 // ---- §5.6 document overlay --------------------------------------------------
@@ -579,14 +664,12 @@ function submitIntent(raw) {
 (function wireIntent() {
   const form = el('intent-form'); if (!form || !intentInput) return;
   form.addEventListener('submit', (e) => { e.preventDefault(); const v = intentInput.value; intentInput.value = ''; submitIntent(v); });
-  // stopPropagation keeps EVERY typed key off the window PTT / mute / dev handlers, so
-  // Space types a space and 'm' types an 'm' while the box is focused (the focus boundary).
+  // The master window controller (capture phase) already decides Space (PTT vs typed) and
+  // routes every other key to the focused input; here the input only needs Esc → blur.
+  // Enter is the form submit. No stopPropagation — the controller ran first and yielded.
   intentInput.addEventListener('keydown', (e) => {
-    e.stopPropagation();
     if (e.key === 'Escape') { e.preventDefault(); intentInput.blur(); }
   });
-  // focusing the box mid-hold ends the PTT clip cleanly (never a wedged-open mic).
-  intentInput.addEventListener('focus', () => { if (pttHeld) pttRelease(); });
 })();
 
 // ═══ G2 THE FLANKS ═══════════════════════════════════════════════════════════
@@ -785,4 +868,14 @@ window.__vulcanStage = {
   route: (text) => ({ cmd: matchDeckCommand(text), verb: gatedVerb(text) }),  // G5 self-check: router read
   holding: () => !!pendingGate,                       // G5 self-check: is a write gate open
   transcript: () => [...document.querySelectorAll('#transcript .tline')].map((n) => n.textContent),
+  // G6.3 THE FOCUS — self-checks. hasFocus: does the renderer's window own the keyboard
+  // (proxy for key-window). capture: the visible capture phase. audioLabels: the AUDIO I/O
+  // read. ptt: drive the trigger the way Space does (the OS-key acceptance stays the
+  // operator's hands). typeAnywhere: exercise the Spotlight insert path.
+  hasFocus: () => document.hasFocus(),
+  capture: () => capturePhase,
+  audioLabels: () => ({ state: (el('aio-state') || {}).textContent, link: (el('aio-link') || {}).textContent }),
+  intentState: () => ({ focused: intentFocused(), value: intentInput.value }),
+  ptt: (down) => { if (down) beginPtt(); else pttRelease(); },
+  typeAnywhere: (ch) => focusIntentAndType({ key: ch, preventDefault() {} }),
 };
