@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld('vulcan', {
   vitalsSpend: () => ipcRenderer.invoke('vitals:spend'),     // B0 governor: % of $2 cap + spark
   vitalsVercel: () => ipcRenderer.invoke('vitals:vercel'),   // B5R deploy eye: state · health
   vitalsCommits: () => ipcRenderer.invoke('vitals:commits'), // B2 machinery: 7-day commit spark
+  vitalsDocuments: () => ipcRenderer.invoke('vitals:documents'), // H1 THE LEDGER: Z1 DOCUMENTS vault trail
   onSpeak: (cb) => ipcRenderer.on('brain:speak', (_e, text) => cb(text)),  // announce → voice
   // STAGE D — THE IGNITION (resident overlay control)
   requestSummon: () => ipcRenderer.send('ui:request-summon'), // wake-from-hidden -> summon + ignite

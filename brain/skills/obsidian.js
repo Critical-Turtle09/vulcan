@@ -21,6 +21,13 @@ const REGISTRY = path.join(os.homedir(), 'Library', 'Application Support', 'obsi
 export const WRITE_DIR = 'VULCAN';        // the ONLY writable subtree inside the vault
 const CAPTURE_DIR = 'Captures';    // day files live in VULCAN/Captures/
 
+// H1 THE LEDGER — the Bonsai mission vault, inside the VULCAN/ containment.
+//   VULCAN/BONSAI/ ── index.md (front door) · raw/ · wiki/ · outputs/ · daily/
+// Dispatch artifacts file to BONSAI/outputs/; every dispatch also appends a one-line
+// trace to BONSAI/daily/YYYY-MM-DD.md. All paths stay inside WRITE_DIR (contained).
+const BONSAI_DIR = 'BONSAI';
+const BONSAI_SUBDIRS = ['raw', 'wiki', 'outputs', 'daily'];
+
 // scan/answer caps — the vault can be large; never let a read run unbounded.
 const MAX_SCAN = 4000;             // notes walked per read
 const MAX_RECENT = 8;              // rows in a vault.recent panel
@@ -229,7 +236,8 @@ async function capture(detail = {}) {
 // later). Returns the vault-relative path + an obsidian:// open URI so the renderer
 // overlay's "OPEN IN VAULT ↗" handoff needs no path logic of its own. Throws only on
 // a genuine containment/vault failure (the dispatch reports that honestly).
-const ARTIFACT_DIR = 'outputs';   // VULCAN/outputs/ — dispatch artifacts
+const ARTIFACT_DIR = path.join(BONSAI_DIR, 'outputs');   // VULCAN/BONSAI/outputs/ — dispatch artifacts
+const DAILY_DIR = path.join(BONSAI_DIR, 'daily');        // VULCAN/BONSAI/daily/  — the activity trail
 
 function slugify(s) {
   return String(s || 'artifact').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 48) || 'artifact';
@@ -237,22 +245,111 @@ function slugify(s) {
 function stamp(d = new Date()) {
   return `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}-${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
 }
+function timeStamp(d = new Date()) { return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`; }
+
+// Obsidian keys vaults by the vault folder's basename; the file arg drops the .md.
+function obsidianUriFor(vault, vaultRel) {
+  return `obsidian://open?vault=${encodeURIComponent(path.basename(vault))}&file=${encodeURIComponent(vaultRel.replace(/\.md$/i, ''))}`;
+}
+
+// H1 THE LEDGER — the front-door README for VULCAN/BONSAI/index.md. Written once on
+// first scaffold; never clobbered thereafter (operator edits survive).
+const BONSAI_INDEX_MD = `# BONSAI — VULCAN Vault
+
+VULCAN's working vault for the Bonsai Instant Citation launch. Everything VULCAN files
+for the mission lands here, inside the \`VULCAN/\` containment — nothing is ever written
+outside this subtree.
+
+## What lives where
+
+- **outputs/** — dispatch artifacts. Every command VULCAN runs (mission brief, metrics
+  pull, outreach, …) writes its rendered result here as a timestamped markdown file.
+- **daily/** — the activity trail. One file per day (\`YYYY-MM-DD.md\`); every dispatch
+  appends a one-line trace: \`time · command · artifact\`.
+- **raw/** — unprocessed source material (pulls, dumps, captures) awaiting refinement.
+- **wiki/** — durable, curated notes: the distilled mission knowledge base.
+
+## Front door
+
+This index is the door. The Z1 DOCUMENTS panel on the VULCAN stage reads the newest
+\`outputs/\` plus today's \`daily/\` file as the live vault trail.
+
+*Filed by VULCAN · Front H · THE LEDGER.*
+`;
+
+// Scaffold VULCAN/BONSAI/ (dirs + index front door) and, once, migrate any legacy
+// dispatch artifacts from the pre-LEDGER VULCAN/outputs/ into BONSAI/outputs/. All
+// inside WRITE_DIR containment; idempotent; best-effort migration never blocks filing.
+let bonsaiReady = false;
+function ensureBonsai(vault) {
+  if (bonsaiReady) return;
+  const root = path.join(vault, WRITE_DIR, BONSAI_DIR);
+  for (const sub of BONSAI_SUBDIRS) fs.mkdirSync(path.join(root, sub), { recursive: true });
+  const index = path.join(root, 'index.md');
+  if (!fs.existsSync(index)) fs.writeFileSync(index, BONSAI_INDEX_MD);
+  try {
+    const oldDir = path.join(vault, WRITE_DIR, 'outputs');            // pre-LEDGER location
+    const newDir = path.join(vault, WRITE_DIR, ARTIFACT_DIR);
+    if (fs.existsSync(oldDir) && path.resolve(oldDir) !== path.resolve(newDir)) {
+      for (const e of fs.readdirSync(oldDir, { withFileTypes: true })) {
+        if (!e.isFile() || !e.name.toLowerCase().endsWith('.md')) continue;
+        const to = path.join(newDir, e.name);
+        if (!fs.existsSync(to)) fs.renameSync(path.join(oldDir, e.name), to);
+      }
+      try { if (fs.readdirSync(oldDir).length === 0) fs.rmdirSync(oldDir); } catch (_) { /* leave non-empty dir */ }
+    }
+  } catch (_) { /* migration is best-effort */ }
+  bonsaiReady = true;
+}
+
+// The daily trail: one line per dispatch — time · command · artifact filename — appended
+// to VULCAN/BONSAI/daily/YYYY-MM-DD.md, the day file created on the first write each day.
+function appendDailyTrace(vault, name, filename, d = new Date()) {
+  const file = safePath(vault, path.join(DAILY_DIR, `${dayStamp(d)}.md`), { confine: true });
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const header = fs.existsSync(file) ? '' : `# Daily · ${dayStamp(d)}\n\n`;
+  fs.appendFileSync(file, `${header}- ${timeStamp(d)} · ${name} · ${filename}\n`);
+  return file;
+}
 
 // name: a human command label ("MISSION BRIEF"); markdown: the full artifact body.
-// Writes VULCAN/outputs/<stamp>-<slug>.md and returns the handle. Vault name (for the
-// obsidian URI) is the vault folder's basename — Obsidian keys vaults by that name.
+// Writes VULCAN/BONSAI/outputs/<stamp>-<slug>.md, appends the daily trace, and returns
+// the handle (obsidian:// URI included so the renderer's OPEN IN VAULT needs no path logic).
 export function writeArtifact(name, markdown) {
   const vault = resolveVault();                              // throws → dispatch reports it
+  ensureBonsai(vault);                                       // BONSAI structure + one-time migration
   const dir = path.join(vault, WRITE_DIR, ARTIFACT_DIR);
   fs.mkdirSync(dir, { recursive: true });                    // containment root must exist before safePath
   const filename = `${stamp()}-${slugify(name)}.md`;
-  const rel = path.join(ARTIFACT_DIR, filename);
-  const file = safePath(vault, rel, { confine: true });      // throws on any escape
+  const file = safePath(vault, path.join(ARTIFACT_DIR, filename), { confine: true });   // throws on any escape
   fs.writeFileSync(file, String(markdown));
-  const vaultRel = path.relative(vault, file);               // e.g. VULCAN/outputs/…md
-  const vaultName = path.basename(vault);
-  const obsidianUri = `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(vaultRel.replace(/\.md$/i, ''))}`;
-  return { filename, rel: vaultRel, vaultPath: file, obsidianUri, vaultName };
+  // the daily trail rides the same dispatch; a trace hiccup never voids the filed artifact.
+  try { appendDailyTrace(vault, name, filename); } catch (_) { /* trace is non-fatal */ }
+  const vaultRel = path.relative(vault, file);               // e.g. VULCAN/BONSAI/outputs/…md
+  return { filename, rel: vaultRel, vaultPath: file, obsidianUri: obsidianUriFor(vault, vaultRel), vaultName: path.basename(vault) };
+}
+
+// H1 — the LIVE VAULT TRAIL for the Z1 DOCUMENTS panel: newest files from BONSAI/outputs/
+// plus today's daily file, each with its true mtime + an obsidian:// open URI. READ-only,
+// contained, capped. Throws only on vault-resolve failure (the IPC reports it fail-soft).
+export function vaultTrail({ max = 6 } = {}) {
+  const vault = resolveVault();
+  ensureBonsai(vault);
+  const rows = [];
+  const push = (full, daily = false) => {
+    let mtimeMs = 0; try { mtimeMs = fs.statSync(full).mtimeMs; } catch (_) { return; }
+    rows.push({ name: path.basename(full), mtimeMs, daily, obsidianUri: obsidianUriFor(vault, path.relative(vault, full)) });
+  };
+  const outDir = path.join(vault, WRITE_DIR, ARTIFACT_DIR);
+  try {
+    for (const e of fs.readdirSync(outDir, { withFileTypes: true })) {
+      if (e.isFile() && e.name.toLowerCase().endsWith('.md')) push(path.join(outDir, e.name));
+    }
+  } catch (_) { /* no outputs yet */ }
+  const todayDaily = path.join(vault, WRITE_DIR, DAILY_DIR, `${dayStamp()}.md`);
+  if (fs.existsSync(todayDaily)) push(todayDaily, true);
+  rows.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  return rows.slice(0, max).map((r) => ({ name: r.name, mtimeMs: r.mtimeMs, ageMs: Date.now() - r.mtimeMs, daily: r.daily, obsidianUri: r.obsidianUri }));
 }
 
 // pull the search phrase out of a find/search utterance

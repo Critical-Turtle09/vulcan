@@ -100,7 +100,7 @@ const bridge = window.vulcan || {
     return {
       ok: true, cmd, title: `${cmd} · SIM`,
       lines: ['SIM · NO ELECTRON MAIN IN BROWSER', 'REAL HANDS + VAULT RUN IN THE APP'],
-      body: `**${cmd}** — SIM dispatch (browser preview).\n\n- No vault artifact is filed in the browser.\n- In the packaged app this runs the real hand and files to \`VULCAN/outputs/\`.`,
+      body: `**${cmd}** — SIM dispatch (browser preview).\n\n- No vault artifact is filed in the browser.\n- In the packaged app this runs the real hand and files to \`VULCAN/BONSAI/outputs/\`.`,
       markdown: `# ${cmd} · SIM\n\n> ${cmd} · SIM · [BROWSER PREVIEW]\n\n**No artifact filed** — the real hand + vault run in the app.\n\n## Detail\n\n- SIM · NO ELECTRON MAIN IN BROWSER\n- REAL HANDS + VAULT RUN IN THE APP\n`,
       speak: `Simulated ${cmd}. Real hands and the vault run in the app.`,
       artifact: null, cost_usd: 0, day_total_usd: 0, sim: true,
@@ -260,7 +260,7 @@ window.addEventListener('blur', pttRelease);
 // the prompt's focus glow, Spotlight-style). Interactive controls (deck / chips / overlay
 // / objectives / the input) keep their own click behaviour and never steal this. Focusing
 // the empty input is safe: Space stays PTT until the operator actually types something.
-const INTERACTIVE_SEL = '.deck-cell, .chip, .chip-x, button, a, input, textarea, .ov-doc, [data-close], .obj';
+const INTERACTIVE_SEL = '.deck-cell, .chip, .chip-x, button, a, input, textarea, .ov-doc, [data-close], .obj, .doc.open';
 window.addEventListener('mousedown', (e) => {
   const t = e.target;
   if (t && t.closest && t.closest(INTERACTIVE_SEL)) return;
@@ -422,6 +422,7 @@ function finishDispatch(d, res) {
   // promote the next queued dispatch into the freed slot.
   if (pending.length && active.length < MAX_ACTIVE) { const nx = pending.shift(); startDispatch(nx); }
   refreshDeckHeader(); refreshOrb(); paintStatus(); drawLeaders();
+  if (res.artifact) refreshDocs();   // H1 — the new artifact + daily trace resolve into Z1 DOCUMENTS
 }
 
 // ---- audio I/O live bars (§4) ----------------------------------------------
@@ -759,6 +760,42 @@ async function refreshVercel() {
   } catch (_) { /* keep placeholder */ }
 }
 
+// ---- Z1 DOCUMENTS · VAULT TRAIL (H1 THE LEDGER) — the real newest BONSAI/outputs/
+// artifacts + today's daily file, with TRUE ages. Rows resolve in (doctrine 11) and open
+// in the vault on click (the same obsidian:// handoff as the overlay). Fail-soft: no
+// bridge (browser SIM) or no vault → an honest empty read, never fake rows. ----
+function docAge(ms) {
+  const s = Math.max(0, ms / 1000);
+  if (s < 60) return 'JUST NOW';
+  const m = s / 60; if (m < 60) return `${Math.round(m)}M AGO`;
+  const h = m / 60; if (h < 24) return `${Math.round(h)}H AGO`;
+  return `${Math.round(h / 24)}D AGO`;
+}
+function renderDocs(docs) {
+  const host = el('docs'); if (!host) return;
+  if (!docs.length) {
+    host.innerHTML = `<div class="doc empty rin"><span class="doc-name">NO ARTIFACTS YET</span></div>`;
+    return;
+  }
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+  host.innerHTML = docs.map((d) => {
+    const openable = !!d.obsidianUri;
+    return `<div class="doc${openable ? ' open' : ''}"${openable ? ` data-uri="${esc(d.obsidianUri)}"` : ''} title="${esc(d.name)}">`
+      + `<span class="doc-name">${d.daily ? '▪ ' : ''}${esc(String(d.name).toUpperCase())}</span>`
+      + `<span class="doc-age">${docAge(d.ageMs)}</span></div>`;
+  }).join('');
+  const rows = [...host.querySelectorAll('.doc')];
+  rows.forEach((n, i) => { n.style.animationDelay = `${i * 40}ms`; n.classList.add('rin'); });   // staggered resolve-in
+  rows.forEach((n) => { if (n.dataset.uri) n.addEventListener('click', () => { if (bridge.openExternal) bridge.openExternal(n.dataset.uri); }); });
+}
+async function refreshDocs() {
+  if (!bridge.vitalsDocuments) return;
+  try {
+    const r = await bridge.vitalsDocuments(); if (!r) return;
+    renderDocs(r.docs || []);
+  } catch (_) { /* keep last trail */ }
+}
+
 // COMMAND DECK — ten commands, row-major over the 2-col grid (§3, exact order).
 const DECK = [
   'MISSION BRIEF', 'DEPLOY CHECK',
@@ -798,8 +835,8 @@ function bootFlanks() {
   buildDeck();
   buildWave();
   resolveFlanks();
-  refreshSpend(); refreshCommits(); refreshVercel();
-  setInterval(() => { refreshSpend(); refreshCommits(); }, 20000);   // ledger + git velocity
+  refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs();
+  setInterval(() => { refreshSpend(); refreshCommits(); refreshDocs(); }, 20000);   // ledger + git velocity + vault trail
   setInterval(refreshVercel, 60000);                                  // deploy eye (heavier read)
 }
 

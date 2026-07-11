@@ -32,8 +32,6 @@ The rationed palette. Greyscale world · bone data · molten heat. Never pure #0
 | `data.bone` | `#E6E4DE` |
 | `data.dim` | `#9A9DA2` |
 | `data.faint` | `#55585E` |
-| `signal.molten` | `#EA6A1E` |
-| `signal.forge` | `#FF8A3D` |
 | `signal.cooled` | `#7E3A1B` |
 | `signal.ember` | `#EA6A1E` |
 | `panel.stroke` | `#3A3E44` |
@@ -414,7 +412,7 @@ The ignition ceremony (kindle → strike → title → resolve) + the quench, sp
 | `ignition.title.text` | `VULCAN` |
 | `ignition.title.inAt` | `0.5` |
 | `ignition.title.outAt` | `0.86` |
-| `ignition.hotkey` | `Alt+Space` |
+| `ignition.hotkey` | `Alt+Command+V` |
 | `ignition.spark.size` | `5.2` |
 | `ignition.spark.hotPush` | `3.2` |
 | `ignition.shock.max` | `5.2` |

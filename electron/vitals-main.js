@@ -10,6 +10,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readLedger, DAILY_CAP_USD } from '../brain/governor.js';
 import { status as vercelStatus } from '../brain/skills/vercel.js';
+import { vaultTrail } from '../brain/skills/obsidian.js';
 
 const run = promisify(execFile);
 
@@ -67,8 +68,17 @@ async function commits(root) {
   }
 }
 
+// ---- DOCUMENTS · VAULT TRAIL — real, from the BONSAI ledger (H1). Newest artifacts
+// from BONSAI/outputs/ + today's daily file, name + true age + obsidian:// open URI.
+// Fail-soft: no vault / no artifacts surfaces as an empty trail, never an IPC reject. ----
+function documents() {
+  try { return { ok: true, docs: vaultTrail({ max: 6 }) }; }
+  catch (e) { return { ok: false, docs: [], reason: String((e && e.message) || e) }; }
+}
+
 export function registerVitalsIpc(root) {
   ipcMain.handle('vitals:spend', () => spend());
   ipcMain.handle('vitals:vercel', () => vercel());
   ipcMain.handle('vitals:commits', () => commits(root));
+  ipcMain.handle('vitals:documents', () => documents());   // H1 — Z1 DOCUMENTS live trail
 }

@@ -180,6 +180,12 @@
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .doc-age { flex: 0 0 auto; font-size: var(--fs-micro); letter-spacing: 0.10em;
       color: var(--st-text-faint); text-transform: uppercase; font-variant-numeric: tabular-nums; }
+    /* H1 — live rows resolve in (doctrine 11, staggered), and open in the vault on click. */
+    .doc.rin { animation: vreflow var(--st-resolve-ms) ease both; }
+    .doc.open { cursor: pointer; }
+    .doc.open:hover .doc-name { color: var(--st-text); }
+    .doc.open:active .doc-name { color: var(--st-ember); }
+    .doc.empty .doc-name { color: var(--st-text-faint); }
 
     /* ── Z2 COMMAND DECK — 5×2, ember dot before each label, ruled rows ── */
     .deck { display: grid; grid-template-columns: 1fr 1fr; column-gap: calc(var(--sp-gutter) * 0.38); }
@@ -446,16 +452,13 @@
             </div>
           </div>
         </section>
-        <!-- DOCUMENTS · VAULT TRAIL — static placeholder rows. TODO(Front H): read the
-             recent VULCAN/BONSAI/ vault trail (name + age) once THE LEDGER lands. -->
+        <!-- DOCUMENTS · VAULT TRAIL — LIVE (H1 THE LEDGER). Rows are the real newest
+             BONSAI/outputs/ artifacts + today's daily file, filled by refreshDocs from
+             the vitals:documents read (name + true age, click → OPEN IN VAULT). -->
         <section class="fsec rz">
           <div class="fsec-head"><span class="fsec-title">DOCUMENTS</span><span class="fsec-sub">VAULT TRAIL</span></div>
           <div class="fsec-body">
-            <div class="docs" id="docs">
-              <div class="doc"><span class="doc-name">MISSION-BRIEF.md</span><span class="doc-age">2H AGO</span></div>
-              <div class="doc"><span class="doc-name">OUTREACH-PLAN.md</span><span class="doc-age">5H AGO</span></div>
-              <div class="doc"><span class="doc-name">COMPLIANCE-COPPA.md</span><span class="doc-age">1D AGO</span></div>
-            </div>
+            <div class="docs" id="docs"></div>
           </div>
         </section>
       </div>
