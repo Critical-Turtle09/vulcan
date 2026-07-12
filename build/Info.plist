@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- P1.2 INSTALL FIX — menu-bar agent: no Dock icon, ever. Merged into the packaged
+       Info.plist via electron-packager --extend-info. app.dock.hide() alone is unreliable
+       once a window is shown; LSUIElement makes VULCAN a true accessory (tray) app. -->
+  <key>LSUIElement</key>
+  <true/>
+</dict>
+</plist>
