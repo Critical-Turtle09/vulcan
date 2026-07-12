@@ -22,7 +22,7 @@ const STEPS = [
 ];
 
 export function createManual({ speak } = {}) {
-  let root = null, i = 0, narrate = false;
+  let root = null, i = 0, narrate = false, hideTimer = null;
 
   function ensureDom() {
     if (root) return;
@@ -105,6 +105,7 @@ export function createManual({ speak } = {}) {
     ensureDom();
     try { localStorage.setItem(SEEN_KEY, '1'); } catch (_) {}
     dismissOffer();
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }   // cancel a pending close → reopen never clobbers
     i = start; root.hidden = false;
     requestAnimationFrame(() => { root.classList.add('up'); paint(); });
     window.addEventListener('keydown', onKey, true);
@@ -115,7 +116,8 @@ export function createManual({ speak } = {}) {
     narrate = false;
     root.classList.remove('up');
     window.removeEventListener('keydown', onKey, true);
-    setTimeout(() => { if (root) root.hidden = true; }, 240);
+    if (hideTimer) clearTimeout(hideTimer);
+    hideTimer = setTimeout(() => { if (root) root.hidden = true; hideTimer = null; }, 240);
   }
 
   // one-time first-launch offer: a small, dismissible prompt (never a modal wall).
