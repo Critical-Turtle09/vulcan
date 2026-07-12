@@ -2,9 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <!-- P1.2 INSTALL FIX — menu-bar agent: no Dock icon, ever. Merged into the packaged
-       Info.plist via electron-packager --extend-info. app.dock.hide() alone is unreliable
-       once a window is shown; LSUIElement makes VULCAN a true accessory (tray) app. -->
+  <!-- P1.2 INSTALL FIX: menu-bar agent, no Dock icon, ever. Merged into the packaged
+       Info.plist via the electron-packager extend-info flag. app.dock.hide() alone is
+       unreliable once a window is shown; LSUIElement makes VULCAN a true accessory (tray)
+       app. NOTE: keep this comment free of double hyphens — they are illegal in XML
+       comments and break the plist parser (the pack fails to merge LSUIElement). -->
   <key>LSUIElement</key>
   <true/>
 </dict>
