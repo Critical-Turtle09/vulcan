@@ -29,22 +29,35 @@ export function hasKey() {
 // Call the Messages API. On success returns
 //   { text, model, input_tokens, output_tokens }
 // parsed from the response usage block. On any failure returns
-//   { banked:true, reason }   (reason: NO_KEY | OFFLINE | HTTP_<code>[_type] | BAD_JSON)
+//   { banked:true, reason }   (reason: NO_KEY | OFFLINE | TIMEOUT | HTTP_<code>[_type] | BAD_JSON)
+//
+// HARD TIMEOUT (offline hardening — hotel/captive-portal): a black-hole network that
+// accepts the connection but never answers would otherwise hang this fetch forever,
+// freezing the conductor mid-dispatch. An AbortController bounds every call at
+// `timeoutMs` (default 15s — ample for a real Sonnet answer, but never open-ended)
+// and banks TIMEOUT so the caller degrades to the local reflex instead of wedging.
 export async function ask({
   model = MODEL_POLICY.SYNTH,
   system,
   prompt,
   maxTokens = 1024,
   signal,
+  timeoutMs = 15000,
 } = {}) {
   const key = readKey();
   if (!key) return { banked: true, reason: 'NO_KEY' };
+
+  // Own controller so we can enforce a deadline; forward an external abort into it too.
+  const ctrl = new AbortController();
+  const onAbort = () => ctrl.abort();
+  if (signal) { if (signal.aborted) ctrl.abort(); else signal.addEventListener('abort', onAbort, { once: true }); }
+  const to = setTimeout(() => ctrl.abort(), timeoutMs);
 
   let res;
   try {
     res = await fetch(API_URL, {
       method: 'POST',
-      signal,
+      signal: ctrl.signal,
       headers: {
         'x-api-key': key,
         'anthropic-version': API_VERSION,
@@ -57,8 +70,13 @@ export async function ask({
         messages: [{ role: 'user', content: prompt }],
       }),
     });
-  } catch (_) {
-    return { banked: true, reason: 'OFFLINE' };
+  } catch (e) {
+    // AbortError from our deadline → TIMEOUT; any other network failure → OFFLINE.
+    const timedOut = (e && e.name === 'AbortError') && !(signal && signal.aborted);
+    return { banked: true, reason: timedOut ? 'TIMEOUT' : 'OFFLINE' };
+  } finally {
+    clearTimeout(to);
+    if (signal) signal.removeEventListener('abort', onAbort);
   }
 
   if (!res.ok) {

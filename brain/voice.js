@@ -79,9 +79,14 @@ async function elevenlabs(text, v) {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) return null;
   const s = v.elevenlabs || {};
+  // HARD TIMEOUT (offline hardening): bound the cloud TTS call so a black-hole network
+  // fails over to the LOCAL chain (Kokoro → say) fast instead of stalling the mouth.
+  const ctrl = new AbortController();
+  const to = setTimeout(() => ctrl.abort(), 8000);
   try {
     const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${resolveVoiceId(v)}`, {
       method: 'POST',
+      signal: ctrl.signal,
       headers: { 'xi-api-key': key, 'Content-Type': 'application/json', Accept: 'audio/mpeg' },
       body: JSON.stringify({
         text,
@@ -98,6 +103,7 @@ async function elevenlabs(text, v) {
     const buf = Buffer.from(await res.arrayBuffer());
     return { audioBase64: buf.toString('base64'), mime: 'audio/mpeg', provider: 'elevenlabs' };
   } catch (e) { log(`elevenlabs error (${e && e.message}) — failing over to local`); return null; }
+  finally { clearTimeout(to); }
 }
 
 async function kokoro(text) {
