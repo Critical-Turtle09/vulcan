@@ -166,6 +166,8 @@ const voice = createVoice({
 // voice. Opened by `?` (input blurred) or by typing/saying "tour"; first-launch offer
 // on boot (once, persisted). Declared here so the keyboard controller can reach it.
 const manual = createManual({ speak: (t) => voice.say(t, { kind: 'answer' }) });
+// P2.2 MANUAL PERMANENCE — the always-visible ? glyph opens the tour (LAW, spec §9).
+{ const g = el('manual-glyph'); if (g) g.addEventListener('click', (e) => { e.preventDefault(); manual.open(0); }); }
 
 // ---- IPC (resident overlay control) — kept in lockstep with the voice session ----
 if (bridge.onIgnite) bridge.onIgnite(() => { resolveIn(); voice.wake(); });

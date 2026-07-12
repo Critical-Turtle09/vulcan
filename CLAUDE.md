@@ -462,3 +462,15 @@ Master reference: operator-signed mockup v0.3.2 (VULCAN UI INTERFACE chat, Jul 8
 - G5 THE INTENT LINE — typed channel into the router.
 - G6 SUMMON-FROM-HIDDEN + Doctrine-11 polish pass.
 - Then: v2.1 live signing ceremony. Tag `v2.1-signed` fires only after the ceremony passes.
+
+### 9 · THE MANUAL — permanent organ (LAW, P2.2)
+THE MANUAL (the spotlight walkthrough of every zone) is a **permanent organ**, not a
+one-off feature. It is always reachable and always discoverable:
+- **`?`** (with the intent line blurred) and typing/saying **`tour`** MUST always open it.
+- A **small, always-visible `?` glyph** lives in a corner of the stage (by the BL
+  summon hint), blueprint-styled and dim; hover ignites it (DOT IGNITION), click opens
+  the tour.
+- **No future slice may remove or degrade** these entry points. A change that hides,
+  breaks, or gates the glyph / the `?` key / the `tour` intent is a spec violation.
+- Rationale: a tired operator must be able to re-learn the stage at any moment without
+  hunting. The manual is how the interface explains itself; it never disappears.

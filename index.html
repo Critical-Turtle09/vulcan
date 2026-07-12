@@ -95,6 +95,17 @@
     .ask-hint .summon { white-space: nowrap; }            /* the summon chord line never wraps */
     .ask-hint .summon b { color: var(--st-ember); }        /* the global summon chord reads hot */
     .ask-hint .talk { display: block; margin-top: 3px; }
+    /* P2.2 MANUAL PERMANENCE — the always-visible tour glyph. Small, dim, blueprint
+       (hairline square + mono ?). Hover ignites it (DOT IGNITION). LAW: never remove. */
+    .manual-glyph { position: absolute; right: 0; bottom: 0; width: 20px; height: 20px;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--type-mono); font-size: var(--fs-micro); line-height: 1;
+      color: var(--st-text-faint); background: transparent;
+      border: 1px solid var(--st-hairline-strong); cursor: pointer;
+      transition: color 110ms ease, border-color 110ms ease, box-shadow 110ms ease; }
+    .corner-foot { position: relative; }
+    .manual-glyph:hover, .manual-glyph:focus-visible { color: var(--st-ember);
+      border-color: var(--st-ember-dim); box-shadow: 0 0 9px 1px var(--st-ember-dim); outline: none; }
 
     /* ── Z6 status strip (top-center) ── */
     #status-strip { display: flex; align-items: center; gap: 0.7em; flex-wrap: nowrap;
@@ -649,6 +660,9 @@
         <div class="ask-hint">
           <span class="summon"><b id="hint-summon">⌥⌘V</b> TO SUMMON</span>
           <span class="talk"><b>TYPE</b> TO COMMAND · <b>HOLD SPACE</b> TO TALK</span>
+          <!-- P2.2 MANUAL PERMANENCE — the always-visible tour glyph (LAW, spec v1.6 §9).
+               `?` / "tour" also open it; this glyph must never be removed or degraded. -->
+          <button class="manual-glyph" id="manual-glyph" type="button" title="Open the tour ( ? )" aria-label="Open the tour">?</button>
         </div>
       </footer>
     </aside>
