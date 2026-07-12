@@ -474,3 +474,77 @@ one-off feature. It is always reachable and always discoverable:
   breaks, or gates the glyph / the `?` key / the `tour` intent is a spec violation.
 - Rationale: a tired operator must be able to re-learn the stage at any moment without
   hunting. The manual is how the interface explains itself; it never disappears.
+
+## SPEC ADDENDUM — WHAT SHIPPED BEYOND v1.6 (TRUTH PASS · 2026-07-12)
+
+> This addendum records the machine **as actually built**, so the law matches reality. It
+> amends nothing above — it documents what the v1.6 slice ladder, the P-series console pass,
+> the conductor spine, THE CREW, and the appliance install actually landed. Where this and an
+> earlier section ever disagree about *what exists*, this section is the current truth.
+
+### The v1.6 STAGE ladder is COMPLETE.
+G1 THE SHELL · G2 THE FLANKS · G3 THE ORB (a5 twin helix, three states) · G4 THE LIFECYCLE
+(dispatch → chip → orb → speech → vault) · G5 THE INTENT LINE (typed channel into the same
+router as voice) · G6 SUMMON-FROM-HIDDEN + G6.3 THE FOCUS (summon owns the keyboard,
+type-anywhere insert, visible capture states) — all shipped. The stage is the live interface.
+
+### THE CONSOLE (P-series) — the stage became operable.
+- **P2 · CLICKABLE WORKSPACES.** The Z1 vitals cards and Z2 panels are not read-outs — they
+  **open**. Workspaces: **SPEND** (per-dispatch ledger + $2 cap detail), **COMMITS** (recent
+  commit list), **VERCEL** (deploy eye + a local SET-TOKEN flow that writes
+  `VULCAN_VERCEL_TOKEN` to the writable `.env` and announces it), **WAITLIST** (labelled
+  placeholder — no live signup source is wired; VULCAN never presents an unsourced number as
+  real), **AUDIO** (voice test). Each is a READ or a **contained, machine-local** write.
+  Hooks: `__vulcanStage.openWorkspace(name)`.
+- **DIRECTIVES + LAUNCH OBJECTIVES are editable and VAULT-PERSISTED.** Edits write to
+  `VULCAN/BONSAI/state/console.json` and **survive a relaunch** (verified). Defaults seed the
+  first run only. IPC: `console:objectivesRead/Write`.
+- **P2.1 · THE TOUCH.** Crafted micro-interactions (DOT IGNITION on hover, granular resolves)
+  across the deck, cards, and chips — the Doctrine-11 feel made pervasive, not per-slice.
+- **THE MANUAL is a permanent organ** (see §9 above): the spotlight tour + the always-visible
+  `?` glyph + the `?` key + the `tour` intent. Shipped in P2.1/P2.2.
+
+### THE CONDUCTOR (B-series) + THE CREW (I-series) — the hands are real.
+- **Conductor spine (B0–B5R).** `conduct(text)` routes any spoken/typed intent: deterministic
+  **skill match** first (local, no key) → **Haiku router** (REFLEX/SYNTH) → **Sonnet synth**,
+  all governor-metered under a **$2/day cap**, all **fail-soft** (no key / cap / offline →
+  local Ollama reflex). The **constitution** gates every action: READ/DRAFT run freely; a
+  WRITE that leaves the machine or spends needs the spoken/typed **confirm gate**.
+- **Real skills (I2):** `mission` (brief · pitch desk), `wire` (headlines · briefing), `repo`
+  (git/commit/tag behind the confirm gate), `obsidian` (vault capture + containment),
+  `vercel` (read-only deploy eye). The ten deck commands route through these — no fabricated
+  results; honest stubs file a real note saying so.
+- **THE CREW (Front I, `.claude/agents/`):** **HERMES** (outreach/comms drafts), **FRAMER**
+  (Bonsai frontend), **WARDEN** (COPPA/FERPA + extension-permission audit), **SMITH**
+  (extension patches in worktrees). Constitution-bound, **draft-only** — every crew output is
+  HELD and filed to the vault; the operator sends. Reached via `crew.*` skill actions.
+- **THE LEDGER (Front H):** dispatches file markdown artifacts to `VULCAN/BONSAI/outputs/`
+  (+ `daily/`), inside the B3 vault-containment seam; Z1 DOCUMENTS reads the trail.
+
+### MISSION PURITY holds.
+`bonsai` is the launch + active profile (Bonsai Instant Citation — a zero-collection browser
+citation extension for students/educators). `semiconductor`/`political` stay in-tree, archived
+to v3, off the `P` switch. The wire feeds are mission-pure ed-tech + citation/scholarly RSS.
+
+### THE APPLIANCE — VULCAN installs as a resident Mac app.
+- Packaged via `npm run pack` (electron-packager, `asar=false`) to `/Applications/VULCAN.app`.
+  **LSUIElement** (via `--extend-info` Info.plist) — **no Dock icon**; `app.dock.hide()` alone
+  was insufficient once a window shows (P1.2). Resident + summonable, never a separate Space.
+- **Packaged env resolution (P1.1):** the writable `.env` lives in per-user `userData` when
+  packaged; the brain reads the app-bundle `.env`. **Open-at-Login** is a tray toggle,
+  defaulted OFF on first run.
+
+### FAIL-SOFT IS LAW (hardened 2026-07-12, Night Shift 2).
+Every network call is **bounded and degrades spoken** — nothing hangs, nothing goes silent.
+The Anthropic client (`ask()`) and cloud TTS (ElevenLabs) carry **hard AbortController
+timeouts** (15s / 8s) so a black-hole/captive-portal network banks and falls to the **local
+reflex (Ollama) + local voice (Kokoro → `say`)** instead of wedging a dispatch. Wire feeds,
+the Vercel eye, and quotes were already bounded. A net-dependent dispatch offline ends in an
+**honest spoken line AND a filed artifact** — never a fabricated number, never a dead mouth.
+
+### Self-check surface (for QA / regression).
+`window.__vulcanStage` exposes the organ hooks (`ignite/bank`, `core/wire/voice`, `dispatch`,
+`intent`, `ptt`, `typeAnywhere`, `openWorkspace`, `objectives`, `manual/openManual`, `perf`);
+`window.vulcan` is the main-process IPC bridge (`dispatch`, `console*`, `vitals*`, `conduct`).
+Repeatable regression + offline harnesses live at `scripts/qa-packaged-night2.mjs` and
+`scripts/verify-offline-night2.mjs`.
