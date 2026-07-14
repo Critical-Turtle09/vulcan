@@ -368,6 +368,29 @@ export function writeConsoleState(state) {
   return { ok: true, rel: path.relative(vault, file) };
 }
 
+// P3 WAITLIST HONESTY — the operator-entered waitlist figure, vault-persisted so it
+// survives restarts. There is no live signup source yet; this is a HAND-ENTERED number,
+// always stamped MANUAL + a date so it can never be mistaken for a live read. Stored as
+// its own contained JSON at VULCAN/BONSAI/state/waitlist.json (same containment as the
+// console state). Shape: { value:number|null, note:string, at:'YYYY-MM-DD'|null }.
+export function readWaitlist() {
+  try {
+    const vault = resolveVault();
+    const file = safePath(vault, path.join(STATE_DIR, 'waitlist.json'), { confine: true });
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (_) { return null; }
+}
+export function writeWaitlist(data) {
+  const vault = resolveVault();
+  ensureBonsai(vault);
+  const dir = path.join(vault, WRITE_DIR, STATE_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = safePath(vault, path.join(STATE_DIR, 'waitlist.json'), { confine: true });
+  fs.writeFileSync(file, JSON.stringify(data || {}, null, 2));
+  return { ok: true, rel: path.relative(vault, file) };
+}
+
 // P2 THE CONSOLE — read a filed artifact's markdown by basename, for the DOCUMENTS
 // workspace's summarize-aloud. Contained to BONSAI/outputs/ + daily/; basename only
 // (path parts are stripped) so it can never escape the vault subtree.

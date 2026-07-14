@@ -717,7 +717,10 @@ function sparkSVG(values) {
 // vitals model. `waitlist` is a placeholder (no live source yet); the other three are
 // overwritten in place by the real reads as they resolve.
 const VITALS = {
-  waitlist: { label: 'WAITLIST', num: '312', unit: '', delta: '18 / WK', mk: '▲', spark: [280, 291, 288, 299, 305, 309, 312] }, // TODO(data-source)
+  // WAITLIST is HAND-ENTERED (no live signup feed yet). Default is an honest dash — VULCAN
+  // never shows an unsourced number as real. The operator sets it in the WAITLIST workspace;
+  // once set it reads the figure + `MANUAL · <date>` (refreshWaitlist, P3).
+  waitlist: { label: 'WAITLIST', num: '—', unit: '', delta: 'NO SOURCE', mk: '', spark: [] },
   commits:  { label: 'GH COMMITS /WK', num: '—', unit: '', delta: 'LAST 7 DAYS', mk: '', spark: [] },
   vercel:   { label: 'VERCEL', num: '—', unit: '', delta: '', mk: '', spark: [] },
   spend:    { label: 'CLAUDE SPEND', num: '—', unit: '', delta: 'OF $2 CAP', mk: '', spark: [] },
@@ -779,6 +782,25 @@ async function refreshVercel() {
     VITALS.vercel.spark = [];   // a deploy STATE has no trend series (honest empty)
     updateCard('vercel');
   } catch (_) { /* keep placeholder */ }
+}
+// P3 — the hand-entered waitlist figure. If set, the card reads the number + `MANUAL · <date>`
+// so it is never mistaken for a live read; if unset, the honest `— / NO SOURCE` default holds.
+async function refreshWaitlist() {
+  if (!bridge.consoleWaitlistRead) return;
+  try {
+    const w = await bridge.consoleWaitlistRead(); if (!w) return;
+    if (w.value !== null && w.value !== undefined && w.value !== '') {
+      VITALS.waitlist.num = String(w.value);
+      VITALS.waitlist.delta = w.at ? `MANUAL · ${w.at}` : 'MANUAL';
+      VITALS.waitlist.mk = '';
+      VITALS.waitlist.spark = [];
+    } else {
+      VITALS.waitlist.num = '—';
+      VITALS.waitlist.delta = 'NO SOURCE';
+      VITALS.waitlist.spark = [];
+    }
+    updateCard('waitlist');
+  } catch (_) { /* keep the honest default */ }
 }
 
 // ---- Z1 DOCUMENTS · VAULT TRAIL (H1 THE LEDGER) — the real newest BONSAI/outputs/
@@ -856,7 +878,7 @@ function bootFlanks() {
   buildDeck();
   buildWave();
   resolveFlanks();
-  refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs();
+  refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs(); refreshWaitlist();
   setInterval(() => { refreshSpend(); refreshCommits(); refreshDocs(); }, 20000);   // ledger + git velocity + vault trail
   setInterval(refreshVercel, 60000);                                  // deploy eye (heavier read)
 }
@@ -983,14 +1005,45 @@ async function wsVercel() {
   });
 }
 
-// ---- WAITLIST workspace: honest, no live source ------------------------------
-function wsWaitlist() {
+// ---- WAITLIST workspace: HONEST manual entry (no live source yet) -------------
+// There is no live signup feed. Rather than show an unsourced number, the operator
+// enters the real figure by hand; it is persisted to the vault and always stamped
+// MANUAL + today's date so it can never be mistaken for a live read. CLEAR returns the
+// card to the honest `— / NO SOURCE` default.
+async function wsWaitlist() {
+  const w = bridge.consoleWaitlistRead ? await bridge.consoleWaitlistRead().catch(() => null) : null;
+  const hasVal = w && w.value !== null && w.value !== undefined && w.value !== '';
+  const cur = hasVal ? String(w.value) : '—';
+  const curNote = (w && w.note) || '';
+  const stamp = hasVal ? `MANUAL · ${w.at || ''}`.trim() : 'NOT SET';
   openWorkspace({
     eyebrow: 'VITALS · WORKSPACE', title: 'WAITLIST',
-    html: kv('SHOWN', (VITALS.waitlist.num || '—'))
-      + note('This number is a PLACEHOLDER — there is no live waitlist source wired yet. VULCAN never presents an unsourced number as real, so this card is labelled and will stay a placeholder until a real signup feed (or a manual figure) is connected.')
-      + `<div class="ws-sub">TO MAKE IT REAL</div>`
-      + note('Wire a signups source (form export, DB, or a manual value) into vitals — then this card reads live.'),
+    html: kv('CURRENT', cur) + kv('SOURCE', stamp)
+      + note('No live signup feed is wired yet. Enter the real figure by hand — it is labelled MANUAL with today’s date so it is never mistaken for a live read. Saved to the vault; survives restarts.')
+      + `<div class="ws-sub">SET MANUAL FIGURE</div>`
+      + `<div class="ws-field"><input class="ws-input" id="ws-wl-num" inputmode="numeric" placeholder="WAITLIST COUNT" spellcheck="false" autocomplete="off" value="${hasVal ? esc(cur) : ''}" /></div>`
+      + `<div class="ws-field"><input class="ws-input" id="ws-wl-note" placeholder="NOTE (OPTIONAL)" spellcheck="false" autocomplete="off" value="${esc(curNote)}" /></div>`,
+    actions: [
+      { label: 'SAVE FIGURE', cls: 'primary', run: async ({ btn, ws }) => {
+        const numInp = ws.querySelector('#ws-wl-num');
+        const noteInp = ws.querySelector('#ws-wl-note');
+        const raw = numInp && numInp.value.trim();
+        const n = raw ? parseInt(raw.replace(/[,\s]/g, ''), 10) : NaN;
+        if (!Number.isFinite(n) || n < 0) { btn.textContent = 'ENTER A NUMBER'; return; }
+        btn.disabled = true; btn.textContent = 'SAVING…';
+        // stamp with the operator's own local date (the same clock the corner shows).
+        const now = new Date();
+        const at = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        let r = null; try { r = await bridge.consoleWaitlistWrite({ value: n, note: (noteInp && noteInp.value.trim()) || '', at }); } catch (_) {}
+        if (r && r.ok) { btn.textContent = 'SAVED ✓'; refreshWaitlist(); speakWs(`Waitlist set to ${n}, marked manual.`); }
+        else { btn.disabled = false; btn.textContent = 'SAVE FAILED'; }
+      } },
+      { label: 'CLEAR', run: async ({ btn }) => {
+        btn.disabled = true; btn.textContent = 'CLEARING…';
+        try { await bridge.consoleWaitlistWrite({ value: null, note: '' }); } catch (_) {}
+        refreshWaitlist(); closeOverlay(); speakWs('Waitlist figure cleared.');
+      } },
+    ],
   });
 }
 

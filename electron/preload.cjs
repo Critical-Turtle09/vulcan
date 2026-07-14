@@ -37,6 +37,8 @@ contextBridge.exposeInMainWorld('vulcan', {
   consoleObjectivesRead: () => ipcRenderer.invoke('console:objectivesRead'),   // DIRECTIVES/OBJECTIVES: vault-persisted read
   consoleObjectivesWrite: (state) => ipcRenderer.invoke('console:objectivesWrite', state), // ...persisted write
   consoleDocRead: (name) => ipcRenderer.invoke('console:docRead', name),   // DOCUMENTS: read artifact for summarize-aloud
+  consoleWaitlistRead: () => ipcRenderer.invoke('console:waitlistRead'),    // WAITLIST: read the hand-entered figure
+  consoleWaitlistWrite: (payload) => ipcRenderer.invoke('console:waitlistWrite', payload), // WAITLIST: persist figure to vault (local)
   onSpeak: (cb) => ipcRenderer.on('brain:speak', (_e, text) => cb(text)),  // announce → voice
   // STAGE D — THE IGNITION (resident overlay control)
   requestSummon: () => ipcRenderer.send('ui:request-summon'), // wake-from-hidden -> summon + ignite

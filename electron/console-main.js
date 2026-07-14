@@ -9,7 +9,7 @@ import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { readLedger, DAILY_CAP_USD } from '../brain/governor.js';
-import { readConsoleState, writeConsoleState, readArtifact } from '../brain/skills/obsidian.js';
+import { readConsoleState, writeConsoleState, readArtifact, readWaitlist, writeWaitlist } from '../brain/skills/obsidian.js';
 
 const run = promisify(execFile);
 
@@ -98,5 +98,38 @@ export function registerConsoleIpc({ root, getWin, envWritePath }) {
   // DOCUMENTS workspace — read a filed artifact's markdown (for summarize-aloud).
   ipcMain.handle('console:docRead', (_e, name) => {
     try { return readArtifact(name); } catch (_) { return { ok: false, name, text: '' }; }
+  });
+
+  // P3 WAITLIST — read/write the hand-entered waitlist figure (vault-persisted, contained).
+  // A CONTAINED, LOCAL write: the number stays in the vault; nothing leaves the machine.
+  ipcMain.handle('console:waitlistRead', () => {
+    try { const w = readWaitlist(); return w ? { ok: true, ...w } : { ok: true, value: null, note: '', at: null }; }
+    catch (_) { return { ok: true, value: null, note: '', at: null }; }
+  });
+  ipcMain.handle('console:waitlistWrite', (_e, payload) => {
+    try {
+      const rawVal = payload && payload.value;
+      const cleared = rawVal === null || rawVal === undefined || rawVal === '';
+      let value = null;
+      if (!cleared) {
+        const n = Math.floor(Number(rawVal));
+        if (!Number.isFinite(n) || n < 0) return { ok: false, reason: 'BAD_NUMBER' };
+        value = n;
+      }
+      const note = String((payload && payload.note) || '').slice(0, 120);
+      // stamp with the LOCAL date so it matches the operator's visible clock (never UTC —
+      // an evening entry must not read as tomorrow). The renderer supplies its own local
+      // date (the same clock the corner shows); main validates it and falls back to its
+      // own local clock if it's absent/malformed. YYYY-MM-DD.
+      const pad2 = (x) => String(x).padStart(2, '0');
+      const d = new Date();
+      const mainDate = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+      const clientAt = String((payload && payload.at) || '');
+      const at = cleared ? null : (/^\d{4}-\d{2}-\d{2}$/.test(clientAt) ? clientAt : mainDate);
+      const data = { value, note, at };
+      const r = writeWaitlist(data);
+      // the renderer speaks the confirmation (single source of truth — no double-speak).
+      return { ok: true, ...data, rel: r.rel };
+    } catch (e) { return { ok: false, reason: String((e && e.message) || e) }; }
   });
 }
