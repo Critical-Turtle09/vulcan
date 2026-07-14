@@ -65,6 +65,9 @@ Examples you can type or say:
 - **Left flank — SYSTEM VITALS.** Waitlist, commit velocity, deploy state, Claude
   spend against the daily cap. Below it: **DIRECTIVES** (your top few) and
   **DOCUMENTS** (the newest things filed to the vault — click one to open it).
+  **Every card is clickable** — it opens a workspace with the detail and, where it
+  makes sense, an action (set the Vercel token, edit directives, set the waitlist
+  number).
 - **Right flank — COMMAND DECK.** Ten labeled commands (MISSION BRIEF, DEPLOY CHECK,
   METRICS PULL, OUTREACH, WIRE SCAN, COMPLIANCE, PITCH DESK, VAULT CLEAN, PLAN TODAY,
   WK REVIEW). **Click any one to run it.** Below the deck is AUDIO I/O — the voice
@@ -81,6 +84,19 @@ When you run a deck command, a small **task chip** appears near the orb with a t
 When the job is done, the chip becomes a **filename** — click it and the result opens
 **center-stage** as a readable page, with an **OPEN IN VAULT ↗** link. Close it to go
 back. Everything it produces is also saved in the vault, so you never lose it.
+
+### Setting the waitlist number (manual, honest)
+
+There's no live signup feed wired yet, so VULCAN will **not** invent a waitlist
+number — the card reads **`— / NO SOURCE`** until you give it a real figure.
+
+- **Click the WAITLIST card** → a workspace opens. Type the real count (and an optional
+  note, e.g. "from the signup sheet") and press **SAVE FIGURE.**
+- The card then reads your number tagged **`MANUAL · <date>`** so it's never mistaken
+  for a live feed. It's saved to the vault and **survives restarts.**
+- **CLEAR** puts it back to `— / NO SOURCE`.
+- When you later want it live, the three ways to wire a real source are written up in
+  `VULCAN/BONSAI/outputs/WAITLIST-LIVE-SOURCE-OPTIONS.md` (Hermes memo).
 
 ---
 
@@ -137,21 +153,51 @@ Work through these in order — the early ones fix most things:
 
 ---
 
-## Starting it up (hands-on)
+## Full Disk Access (do this once)
 
-VULCAN currently runs from the project during development:
+VULCAN files everything it does into your Obsidian vault, which lives inside a
+macOS-protected iCloud folder. A packaged Mac app can't write there until you grant it
+**Full Disk Access** — this is the one permission that makes the installed app whole.
+Without it, dispatches may run but their artifacts won't land in the vault.
+
+Grant it once:
+
+1. **Apple menu  → System Settings → Privacy & Security → Full Disk Access.**
+2. Click **`+`**, authenticate, and in the picker press **⌘⇧A** (Applications), pick
+   **VULCAN.app**, **Open.**
+3. Make sure VULCAN's toggle is **ON.**
+4. **Quit VULCAN** from its menu-bar (`◆ VULCAN`) item, then **relaunch** it from
+   `/Applications`. macOS only applies the new permission on a fresh launch.
+
+You can confirm it worked: run **MISSION BRIEF**, then check the **DOCUMENTS** list on
+the left flank — the new brief should appear there within a few seconds.
+
+---
+
+## Starting it up
+
+**The installed appliance (normal use).** VULCAN is installed at
+`/Applications/VULCAN.app`. Launch it once from Applications; after that it lives in the
+menu bar (`◆ VULCAN`) and you summon it with the hotkey — no terminal needed. It has no
+Dock icon by design. "Open at Login" is a toggle in its menu-bar menu (off by default).
+
+**From the project (hands-on / development):**
 
 ```bash
 cd ~/vulcan
 npm start          # runs the dev server + the Electron stage together
 ```
 
-- Voice needs keys in `~/vulcan/.env` (ElevenLabs for the nicer voice; a Wispr Flow
-  key or local whisper for the ears). Without them it still runs and still drives the
-  orb — it just falls back to the built-in Mac voice and text.
-- The packaged, install-to-Applications, launch-at-login version is a separate
-  operator-present step (see the night-shift report). Once installed, you won't need
-  the terminal — it just lives in the menu bar.
+- Voice needs keys in the `.env` (ElevenLabs for the nicer voice; a Wispr Flow key or
+  local whisper for the ears). Without them it still runs and still drives the orb — it
+  just falls back to the built-in Mac voice and text. For the **installed** app the
+  writable `.env` lives in its per-user data folder; the SET-TOKEN flows (e.g. the
+  Vercel card) write there for you.
+- **Keep `ollama serve` running** on the travel machine — it's the free local brain
+  VULCAN falls back to offline. Without it VULCAN still speaks, but only to say it has
+  no local model.
+- After code changes reach the source, the installed app is refreshed with a
+  **repack + reinstall** (`npm run pack`) — an operator-present step.
 
 ---
 
