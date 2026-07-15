@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('vulcan', {
   vitalsVercel: () => ipcRenderer.invoke('vitals:vercel'),   // B5R deploy eye: state · health
   vitalsCommits: () => ipcRenderer.invoke('vitals:commits'), // B2 machinery: 7-day commit spark
   vitalsDocuments: () => ipcRenderer.invoke('vitals:documents'), // H1 THE LEDGER: Z1 DOCUMENTS vault trail
+  metricsHistory: () => ipcRenderer.invoke('metrics:history'),   // P4: vault-persisted daily metrics history → sparklines
   // P2 THE CONSOLE — clickable-workspace hands (all READ or contained/local writes).
   consoleLedger: () => ipcRenderer.invoke('console:ledger'),               // SPEND: per-dispatch ledger + cap
   consoleCommitsList: () => ipcRenderer.invoke('console:commitsList'),     // COMMITS: recent commit list

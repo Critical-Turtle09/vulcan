@@ -761,7 +761,8 @@ async function refreshSpend() {
     VITALS.spend.num = String(s.pct); VITALS.spend.unit = '%';
     VITALS.spend.delta = `$${(s.spentUsd || 0).toFixed(2)} / $${(s.capUsd || 2).toFixed(0)} CAP`;
     VITALS.spend.mk = s.pct >= 80 ? '▲' : '';
-    VITALS.spend.spark = (s.spark && s.spark.length > 1) ? s.spark : [];
+    // NUMBER is the live cap % (this read); the SPARK is the persisted multi-day trend
+    // (refreshMetricsHistory, P4) — no fake series.
     updateCard('spend');
   } catch (_) { /* keep placeholder */ }
 }
@@ -769,9 +770,24 @@ async function refreshCommits() {
   if (!bridge.vitalsCommits) return;
   try {
     const c = await bridge.vitalsCommits(); if (!c) return;
-    VITALS.commits.num = String(c.total); VITALS.commits.spark = c.spark || [];
+    VITALS.commits.num = String(c.total);   // 7-day total; spark comes from metrics history (P4)
     updateCard('commits');
   } catch (_) { /* keep placeholder */ }
+}
+// P4 — the vitals sparklines render from the vault-persisted daily metrics history
+// (GH commits + Claude spend per day), not a fabricated series. Requires ≥2 recorded
+// days to draw a line; until then the card shows the number with no spark (honest).
+async function refreshMetricsHistory() {
+  if (!bridge.metricsHistory) return;
+  try {
+    const r = await bridge.metricsHistory(); if (!r || !Array.isArray(r.history)) return;
+    const h = r.history;
+    if (h.length >= 2) {
+      VITALS.commits.spark = h.map((d) => Number(d.commits) || 0);
+      VITALS.spend.spark = h.map((d) => Number(d.spendUsd) || 0);
+      updateCard('commits'); updateCard('spend');
+    }
+  } catch (_) { /* keep whatever sparks are set */ }
 }
 async function refreshVercel() {
   if (!bridge.vitalsVercel) return;
@@ -878,8 +894,8 @@ function bootFlanks() {
   buildDeck();
   buildWave();
   resolveFlanks();
-  refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs(); refreshWaitlist();
-  setInterval(() => { refreshSpend(); refreshCommits(); refreshDocs(); }, 20000);   // ledger + git velocity + vault trail
+  refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs(); refreshWaitlist(); refreshMetricsHistory();
+  setInterval(() => { refreshSpend(); refreshCommits(); refreshDocs(); refreshMetricsHistory(); }, 20000);   // ledger + git velocity + vault trail + metrics sparks
   setInterval(refreshVercel, 60000);                                  // deploy eye (heavier read)
 }
 

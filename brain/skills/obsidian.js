@@ -396,6 +396,29 @@ export function writeWaitlist(data) {
   return { ok: true, rel: path.relative(vault, file) };
 }
 
+// P4 METRICS HISTORY — the daily metrics snapshot store (GH commits, Claude spend,
+// waitlist, deploy state), vault-persisted so vitals sparklines render from a REAL
+// multi-day history rather than a fabricated series. One contained JSON at
+// VULCAN/BONSAI/state/metrics.json. Shape: { history:[{date,commits,spendUsd,
+// waitlist,deploy}], updated }. Fail-soft: a missing/corrupt file reads as null.
+export function readMetrics() {
+  try {
+    const vault = resolveVault();
+    const file = safePath(vault, path.join(STATE_DIR, 'metrics.json'), { confine: true });
+    if (!fs.existsSync(file)) return null;
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (_) { return null; }
+}
+export function writeMetrics(data) {
+  const vault = resolveVault();
+  ensureBonsai(vault);
+  const dir = path.join(vault, WRITE_DIR, STATE_DIR);
+  fs.mkdirSync(dir, { recursive: true });
+  const file = safePath(vault, path.join(STATE_DIR, 'metrics.json'), { confine: true });
+  fs.writeFileSync(file, JSON.stringify(data || {}, null, 2));
+  return { ok: true, rel: path.relative(vault, file) };
+}
+
 // P2 THE CONSOLE — read a filed artifact's markdown by basename, for the DOCUMENTS
 // workspace's summarize-aloud. Contained to BONSAI/outputs/ + daily/; basename only
 // (path parts are stripped) so it can never escape the vault subtree.
