@@ -54,6 +54,11 @@ function readTokens() {
 // VULCAN/ exactly like this skill does. One containment implementation, reused.
 export function resolveVault() {
   if (cachedVault) return cachedVault;
+  // Test/CI + deploy seam: an explicit VULCAN_VAULT_PATH wins over discovery, so a
+  // suite can point every vault write at a throwaway directory (never the operator's
+  // real vault). Harmless in production (unset by default). Must exist to be honored.
+  const envPath = process.env.VULCAN_VAULT_PATH;
+  if (envPath && fs.existsSync(envPath)) { cachedVault = envPath; return cachedVault; }
   const tk = readTokens();
   const fromTokens = tk.obsidian && tk.obsidian.vault_path;
   if (fromTokens && fs.existsSync(fromTokens)) { cachedVault = fromTokens; return cachedVault; }

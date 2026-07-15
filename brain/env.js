@@ -10,6 +10,10 @@ import { fileURLToPath } from 'node:url';
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export function loadEnv(root = ROOT) {
+  // Test/CI seam: VULCAN_DISABLE_ENV=1 skips reading .env entirely, so a suite can
+  // force a keyless (offline / banked) brain deterministically regardless of what the
+  // operator's real .env holds. Harmless in production (off unless explicitly set).
+  if (process.env.VULCAN_DISABLE_ENV === '1') return;
   const p = path.join(root, '.env');
   if (!fs.existsSync(p)) return;
   for (const line of fs.readFileSync(p, 'utf8').split('\n')) {

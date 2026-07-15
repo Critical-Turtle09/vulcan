@@ -9,6 +9,7 @@
     "dev": "vite",
     "electron": "electron .",
     "brain": "node brain/cli.js",
+    "test": "node --test test/*.test.mjs",
     "audit": "node scripts/audit.mjs",
     "tokens": "node scripts/gen-tokens.mjs",
     "topo": "node scripts/build-topo.mjs",
