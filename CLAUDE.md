@@ -548,3 +548,32 @@ the Vercel eye, and quotes were already bounded. A net-dependent dispatch offlin
 `window.vulcan` is the main-process IPC bridge (`dispatch`, `console*`, `vitals*`, `conduct`).
 Repeatable regression + offline harnesses live at `scripts/qa-packaged-night2.mjs` and
 `scripts/verify-offline-night2.mjs`.
+
+## STANDING CONTRACTS — the law (C1 THE NIGHT WATCHMAN)
+
+VULCAN may run **standing contracts**: signed, scheduled jobs that watch something on the
+operator's behalf and, when warranted, reach out. The first is THE NIGHT WATCHMAN — a 03:00
+read-only uptime sentinel over the Bonsai launch site. The law that governs every contract,
+present and future:
+
+- **SIGNED OR INERT.** A contract lives as `contracts/<id>.json`; it is INERT until the
+  operator SIGNS it (`contracts/<id>.md` carries a signature over the canonical JSON, written
+  by `contracts/sign.mjs`). The generic runner (`contracts/runner.mjs`) executes **only signed
+  contracts**. Editing the JSON breaks the signature (tamper-evident); the operator re-signs
+  deliberately. No config can drive a check — or an egress — that the operator did not sign.
+- **EGRESS IS FENCED, NAMED, AND RATIONED.** A contract's only way to reach the outside world
+  is its declared channel. THE NIGHT WATCHMAN's is one email, and it is fenced on every side:
+  the recipient is a **compile-time constant** (`contracts/mailer.mjs` → `vishnumovva@icloud.com`,
+  not from config/env/argument), **at most one send per 24h**, and **every attempt is logged**
+  (`logs/night-watchman.log`) whether sent, suppressed, or refused.
+- **LOG-ONLY UNTIL ARMED.** A contract that can send ships as `mode: "log-only"` and sends
+  NOTHING — it writes what it *would* send — until (a) the credential exists in the env and
+  (b) the operator flips the mode and re-signs. Arming is always a deliberate, signed act.
+- **READ-ONLY CHECKS.** A watch contract only GETs and headless-LOADs; it never writes to,
+  submits to, or mutates the thing it watches, and never touches unrelated repos.
+- **PRE-FLIGHT WITH JUDGMENT, RECORDED.** Before arming, probe reality (which domain is the
+  real site, which paths are live) and write every pruning decision into the contract's charter
+  `.md` for operator review — the config must match what actually exists, not what was assumed.
+
+The runner is scheduled by a user LaunchAgent (`contracts/*.plist` → `~/Library/LaunchAgents/`).
+Contract battery: `test/contracts.test.mjs` (signature gate + mailer fences).

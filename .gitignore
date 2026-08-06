@@ -47,3 +47,7 @@ release/
 # PART 7 — Kokoro TTS venv + model files (heavy; recreate: voice/kokoro/setup.sh)
 voice/kokoro/venv/
 voice/kokoro/models/
+
+# C1 THE NIGHT WATCHMAN — runtime logs, mail-rate state, and per-run reports (the runner
+# recreates logs/ on demand; the signed contract + code are what's committed).
+logs/

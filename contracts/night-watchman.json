@@ -1,0 +1,44 @@
+{
+  "id": "night-watchman",
+  "title": "Bonsai Night Watchman",
+  "version": 1,
+  "mode": "log-only",
+  "schedule": "0 3 * * *",
+  "baseUrl": "https://bonsaicitations.com",
+  "fallbackUrl": "https://bonsaicitations.vercel.app",
+  "mailer": {
+    "to": "vishnumovva@icloud.com",
+    "subjectPrefix": "[BONSAI WATCHMAN]",
+    "maxPer24h": 1
+  },
+  "checks": {
+    "http200": [
+      "/",
+      "/tool.html",
+      "/guides.html",
+      "/it.html",
+      "/privacy.html",
+      "/schools.html",
+      "/terms.html"
+    ],
+    "consoleClean": [
+      "/",
+      "/tool.html"
+    ],
+    "linkCrawl": {
+      "start": "/",
+      "maxPages": 12
+    },
+    "engineSmoke": {
+      "page": "/tool.html",
+      "requireIds": [
+        "style-picker",
+        "type-picker",
+        "fields",
+        "generate",
+        "output",
+        "workspace"
+      ]
+    }
+  }
+}
