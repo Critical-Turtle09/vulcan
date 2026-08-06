@@ -1,0 +1,26 @@
+{
+  "id": "morning-herald",
+  "title": "Bonsai Morning Herald",
+  "version": 1,
+  "type": "digest",
+  "status": "DRAFT — UNSIGNED (inert until the operator signs)",
+  "mode": "log-only",
+  "schedule": "0 8 * * *",
+  "baseUrl": "https://bonsaicitations.com",
+  "mailer": {
+    "to": "vishnumovva@icloud.com",
+    "subjectPrefix": "[BONSAI HERALD]",
+    "maxPer24h": 1,
+    "rateKey": "morning-herald"
+  },
+  "digest": {
+    "_note": "A digest is NOT an alert: unlike the watchman (which mails only on failure), the herald composes one short email every morning at 08:00. It sends whether or not anything is wrong — a single scannable start-of-day brief. Same sole recipient, same fences.",
+    "sections": [
+      { "id": "watchman", "title": "Overnight watchman verdict", "source": "logs/night-watchman-report.json", "render": "PASS/FAIL per check + last run time" },
+      { "id": "vitals", "title": "Vitals snapshot", "source": "brain vitals (Claude spend vs $2 cap, GH commits/wk, Vercel deploy state, waitlist)", "render": "one line each, honest dashes where unsourced" },
+      { "id": "wire", "title": "Wire highlights", "source": "bonsai profile wire feed", "render": "top 3 headlines" },
+      { "id": "directives", "title": "Open directives", "source": "VULCAN/BONSAI/state/console.json (directives)", "render": "unchecked items only" }
+    ],
+    "sendPolicy": "compose + send once at 08:00 daily (a digest, not conditional on failure)"
+  }
+}

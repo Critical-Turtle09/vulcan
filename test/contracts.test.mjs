@@ -51,6 +51,15 @@ test('an unknown contract does not verify (never throws)', () => {
   assert.equal(v.signed, false);
 });
 
+test('the morning-herald DRAFT is present but UNSIGNED and inert (runner refuses it)', () => {
+  // C2-DRAFT: a proposal contract must NOT run until the operator deliberately signs it.
+  // (When they sign it to arm, this assertion is expected to change — see the charter.)
+  const v = verify('morning-herald');
+  assert.equal(v.signed, false, 'the herald must ship UNSIGNED');
+  assert.equal(v.contract.type, 'digest');
+  assert.equal(v.contract.mailer.to, HARD_TO, 'same hard-scoped recipient');
+});
+
 // ---- the mailer fences ------------------------------------------------------
 test('mailer: the recipient is hard-scoped and immovable', async () => {
   const r = await send({ to: 'attacker@evil.com', subject: 's', body: 'b', mode: 'armed', force: true, nowMs: 1, iso: '2026-01-01T00:00:00.000Z' });
