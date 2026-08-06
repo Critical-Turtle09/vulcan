@@ -16,20 +16,21 @@ import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
 import tls from 'node:tls';
-import { LOGS_DIR, ensureLogsDir, appendLog } from './lib.mjs';
+import { logsDir, ensureLogsDir, appendLog } from './lib.mjs';
 
 // ── the immovable recipient. Change requires editing this line in code, on purpose. ──
 export const HARD_TO = 'vishnumovva@icloud.com';
 
-const STATE_FILE = path.join(LOGS_DIR, '.watchman-mail-state.json');
+// resolved lazily (same override as the log) so tests never write real mail-rate state.
+const stateFile = () => path.join(logsDir(), '.watchman-mail-state.json');
 const SMTP_HOST = process.env.VULCAN_SMTP_HOST || 'smtp.mail.me.com';
 // iCloud's implicit-TLS :465 was unreachable from here (times out); :587 STARTTLS is open
 // and is Apple's recommended submission port. Default to 587/STARTTLS; :465 → implicit TLS.
 const SMTP_PORT = Number(process.env.VULCAN_SMTP_PORT) || 587;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-function readState() { try { return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')); } catch { return {}; } }
-function writeState(s) { ensureLogsDir(); fs.writeFileSync(STATE_FILE, JSON.stringify(s, null, 2)); }
+function readState() { try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch { return {}; } }
+function writeState(s) { ensureLogsDir(); fs.writeFileSync(stateFile(), JSON.stringify(s, null, 2)); }
 
 // send(...) — the guarded entry point. Returns { status, reason }. status is one of
 // 'sent' | 'suppressed' | 'refused' | 'error'. `nowMs`/`iso` are injected so behaviour is

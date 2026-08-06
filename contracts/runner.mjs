@@ -14,7 +14,7 @@
 //   node contracts/runner.mjs --test-alert    live-fire ONE mail (morning receipt test)
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTRACTS_DIR, LOGS_DIR, ensureLogsDir, appendLog, verify } from './lib.mjs';
+import { CONTRACTS_DIR, logsDir, ensureLogsDir, appendLog, verify } from './lib.mjs';
 import { runChecks } from './checks.mjs';
 import { send, HARD_TO } from './mailer.mjs';
 
@@ -68,7 +68,7 @@ async function runOne(id) {
   // persist the machine-readable report (latest wins).
   ensureLogsDir();
   const report = { id, iso, signed: true, signer: v.signer, mode, baseUrl: contract.baseUrl, results, failed: failed.length, mail };
-  fs.writeFileSync(path.join(LOGS_DIR, `${id}-report.json`), JSON.stringify(report, null, 2));
+  fs.writeFileSync(path.join(logsDir(), `${id}-report.json`), JSON.stringify(report, null, 2));
   return report;
 }
 

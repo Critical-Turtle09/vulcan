@@ -12,7 +12,13 @@ import { fileURLToPath } from 'node:url';
 
 export const CONTRACTS_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_DIR = path.dirname(CONTRACTS_DIR);
-export const LOGS_DIR = path.join(REPO_DIR, 'logs');
+
+// The log/state directory, resolved LAZILY at call time so a test (or an operator) can
+// redirect it via VULCAN_WATCHMAN_LOG_DIR without the production log ever being touched.
+// Default is <repo>/logs. Kept a function (not a const) precisely so the test battery can
+// point the mailer's appendLog at a temp dir — otherwise send()-in-tests pollutes the real
+// operator log with fixed-timestamp lines.
+export function logsDir() { return process.env.VULCAN_WATCHMAN_LOG_DIR || path.join(REPO_DIR, 'logs'); }
 
 // stable, key-sorted JSON — the exact bytes the signature is computed over, so two
 // machines (signer + runner) agree regardless of key order or incidental whitespace.
@@ -64,11 +70,11 @@ export function verify(id) {
   return { signed: true, reason: 'signature valid', contract, signer: md.signer, signedAt: md.signedAt };
 }
 
-export function ensureLogsDir() { fs.mkdirSync(LOGS_DIR, { recursive: true }); }
+export function ensureLogsDir() { const d = logsDir(); fs.mkdirSync(d, { recursive: true }); return d; }
 
-// append one line to logs/night-watchman.log with a caller-supplied ISO timestamp
+// append one line to <logsDir>/night-watchman.log with a caller-supplied ISO timestamp
 // (callers pass the time so this stays pure of wall-clock policy).
 export function appendLog(iso, message) {
-  ensureLogsDir();
-  fs.appendFileSync(path.join(LOGS_DIR, 'night-watchman.log'), `${iso}  ${message}\n`);
+  const d = ensureLogsDir();
+  fs.appendFileSync(path.join(d, 'night-watchman.log'), `${iso}  ${message}\n`);
 }

@@ -4,8 +4,16 @@
 // immovable and log-only never opens a socket. No network, no real send.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { canonicalJson, signatureFor, verify, parseSignedMd, loadContract } from '../contracts/lib.mjs';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { canonicalJson, signatureFor, verify, parseSignedMd, loadContract, logsDir } from '../contracts/lib.mjs';
 import { send, HARD_TO } from '../contracts/mailer.mjs';
+
+// Redirect the log + mail-rate state to a throwaway temp dir BEFORE any send() runs, so the
+// battery never pollutes the operator's real logs/night-watchman.log. logsDir() reads this
+// env lazily at call time, and this module-init line runs before any test() body.
+process.env.VULCAN_WATCHMAN_LOG_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'watchman-test-'));
 
 // ---- canonicalization + signing --------------------------------------------
 test('canonicalJson is key-order independent', () => {
@@ -63,4 +71,14 @@ test('mailer: armed but no credential is suppressed honestly (no crash, no send)
   assert.equal(r.status, 'suppressed');
   assert.equal(r.reason, 'no VULCAN_SMTP_PASS');
   if (saved !== undefined) process.env.VULCAN_SMTP_PASS = saved;
+});
+
+test('mailer: the battery writes to a redirected temp log, never the real one', () => {
+  const dir = logsDir();
+  assert.ok(dir.includes('watchman-test-'), `logsDir should be the temp dir, got ${dir}`);
+  assert.notEqual(dir, path.join(path.dirname(new URL('../contracts/lib.mjs', import.meta.url).pathname), '..', 'logs'));
+  // the earlier send() calls in this file must have landed in the temp dir's log.
+  const log = path.join(dir, 'night-watchman.log');
+  assert.ok(fs.existsSync(log), 'temp log should exist after the send() tests');
+  assert.match(fs.readFileSync(log, 'utf8'), /\[MAIL\]/);
 });
