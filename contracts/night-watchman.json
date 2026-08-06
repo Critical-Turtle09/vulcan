@@ -2,7 +2,7 @@
   "id": "night-watchman",
   "title": "Bonsai Night Watchman",
   "version": 1,
-  "mode": "log-only",
+  "mode": "armed",
   "schedule": "0 3 * * *",
   "baseUrl": "https://bonsaicitations.com",
   "fallbackUrl": "https://bonsaicitations.vercel.app",

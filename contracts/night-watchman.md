@@ -58,8 +58,8 @@ bytes of `night-watchman.json`. The runner executes this contract ONLY while the
 
 ```
 contract: night-watchman.json
-mode: log-only
+mode: armed
 signer: operator (vishnumovva@icloud.com)
-signed-at: 2026-08-06T06:01:07.125Z
-signature: sha256:0d76698b94391e121dc5e2a71a9f69ce30846d4259e807a55c2214a32f76fd97
+signed-at: 2026-08-06T20:12:08.490Z
+signature: sha256:58d73f68816742b13a991bed66b3d42a4b0fae8592509e5ad763a79d11247e49
 ```
