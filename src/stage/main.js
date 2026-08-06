@@ -188,7 +188,7 @@ const situational = createSituational({
 });
 
 // ---- IPC (resident overlay control) — kept in lockstep with the voice session ----
-if (bridge.onIgnite) bridge.onIgnite(() => { resolveIn(); voice.wake(); });
+if (bridge.onIgnite) bridge.onIgnite(() => { resumeIdle(); resolveIn(); voice.wake(); });   // P6 — wake the loop before the ceremony draws
 // Esc / tray Bank / hotkey-toggle bank. If a modal artifact overlay is open, Esc resolves
 // THAT first (never a jarring whole-stage bank over an open document). Otherwise bank the
 // fire: quench the session, play the resolve-OUT transition, then hide (G6 scope A · 4).
@@ -215,7 +215,7 @@ function universalStop() {
 }
 if (bridge.onBank) bridge.onBank(universalStop);
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintStatus(); });
-if (bridge.onForceHide) bridge.onForceHide(() => { voice.goDormant(); });
+if (bridge.onForceHide) bridge.onForceHide(() => { voice.goDormant(); pauseIdle(); });   // P6 — emergency hide also sleeps the loop
 if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' }));
 // §1a backdrop snapshot (ceremony material, exercised fully in G6) — kept intact.
 const backdrop = el('backdrop');
@@ -972,14 +972,26 @@ function resolveFlanks() {
   requestAnimationFrame(() => requestAnimationFrame(() => items.forEach((elm) => elm.classList.add('up'))));
 }
 
+// P6 IDLE EFFICIENCY — the vitals/vercel polls live in module vars so they can be paused
+// while the stage is hidden (no reason to poll the network at a banked screen) and re-armed
+// on summon.
+let vitalsTimer = null, vercelTimer = null;
+function refreshAllVitals() { refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs(); refreshWaitlist(); refreshMetricsHistory(); }
+function startPolls() {
+  if (!vitalsTimer) vitalsTimer = setInterval(() => { refreshSpend(); refreshCommits(); refreshDocs(); refreshMetricsHistory(); }, 20000);   // ledger + git velocity + vault trail + metrics sparks
+  if (!vercelTimer) vercelTimer = setInterval(refreshVercel, 60000);   // deploy eye (heavier read)
+}
+function stopPolls() {
+  if (vitalsTimer) { clearInterval(vitalsTimer); vitalsTimer = null; }
+  if (vercelTimer) { clearInterval(vercelTimer); vercelTimer = null; }
+}
 function bootFlanks() {
   buildVitals();
   buildDeck();
   buildWave();
   resolveFlanks();
-  refreshSpend(); refreshCommits(); refreshVercel(); refreshDocs(); refreshWaitlist(); refreshMetricsHistory();
-  setInterval(() => { refreshSpend(); refreshCommits(); refreshDocs(); refreshMetricsHistory(); }, 20000);   // ledger + git velocity + vault trail + metrics sparks
-  setInterval(refreshVercel, 60000);                                  // deploy eye (heavier read)
+  refreshAllVitals();
+  startPolls();
 }
 
 // ---- doctrine 11: the stage RESOLVES in on launch (never a pop) ----
@@ -991,7 +1003,10 @@ function resolveOut(done) {
   document.getElementById('bg').classList.remove('up');
   setTimeout(() => { if (done) done(); }, stage['resolve.ms'] || 560);
 }
-function bankHide() { resolveOut(() => { if (bridge.requestHide) bridge.requestHide(); }); }
+// P6 — pause the idle loop the instant the window actually hides (after the resolve-OUT
+// animation has played on the still-running loop). win.hide() with backgroundThrottling off
+// does NOT fire visibilitychange, so the hide paths pause explicitly; summon resumes via onIgnite.
+function bankHide() { resolveOut(() => { if (bridge.requestHide) bridge.requestHide(); pauseIdle(); }); }
 
 // ---- G6: the BL hint documents the global summon chord, rendered from the ignition.hotkey
 // token (doctrine 10 — never hardcode the chord). "Alt+Command+V" -> "⌥⌘V". ----
@@ -1287,8 +1302,10 @@ requestAnimationFrame(() => resolveIn());   // trigger the resolve transition af
 
 // ---- render + tick loop ----
 let last = performance.now(), t = 0, statusAccum = 0;
+let rafId = null, idlePaused = false, frameCount = 0;
 function frame(now) {
   const dt = Math.min((now - last) / 1000, 0.05); last = now; t += dt;
+  frameCount++;
   bg.render(t);
   orb.render(dt);
   voice.tick();
@@ -1296,9 +1313,37 @@ function frame(now) {
   paintClock();
   statusAccum += dt;
   if (statusAccum >= 0.5) { statusAccum = 0; paintStatus(); }   // catch wire-poll / session drift
-  requestAnimationFrame(frame);
+  if (!idlePaused) rafId = requestAnimationFrame(frame);        // stops scheduling when hidden
 }
-requestAnimationFrame(frame);
+rafId = requestAnimationFrame(frame);
+
+// ---- P6 IDLE EFFICIENCY — the hidden stage SLEEPS ----------------------------------
+// backgroundThrottling is off (main) so Chromium won't pause us; and under the PTT /
+// no-open-mic model NOTHING needs to run while banked (the wake listener is a held key,
+// not a background ear). So when VULCAN banks we stop the 60fps WebGL loop, the
+// vitals/vercel polls, and the wire feed — a banked VULCAN costs ~0 CPU and no network.
+// Summon resumes everything and the Doctrine-11 resolve plays exactly as before (the loop
+// is running again the instant the window shows, before the ignition transition draws).
+//
+// TRIGGERS are the AUTHORITATIVE session events, not the page's visibilitychange: with
+// backgroundThrottling off, win.hide() does NOT flip document.hidden, and Chromium's
+// visibility for an occluded overlay is unreliable — so we pause on the real hide paths
+// (bankHide completion + emergency force-hide) and resume on the real summon (onIgnite).
+function pauseIdle() {
+  if (idlePaused) return;
+  idlePaused = true;
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  stopPolls();
+  try { wire.stop(); } catch (_) { /* wire may be mid-boot */ }
+}
+function resumeIdle() {
+  if (!idlePaused) return;
+  idlePaused = false;
+  startPolls();
+  try { wire.boot(); } catch (_) { /* re-arms the feed poll (stop cleared it) */ }
+  refreshAllVitals();                          // fresh reads immediately on return
+  if (!rafId) { last = performance.now(); rafId = requestAnimationFrame(frame); }
+}
 
 // minimal shell harness (self-check / operator screenshot aid)
 window.__vulcanStage = {
@@ -1341,4 +1386,9 @@ window.__vulcanStage = {
   speaking: () => voice.speaking,
   cancelDispatch: (id) => { const d = [...active, ...pending].find((x) => x.id === id); if (d) cancelDispatch(d); },
   situational: (text) => situational.offer(text),
+  // P6 IDLE EFFICIENCY self-check: frame counter + paused/polling state; drive the idle
+  // pause/resume directly (the real trigger is the window's visibilitychange).
+  perf: () => ({ frames: frameCount, paused: idlePaused, polling: !!vitalsTimer }),
+  pauseIdle: () => pauseIdle(),
+  resumeIdle: () => resumeIdle(),
 };
