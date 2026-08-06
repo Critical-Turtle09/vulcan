@@ -237,6 +237,20 @@
     .aio-wave.capturing i.hot { background: var(--st-ember); }
     #shell.capturing #aio-state, #shell.capturing #aio-link { color: var(--st-ember); }
     #shell.transcribing #aio-link { color: var(--st-text); }
+    /* P5 UNIVERSAL STOP — the ■ control on the AUDIO panel, shown only while VULCAN is
+       speaking or a job is running. Ember hairline, blueprint-quiet; click = stop. */
+    .aio-stop { margin-left: auto; width: 18px; height: 18px; padding: 0; line-height: 1;
+      font-size: 9px; color: var(--st-ember); background: transparent; cursor: pointer;
+      border: 1px solid var(--st-ember-dim); border-radius: 2px; opacity: 0.85;
+      transition: opacity 120ms ease, background 120ms ease; }
+    .aio-stop:hover { opacity: 1; background: rgba(232,86,46,0.12); }
+    .aio-stop[hidden] { display: none; }
+    /* the chip ■ stop control — visible only while the chip is live (.running). */
+    .chip-stop { display: none; margin-left: 4px; padding: 0 3px; font-size: 9px; line-height: 1;
+      color: var(--st-ember); background: transparent; border: 0; cursor: pointer; opacity: 0.8; }
+    .chip-stop:hover { opacity: 1; }
+    .chip.running .chip-stop { display: inline-block; }
+    .chip.running .chip-x { display: none; }
     /* the near-orb listening cue: a pulsing ember dot + CAPTURING, just below the orb. */
     #orb-cue { position: absolute; left: 50%; top: calc(50% + min(23vh, 23vw) + 2vh);
       transform: translateX(-50%); display: flex; align-items: center; gap: 8px;
@@ -687,7 +701,7 @@
              ride the real TTS envelope (G4, live). The state + link labels track the real
              TTS/voice speaking state. -->
         <section class="fsec rz">
-          <div class="fsec-head"><span class="fsec-title">AUDIO I/O</span><span class="fsec-sub" id="aio-state">TTS.STANDBY</span></div>
+          <div class="fsec-head"><span class="fsec-title">AUDIO I/O</span><span class="fsec-sub" id="aio-state">TTS.STANDBY</span><button class="aio-stop" id="aio-stop" hidden title="Stop" aria-label="Stop">■</button></div>
           <div class="fsec-body">
             <div class="aio-wave" id="aio-wave"></div>
             <div class="aio-micro">VOICE LINK · <span class="k" id="aio-link">STANDBY</span></div>

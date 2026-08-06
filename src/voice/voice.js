@@ -23,6 +23,8 @@ import { createEars } from './ears.js';
 import { createBrain } from './brain.js';
 import { createMouth } from './mouth.js';
 import { classify } from '../reflex.js';
+import { sanitizeForSpeech } from './sanitize.js';
+import { line as regLine } from './register.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -133,7 +135,7 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
         if (intent === 'dismiss') { safe(onDismiss); continue; }     // bank phrase while dormant -> stay dormant/hidden
         // v1.5.1 THE TRIGGER — a held DORMANT clip that isn't the wake phrase: never
         // silent. Speak one redirect line, stay dormant, keep listening for the trigger.
-        if (intent === 'other') { await speakGated(SESS.redirectLine || NEVER_SILENT, 'announce'); continue; }
+        if (intent === 'other') { await speakGated(regLine('redirect') || SESS.redirectLine || NEVER_SILENT, 'announce'); continue; }
         // intent === 'wake' -> ENTER THE HOT SESSION
         safe(onWake);                                                 // summon overlay + ignition
         await runAttentive();
@@ -155,7 +157,7 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
       const cap = await captureWithIdleTimeout(idleMs);             // CAPTURE (silence-ended) vs idle timer
       if (!running || muted || leaveAttentive) break;
       if (cap.timedOut) {                                           // AUTO-DORMANT: announce, then bank
-        await speakGated(SESS.autoDormantLine || 'Banking the fire.', 'announce');
+        await speakGated(regLine('autoDormant') || SESS.autoDormantLine || 'Banking the fire.', 'announce');
         safe(onDismiss);                                            // hide the overlay (quench)
         break;
       }
@@ -184,7 +186,7 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
 
   // NEVER SILENT (constitutional, FX). Silence in ATTENTIVE is a build-failing bug: any
   // unroutable / dead-end / unfinished path speaks ONE line and returns to listening.
-  const NEVER_SILENT = SESS.fallbackLine || "I didn't catch a command. Say it again, or ask for the mission brief.";
+  const NEVER_SILENT = regLine('fallback') || SESS.fallbackLine || "I didn't catch a command. Say it again, or ask for the mission brief.";
 
   // one exchange: reflex or brain -> present + speak -> back to listening. Returns
   // true only when the utterance is an in-session BANK (leave the hot session).
@@ -236,17 +238,38 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
     return false;
   }
 
-  // SPEAK, gated. Hard-close the ears BEFORE any sound (self-hear forbidden + dodge
-  // the macOS HAL reconfiguration race), speak on the real analyser envelope, then a
-  // short settle before the next capture re-acquires a fresh graph.
-  async function speakGated(text, kind = 'answer') {
-    rememberSpoken(text);                                            // for the self-echo guard
+  // P5 ONE VOICE — the single speech channel. Every spoken string (loop, dispatch,
+  // manual, announcements) funnels through here: sanitize for the mouth (no symbols /
+  // markdown / paths / raw numbers), close the ears BEFORE any sound (self-hear forbidden
+  // + the macOS HAL race), speak on the real analyser envelope. `speakGen` makes the
+  // channel single: a newer utterance or a stopSpeech() supersedes the one in flight, and
+  // the superseded call returns WITHOUT reclaiming the orb (the newer line owns it).
+  let speakGen = 0;
+  async function channelSpeak(text, kind) {
+    const clean = sanitizeForSpeech(text);
+    rememberSpoken(clean);                                           // self-echo guard (matches what was voiced)
+    const myGen = ++speakGen;
     orb.setState('speaking');                                        // -> SPEAKING
     if (ears && ears.closeForSpeech) ears.closeForSpeech();
-    await mouth.speak(text, { synthetic: synthetic(), kind });
+    await mouth.speak(clean, { synthetic: synthetic(), kind });
+    if (myGen !== speakGen) return false;                           // superseded mid-line — yield the orb
     orb.setAmplitude(0);
-    // let the room echo of VULCAN's own line decay below the VAD before the ear reopens
-    // (echoCancellation is off for mic coexistence). Test uses ~0 to stay fast.
+    return true;
+  }
+
+  // STOP the live voice now (universal STOP / barge-in). Cuts the mouth and invalidates
+  // any in-flight channelSpeak so its awaiter can't reclaim the orb after the cut.
+  function stopSpeech() {
+    speakGen++;
+    if (mouth && mouth.stop) mouth.stop();
+    orb.setAmplitude(0);
+  }
+
+  // SPEAK, gated. Speak on the channel, then a short settle before the next capture
+  // re-acquires a fresh graph (open-mode echo decay; test uses ~0 to stay fast).
+  async function speakGated(text, kind = 'answer') {
+    const ok = await channelSpeak(text, kind);
+    if (!ok) return;                                                 // superseded — skip the settle too
     const settle = (isTest() ? (SESS.test && SESS.test.speakGateSettleMs) : SESS.speakGateSettleMs) || 0;
     if (settle) await sleep(settle);
   }
@@ -316,17 +339,15 @@ export function createVoice({ orb, bridge, forceTest = false, onWake = null, onD
   // other utterance; drives the speaking state so the orb rides the envelope.
   async function say(text, { kind = 'answer' } = {}) {
     if (!mouth || !text) return;
-    rememberSpoken(text);                                            // for the self-echo guard
-    orb.setState('speaking');
-    if (ears && ears.closeForSpeech) ears.closeForSpeech();
-    await mouth.speak(text, { synthetic: synthetic(), kind });
-    orb.setAmplitude(0);
+    const ok = await channelSpeak(text, kind);
+    if (!ok) return;                                                 // superseded — the newer line owns the orb
     // return the orb to the session's resting read (attentive keeps listening).
     orb.setState(session === 'attentive' ? 'listening' : 'idle');
   }
 
   return {
-    boot, tick, say, wake, goDormant, pttDown, pttUp,
+    boot, tick, say, stopSpeech, get speaking() { return !!(mouth && mouth.playing); },
+    wake, goDormant, pttDown, pttUp,
     setMuted, toggleMute() { setMuted(!muted); }, get muted() { return muted; },
     get session() { return session; },
     get capturing() { return capturing; },

@@ -15,6 +15,8 @@ import { createManual } from './manual.js';   // P2.1 THE MANUAL — spotlight w
 import { createVoice } from '../voice/voice.js';
 import { createWire } from '../wire.js';
 import { activeProfile } from '../profile.js';
+import { line as regLine } from '../voice/register.js';       // P5 — the E.V. register
+import { createSituational } from '../voice/situational.js';  // P5 — situational lines
 import rawTokens from '../../tokens.json';
 
 injectStageVars();
@@ -84,6 +86,9 @@ function paintStatus() {
   const shell = document.getElementById('shell');
   if (shell) { shell.classList.toggle('capturing', capturing); shell.classList.toggle('transcribing', transcribing); }
   const cue = el('orb-cue'); if (cue) cue.textContent = capturing ? 'CAPTURING' : (transcribing ? 'TRANSCRIBING' : '');
+  // P5 UNIVERSAL STOP — the ■ control on the AUDIO panel shows only while there is
+  // something to stop (VULCAN speaking, or a job running/queued).
+  const aioStop = el('aio-stop'); if (aioStop) aioStop.hidden = !(speaking || dispatch.busy());
 }
 
 // ---- voice loop + wire (kept intact; the audio path must stay unbroken) ----
@@ -132,12 +137,15 @@ const wire = createWire({ bridge, getProfile: activeProfile });
 // PART 6 local reflexes reaching the shell: only the session/audio controls exist here.
 function statusLine() {
   const s = voice.status(), ws = wire.status();
-  return `Status. Voice ${s.online ? (s.local ? 'local' : 'online') : 'offline'}, wire ${ws.online ? 'live' : 'offline'}.`;
+  const voiceWord = s.online ? (s.local ? 'local' : 'online') : 'offline';
+  const wireWord = ws.online ? 'live' : 'offline';
+  return regLine('status', { voice: voiceWord, wire: wireWord })
+    || `Status. Voice ${voiceWord}, wire ${wireWord}.`;
 }
 function runCommand(intent) {
   switch (intent && intent.type) {
-    case 'mute': voice.setMuted(true); paintStatus(); return 'Muted.';
-    case 'unmute': voice.setMuted(false); paintStatus(); return 'Listening.';
+    case 'mute': voice.setMuted(true); paintStatus(); return regLine('muted') || 'Muted.';
+    case 'unmute': voice.setMuted(false); paintStatus(); return regLine('unmuted') || 'Listening.';
     case 'bank': bankHide(); return null;
     case 'status': return statusLine();
     default: return null;
@@ -169,16 +177,43 @@ const manual = createManual({ speak: (t) => voice.say(t, { kind: 'answer' }) });
 // P2.2 MANUAL PERMANENCE — the always-visible ? glyph opens the tour (LAW, spec §9).
 { const g = el('manual-glyph'); if (g) g.addEventListener('click', (e) => { e.preventDefault(); manual.open(0); }); }
 
+// P5 SITUATIONAL LINES — VULCAN volunteers ONE short line when something meaningful
+// changes (budget crossing, a deploy flipping state). ATTENTIVE-only speech, hard cap 1
+// per 5 minutes; hidden/dormant it records to the transcript ONLY (never a voice from a
+// dark screen). Fed by real state-change reads (refreshSpend / refreshVercel) via once().
+const situational = createSituational({
+  speak: (t) => voice.say(t, { kind: 'announce' }),
+  transcript: (t) => pushLine('v', t, 'sit'),
+  isAttentive: () => voice.session === 'attentive',
+});
+
 // ---- IPC (resident overlay control) — kept in lockstep with the voice session ----
 if (bridge.onIgnite) bridge.onIgnite(() => { resolveIn(); voice.wake(); });
 // Esc / tray Bank / hotkey-toggle bank. If a modal artifact overlay is open, Esc resolves
 // THAT first (never a jarring whole-stage bank over an open document). Otherwise bank the
 // fire: quench the session, play the resolve-OUT transition, then hide (G6 scope A · 4).
-if (bridge.onBank) bridge.onBank(() => {
+// P5 UNIVERSAL STOP — Esc is contextual, one rung per press (spec order):
+//   1) a modal artifact/workspace overlay is open  → close it
+//   1b) the intent line is focused with text        → blur it (never bank mid-type)
+//   2) VULCAN is SPEAKING                           → cut the voice instantly
+//   3) a dispatch is WORKING/queued                 → cancel it, honest STOPPED chips, one spoken "Stopped."
+//   4) otherwise (idle)                             → bank the fire (quench + hide)
+function universalStop() {
   const ov = el('overlay');
-  if (ov && !ov.hidden) { closeOverlay(); return; }
-  voice.goDormant(); bankHide();
-});
+  if (ov && !ov.hidden) { closeOverlay(); return; }                          // 1
+  if (intentFocused() && intentInput.value.length > 0) { intentInput.blur(); return; }   // 1b
+  if (voice.speaking) { voice.stopSpeech(); audioLive(false); paintStatus(); return; }   // 2
+  if (dispatch.busy()) {                                                      // 3
+    cancelAllDispatches(); audioLive(false);
+    const stopLine = regLine('stopped.working') || 'Stopped.';
+    pushLine('v', stopLine);
+    voice.say(stopLine, { kind: 'announce' });
+    paintStatus();
+    return;
+  }
+  voice.goDormant(); bankHide();                                             // 4
+}
+if (bridge.onBank) bridge.onBank(universalStop);
 if (bridge.onMute) bridge.onMute(() => { voice.toggleMute(); paintStatus(); });
 if (bridge.onForceHide) bridge.onForceHide(() => { voice.goDormant(); });
 if (bridge.onSpeak) bridge.onSpeak((text) => voice.say(text, { kind: 'announce' }));
@@ -333,9 +368,15 @@ function spawnChip(d) {
   chip.dataset.id = String(d.id);
   chip.innerHTML = `<span class="chip-mark">◆</span><span class="chip-name">${d.cmd}</span>`
     + `<span class="chip-meta">${d.phase === 'queued' ? 'QUEUED' : '0.0s'}</span>`
+    // P5 UNIVERSAL STOP — a visible ■ stop control lives on every live chip (working /
+    // speaking / queued); clicking it cancels that one dispatch honestly. It hides once
+    // the chip resolves (CSS gates it on .running); the ✕ then dismisses the resolved chip.
+    + `<button class="chip-stop" title="Stop" aria-label="Stop">■</button>`
     + `<button class="chip-x" title="Dismiss" aria-label="Dismiss">✕</button>`;
   host.appendChild(chip);
   d.chip = chip;
+  chip.classList.add('running');   // live from spawn (queued or working); cleared on finish
+  chip.querySelector('.chip-stop').addEventListener('click', (ev) => { ev.stopPropagation(); cancelDispatch(d); });
   chip.querySelector('.chip-x').addEventListener('click', (ev) => { ev.stopPropagation(); dismissChip(d); });
   chip.addEventListener('click', () => { if (d.artifact || d.done) openArtifact(d); });
   requestAnimationFrame(() => requestAnimationFrame(() => chip.classList.add('up')));
@@ -377,7 +418,7 @@ function drawLeaders() {
 // ---- the lifecycle ----------------------------------------------------------
 function dispatchCommand(cmd, cell) {
   if (!cmd) return;
-  const d = { id: ++seq, cmd, cell, phase: 'queued', t0: 0, chip: null, artifact: null, done: false, result: null };
+  const d = { id: ++seq, cmd, cell, phase: 'queued', t0: 0, chip: null, artifact: null, done: false, cancelled: false, result: null };
   if (cell) { cell.classList.add('busy'); }
   spawnChip(d);
   if (active.length < MAX_ACTIVE) startDispatch(d);
@@ -403,7 +444,7 @@ async function startDispatch(d) {
   try {
     res = bridge.dispatch ? await bridge.dispatch(d.cmd) : null;
   } catch (_) { res = null; }
-  if (!res) res = { ok: false, failed: true, title: `${d.cmd} · FAILED`, lines: ['DISPATCH UNAVAILABLE'], speak: `${d.cmd} could not run. Nothing left the machine.`, artifact: null };
+  if (!res) res = { ok: false, failed: true, title: `${d.cmd} · FAILED`, lines: ['DISPATCH UNAVAILABLE'], speak: regLine('dispatchFailed', { cmd: d.cmd }) || `${d.cmd} could not run. Nothing left the machine.`, artifact: null };
   d.result = res; d.artifact = res.artifact || null;
 
   // speak the result (serialized — one mouth). The dispatch STAYS in 'working' until
@@ -418,6 +459,7 @@ async function startDispatch(d) {
 
 // CORE·SPEAKING for the duration of the real voice line + live audio bars.
 async function speakResult(d, res) {
+  if (d.cancelled) return;                                          // STOP hit before/while speaking — stay silent
   d.phase = 'speaking'; refreshOrb();
   audioLive(true);
   pushLine('v', res.speak || 'Done.', res.failed ? 'fail' : '');   // G5 — the result reads in the transcript
@@ -429,9 +471,14 @@ function finishDispatch(d, res) {
   const i = active.indexOf(d); if (i >= 0) active.splice(i, 1);
   d.phase = 'idle'; d.done = true;
   if (d.chip) {
+    d.chip.classList.remove('running');
     d.chip.classList.add('done');
-    if (res.failed) d.chip.classList.add('failed');
-    chipMeta(d, res.artifact ? res.artifact.filename : (res.failed ? 'FAILED' : (res.sim ? 'SIM' : 'NO FILE')));
+    // an honest chip: STOPPED if the operator cancelled it, else the filename / failure.
+    if (d.cancelled) { d.chip.classList.add('failed'); chipMeta(d, 'STOPPED'); }
+    else {
+      if (res.failed) d.chip.classList.add('failed');
+      chipMeta(d, res.artifact ? res.artifact.filename : (res.failed ? 'FAILED' : (res.sim ? 'SIM' : 'NO FILE')));
+    }
   }
   done.push(d);
   // persistent + dismissible, but soft-capped so the stack never overflows the field:
@@ -443,6 +490,33 @@ function finishDispatch(d, res) {
   if (pending.length && active.length < MAX_ACTIVE) { const nx = pending.shift(); startDispatch(nx); }
   refreshDeckHeader(); refreshOrb(); paintStatus(); drawLeaders();
   if (res.artifact) refreshDocs();   // H1 — the new artifact + daily trace resolve into Z1 DOCUMENTS
+}
+
+// ---- P5 UNIVERSAL STOP — cancel a dispatch honestly -------------------------
+// The main-side hand can't be aborted mid-flight (a read/draft is atomic), so cancel
+// means: mark it cancelled, cut any speech it owns, resolve its chip as STOPPED, and
+// never fabricate a result. A still-QUEUED dispatch is pulled before it ever runs.
+function cancelDispatch(d) {
+  if (!d || d.done || d.cancelled) return;
+  d.cancelled = true;
+  const wasSpeaking = d.phase === 'speaking';
+  const qi = pending.indexOf(d);
+  if (qi >= 0) {                                    // queued and never started — finish it now as stopped
+    pending.splice(qi, 1);
+    finishDispatch(d, d.result || { failed: true, artifact: null });
+    return;
+  }
+  if (wasSpeaking) voice.stopSpeech();             // cut the narration it owns
+  audioLive(false);
+  // if the hand already returned, resolve it now; otherwise startDispatch's finishDispatch
+  // will see d.cancelled and resolve it STOPPED when the atomic hand returns.
+  if (d.result && active.indexOf(d) >= 0) finishDispatch(d, d.result);
+  refreshOrb(); paintStatus();
+}
+
+// cancel EVERY live dispatch (the WORKING rung of the universal STOP).
+function cancelAllDispatches() {
+  [...pending, ...active].forEach(cancelDispatch);
 }
 
 // ---- audio I/O live bars (§4) ----------------------------------------------
@@ -531,7 +605,11 @@ function closeOverlay() {
     ev.preventDefault();
     const uri = open.dataset.uri; if (uri && bridge.openExternal) bridge.openExternal(uri);
   });
-  window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !ov.hidden) { e.stopPropagation(); closeOverlay(); } }, true);
+  // Escape → the UNIVERSAL STOP. In the packaged app the main-process global 'Escape'
+  // shortcut grabs the key and drives universalStop via the ui:bank IPC (so this keydown
+  // never fires there); in the browser/dev preview there is no global shortcut, so this
+  // is the path that gives Esc the same contextual behaviour end-to-end.
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); universalStop(); } }, true);
 })();
 
 // the object paintStatus / the frame loop read for the HANDS + audio reads.
@@ -614,9 +692,10 @@ const TYPED_CONFIRM = /^\s*(confirm|confirmed|yes|yeah|yep|do it|proceed|go ahea
 function beginGate(text, verb) {
   pendingGate = { text, verb };
   const form = el('intent-form'); if (form) form.classList.add('holding');
-  const line = `${verb.toUpperCase()} — ${INTENT.holdLine || 'That leaves the machine. Type confirm to proceed, or cancel.'}`;
-  pushLine('v', line, 'hold');
-  queueSpeak(line, 'confirm');                       // announce-class — always speaks
+  const spoken = regLine('hold', { verb: verb.charAt(0).toUpperCase() + verb.slice(1) })
+    || INTENT.holdLine || 'That leaves the machine. Type confirm to proceed, or cancel.';
+  pushLine('v', `${verb.toUpperCase()} — ${spoken}`, 'hold');   // transcript carries the verb tag
+  queueSpeak(spoken, 'confirm');                                 // announce-class — always speaks
 }
 
 // resolve a pending HOLD from the operator's TYPED decision. Only an explicit affirmative
@@ -626,7 +705,7 @@ async function resolveGate(text) {
   const g = pendingGate; pendingGate = null;
   const form = el('intent-form'); if (form) form.classList.remove('holding');
   if (!TYPED_CONFIRM.test(text)) {
-    const line = INTENT.cancelLine || 'Cancelled — nothing left the machine.';
+    const line = regLine('cancelled') || INTENT.cancelLine || 'Cancelled — nothing left the machine.';
     pushLine('v', line, 'fail');
     queueSpeak(line, 'confirm');
     return;
@@ -641,7 +720,7 @@ async function resolveGate(text) {
     queueSpeak(spoken, 'confirm');
   } else {
     // no concrete WRITE hand exists for this verb yet — honest, nothing executed.
-    const line = INTENT.noHandLine || 'There is no hand wired for that yet — nothing left the machine.';
+    const line = regLine('noHand') || INTENT.noHandLine || 'There is no hand wired for that yet — nothing left the machine.';
     pushLine('v', line, 'fail');
     queueSpeak(line, 'confirm');
   }
@@ -659,7 +738,7 @@ async function conductAndSpeak(text) {
     queueSpeak(line, 'confirm');
     return;
   }
-  const spoken = (r && r.text) || (INTENT.clarifyLine || "I didn't catch a command.");
+  const spoken = (r && r.text) || regLine('clarify') || INTENT.clarifyLine || "I didn't catch a command.";
   pushLine('v', spoken, r ? '' : 'fail');
   queueSpeak(spoken, 'answer');
 }
@@ -764,6 +843,8 @@ async function refreshSpend() {
     // NUMBER is the live cap % (this read); the SPARK is the persisted multi-day trend
     // (refreshMetricsHistory, P4) — no fake series.
     updateCard('spend');
+    // P5 situational — announce ONCE when the day's Claude budget crosses 80%.
+    situational.once('spend.high', s.pct >= 80, (hi) => hi ? regLine('situational.spend', { pct: s.pct }) : '');
   } catch (_) { /* keep placeholder */ }
 }
 async function refreshCommits() {
@@ -797,6 +878,8 @@ async function refreshVercel() {
     VITALS.vercel.delta = v.sub || (v.connected ? '' : 'NOT CONNECTED');
     VITALS.vercel.spark = [];   // a deploy STATE has no trend series (honest empty)
     updateCard('vercel');
+    // P5 situational — announce ONCE when the deploy state actually changes.
+    if (v.connected && v.primary) situational.once('vercel.state', v.primary, (st) => regLine('situational.deploy', { state: String(st).toLowerCase() }));
   } catch (_) { /* keep placeholder */ }
 }
 // P3 — the hand-entered waitlist figure. If set, the card reads the number + `MANUAL · <date>`
@@ -1013,7 +1096,7 @@ async function wsVercel() {
         if (!tok) { btn.textContent = 'ENTER A TOKEN'; return; }
         btn.disabled = true; btn.textContent = 'SAVING…';
         let r = null; try { r = await bridge.consoleSetVercelToken(tok); } catch (_) {}
-        if (r && r.ok) { if (inp) inp.value = ''; btn.textContent = 'SAVED ✓'; refreshVercel(); speakWs('Vercel token set and saved locally. Nothing left the machine.'); }
+        if (r && r.ok) { if (inp) inp.value = ''; btn.textContent = 'SAVED ✓'; refreshVercel(); speakWs(regLine('vercelSaved') || 'Vercel token set and saved locally. Nothing left the machine.'); }
         else { btn.disabled = false; btn.textContent = r && r.sim ? 'APP-ONLY (SIM)' : 'SAVE FAILED'; }
       } },
       { label: 'DEPLOY CHECK', run: async () => { closeOverlay(); dispatchCommand('DEPLOY CHECK', deckCellFor('DEPLOY CHECK')); } },
@@ -1051,13 +1134,13 @@ async function wsWaitlist() {
         const now = new Date();
         const at = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         let r = null; try { r = await bridge.consoleWaitlistWrite({ value: n, note: (noteInp && noteInp.value.trim()) || '', at }); } catch (_) {}
-        if (r && r.ok) { btn.textContent = 'SAVED ✓'; refreshWaitlist(); speakWs(`Waitlist set to ${n}, marked manual.`); }
+        if (r && r.ok) { btn.textContent = 'SAVED ✓'; refreshWaitlist(); speakWs(regLine('waitlistSet', { n }) || `Waitlist set to ${n}, marked manual.`); }
         else { btn.disabled = false; btn.textContent = 'SAVE FAILED'; }
       } },
       { label: 'CLEAR', run: async ({ btn }) => {
         btn.disabled = true; btn.textContent = 'CLEARING…';
         try { await bridge.consoleWaitlistWrite({ value: null, note: '' }); } catch (_) {}
-        refreshWaitlist(); closeOverlay(); speakWs('Waitlist figure cleared.');
+        refreshWaitlist(); closeOverlay(); speakWs(regLine('waitlistCleared') || 'Waitlist figure cleared.');
       } },
     ],
   });
@@ -1072,7 +1155,7 @@ function wsAudio() {
       + kv('EARS', s.ears ? 'READY' : 'NONE')
       + kv('MUTED', s.muted ? 'YES' : 'NO')
       + note('Hold Space anywhere to talk; Esc stops. Test the voice below.'),
-    actions: [{ label: 'TEST VOICE', cls: 'primary', run: () => { voice.say('VULCAN online. Voice link nominal.', { kind: 'answer' }); } }],
+    actions: [{ label: 'TEST VOICE', cls: 'primary', run: () => { voice.say(regLine('testVoice') || 'VULCAN online. Voice link nominal.', { kind: 'answer' }); } }],
   });
 }
 
@@ -1149,7 +1232,7 @@ function wsEditList(key, title) {
       + note('Edits persist to the vault and survive restarts. Toggle the tick to mark done.'),
     actions: [
       { label: 'ADD', run: async ({ ws }) => { const inp = ws.querySelector('#ws-add'); const v = inp && inp.value.trim(); if (!v) return; consoleState[key].push({ text: v, done: false }); await persistObjectives(); renderObjectives(); wsEditList(key, title); } },
-      { label: 'SAVE & CLOSE', cls: 'primary', run: async ({ ws }) => { syncEdits(ws, key); await persistObjectives(); renderObjectives(); closeOverlay(); speakWs(`${title} saved.`); } },
+      { label: 'SAVE & CLOSE', cls: 'primary', run: async ({ ws }) => { syncEdits(ws, key); await persistObjectives(); renderObjectives(); closeOverlay(); speakWs(regLine('saved', { what: title }) || `${title} saved.`); } },
     ],
     onOpen: (body) => {
       body.querySelectorAll('.ws-edit').forEach((row) => {
@@ -1176,7 +1259,11 @@ function wireConsole() {
   el('objs') && el('objs').addEventListener('click', () => wsEditList('objectives', 'LAUNCH OBJECTIVES'));
   // AUDIO I/O panel → workspace (the section around the wave).
   const aio = el('aio-wave'); const aioSec = aio && aio.closest('.fsec');
-  if (aioSec) { aioSec.classList.add('ws-open'); aioSec.addEventListener('click', (e) => { if (e.target.closest('.deck-cell')) return; wsAudio(); }); }
+  if (aioSec) { aioSec.classList.add('ws-open'); aioSec.addEventListener('click', (e) => { if (e.target.closest('.deck-cell') || e.target.closest('.aio-stop')) return; wsAudio(); }); }
+  // P5 UNIVERSAL STOP — the ■ on the AUDIO panel stops speech / cancels the running job
+  // (the same contextual STOP as Esc), without opening the audio workspace.
+  const aioStop = el('aio-stop');
+  if (aioStop) aioStop.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); universalStop(); });
   // DOCUMENTS rows now open a document workspace (was: straight open-in-vault).
   const docs = el('docs');
   if (docs) docs.addEventListener('click', (e) => {
@@ -1248,4 +1335,10 @@ window.__vulcanStage = {
   manual: () => manual.isOpen(),
   openManual: (i) => manual.open(i || 0),
   closeManual: () => manual.close(),
+  // P5 THE VOICE PASS self-checks: the universal STOP, the live speaking read, and the
+  // situational-line gate (for drives + regression).
+  stop: () => universalStop(),
+  speaking: () => voice.speaking,
+  cancelDispatch: (id) => { const d = [...active, ...pending].find((x) => x.id === id); if (d) cancelDispatch(d); },
+  situational: (text) => situational.offer(text),
 };

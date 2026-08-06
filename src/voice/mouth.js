@@ -13,6 +13,11 @@ export function createMouth({ bridge }) {
   let dataArr = null;
   let playing = false;
   let lastProvider = null;   // ORGAN 1.5 — which TTS provider produced the last audio
+  // P5 ONE VOICE — the single live channel. `current` is the release() of whatever is
+  // playing right now; `gen` invalidates a speak() whose TTS is still in flight when a
+  // newer utterance (or a stop) supersedes it. New utterance cancels current — always.
+  let current = null;
+  let gen = 0;
   // fallback envelope (only if the analyser yields no signal, e.g. a suspended
   // context) — still the real envelope of the real buffer, read by position.
   let fbBuffer = null, fbStart = 0;
@@ -64,6 +69,9 @@ export function createMouth({ bridge }) {
   // loop can always return to the wake listener. One-shot: whichever fires first wins.
   async function play(buffer) {
     ensureCtx();
+    // ONE VOICE: whatever is playing now yields to this new utterance (barge-in). The
+    // old release() resolves its awaiter cleanly so no caller hangs on a cut line.
+    if (current) { const c = current; current = null; c(false, true); }
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     src.connect(analyser);
@@ -73,18 +81,29 @@ export function createMouth({ bridge }) {
       let settled = false;
       const graceMs = (V.envelope && V.envelope.gateWatchdogGraceMs) || 2000;
       let wd = null;
-      const release = (forced) => {
+      // release(forced, superseded): superseded means a newer utterance/stop replaced us —
+      // resolve quietly (no watchdog warning, this line was deliberately cut).
+      const release = (forced, superseded) => {
         if (settled) return; settled = true;
         if (wd) { clearTimeout(wd); wd = null; }
+        if (current === release) current = null;
         playing = false; fbBuffer = null;
         try { src.onended = null; src.stop(); } catch (_) { /* already stopped */ }
-        if (forced) console.warn(`[GATE-WATCHDOG] speak gate force-released — no playback-end within ${buffer.duration.toFixed(2)}s + ${graceMs}ms`);
+        if (forced && !superseded) console.warn(`[GATE-WATCHDOG] speak gate force-released — no playback-end within ${buffer.duration.toFixed(2)}s + ${graceMs}ms`);
         resolve();
       };
-      wd = setTimeout(() => release(true), buffer.duration * 1000 + graceMs);
-      src.onended = () => release(false);
+      current = release;
+      wd = setTimeout(() => release(true, false), buffer.duration * 1000 + graceMs);
+      src.onended = () => release(false, false);
       src.start();
     });
+  }
+
+  // STOP the live channel now (universal STOP / barge-in). Idempotent; safe when idle.
+  function stop() {
+    gen++;                            // invalidate any speak() whose TTS is still in flight
+    if (current) { const c = current; current = null; c(false, true); }
+    playing = false; fbBuffer = null;
   }
 
   // returns 0..1 current amplitude from the analyser (RMS), with a buffer-position
@@ -111,23 +130,28 @@ export function createMouth({ bridge }) {
   // ElevenLabs audio via the bridge; if the bridge is offline, fall back to synth
   // so the loop still completes visibly (caller decides whether that path is used).
   async function speak(text, { synthetic = false, kind = 'answer' } = {}) {
+    const myGen = ++gen;                              // this utterance's generation
+    const superseded = () => myGen !== gen;          // a newer speak()/stop() replaced us
     const words = (text || '').trim().split(/\s+/).length || 1;
     const durS = Math.max(1.2, Math.min(words * 0.42, V.test.speakMs / 1000 * 2));
-    if (synthetic) return play(synth(durS));
+    if (synthetic) return superseded() ? undefined : play(synth(durS));
 
     try {
       const res = await bridge.tts(text, kind);
+      if (superseded()) return;                       // cut while the TTS was in flight — drop it
       if (res && res.ok && res.audioBase64) {
         lastProvider = res.provider || 'cloud';   // elevenlabs | kokoro | say
         const bytes = Uint8Array.from(atob(res.audioBase64), (c) => c.charCodeAt(0));
         ensureCtx();
         const audio = await ctx.decodeAudioData(bytes.buffer);
+        if (superseded()) return;                     // decode outlived us — drop it
         return play(audio);   // same analyser path -> envelope drives orb + rings identically
       }
     } catch (_) { /* fall through to synthetic */ }
+    if (superseded()) return;
     lastProvider = 'synthetic';
     return play(synth(durS));
   }
 
-  return { speak, getAmplitude, get playing() { return playing; }, getProvider() { return lastProvider; }, resume: ensureCtx };
+  return { speak, stop, getAmplitude, get playing() { return playing; }, getProvider() { return lastProvider; }, resume: ensureCtx };
 }

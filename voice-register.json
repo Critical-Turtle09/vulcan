@@ -1,0 +1,26 @@
+{
+  "_note": "P5 THE VOICE PASS — E.V. REGISTER (the VULCAN voice register). The single home for every FIXED spoken string in VULCAN. LAW for anything VULCAN says on its own initiative — statuses, confirmations, redirects, failures, situational lines. Register rules, applied to every line here: (1) short conversational sentences — one or two, never a paragraph; (2) SECOND PERSON — talk to the operator ('you', 'your'), never about 'the user'; (3) LEAD WITH THE ANSWER — the useful word first, the caveat after; (4) ONE-BREATH STATUSES — a status line is sayable in a single breath. {vars} interpolate at call time via register.line(key, vars). Dynamic answers (a real brain reply, a wire briefing) are NOT here — only fixed strings. Keep tokens.json and this file in step: session/intent tokens that are spoken mirror these keys.",
+  "lines": {
+    "muted": "Muted. Hold the trigger when you want me.",
+    "unmuted": "Listening.",
+    "stopped": "Stopped.",
+    "stopped.working": "Stopped. That job is cancelled — nothing left the machine.",
+    "autoDormant": "Banking the fire. Say Fire and Forge when you need me.",
+    "fallback": "I didn't catch that. Say it again, or ask me for the mission brief.",
+    "redirect": "Hold the trigger and say Fire and Forge to wake me.",
+    "cancelled": "Cancelled. Nothing left the machine.",
+    "hold": "{verb} leaves the machine. Say confirm to go ahead, or cancel to hold.",
+    "noHand": "I don't have a hand for that one yet, so nothing left the machine.",
+    "clarify": "I didn't catch a command. Try a deck command, or ask me a question.",
+    "dispatchFailed": "{cmd} couldn't run. Nothing left the machine.",
+    "status": "Here's the read. Voice is {voice}, and the wire is {wire}.",
+    "testVoice": "I'm online. Your voice link sounds good.",
+    "saved": "{what} saved.",
+    "waitlistSet": "Waitlist is at {n} now, marked manual.",
+    "waitlistCleared": "Cleared the waitlist figure.",
+    "vercelSaved": "Vercel token saved locally. Nothing left the machine.",
+    "situational.spend": "Heads up — you're at {pct} percent of today's Claude budget.",
+    "situational.deploy": "Your latest deploy just went {state}.",
+    "situational.wire": "New on the wire — {headline}."
+  }
+}
